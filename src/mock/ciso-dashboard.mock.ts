@@ -683,4 +683,135 @@ export const CISO_MOCK_INCIDENT_RECOMMENDATIONS: IncidentRecommendationItem[] = 
   },
 ];
 
+// ----------------------------------------------------
+// VULNERABILITY DETAIL DATA
+// ----------------------------------------------------
+
+export interface VulnerabilityCveItem {
+  cve: string;
+  title: string;
+  asset: string;
+  assetType: string;
+  cvss: number;
+  status: "Overdue" | "Due Soon" | "In Progress" | "Compliant";
+  dueDate: string;
+}
+
+export interface VulnerabilityActionItem {
+  id: string;
+  title: string;
+  priority: "Critical" | "High" | "Medium";
+  impact: string;
+  owner: string;
+  description: string;
+}
+
+export const CISO_MOCK_VULN_SEVERITY_DIST = [
+  { name: "Critical", value: 312, color: "#EF4444", percentage: "25%" },
+  { name: "High", value: 428, color: "#F97316", percentage: "34%" },
+  { name: "Medium", value: 356, color: "#EAB308", percentage: "29%" },
+  { name: "Low", value: 152, color: "#22C55E", percentage: "12%" },
+];
+
+export const CISO_MOCK_VULN_SLA_WEEKLY = [
+  { week: "Week 1", compliant: 45, inProgress: 90, dueSoon: 68, overdue: 110 },
+  { week: "Week 2", compliant: 52, inProgress: 94, dueSoon: 70, overdue: 108 },
+  { week: "Week 3", compliant: 48, inProgress: 98, dueSoon: 75, overdue: 106 },
+  { week: "Week 4", compliant: 40, inProgress: 96, dueSoon: 72, overdue: 104 },
+];
+
+export const CISO_MOCK_VULN_ASSET_RISK = [
+  { asset: "Domain Controller", count: 88, critical: 32, riskScore: 9.6 },
+  { asset: "Database Cluster", count: 64, critical: 24, riskScore: 9.1 },
+  { asset: "Mail Server", count: 52, critical: 18, riskScore: 8.4 },
+  { asset: "Web Server (DMZ)", count: 46, critical: 15, riskScore: 7.9 },
+  { asset: "Endpoint Fleet", count: 62, critical: 15, riskScore: 7.2 },
+];
+
+export const CISO_MOCK_TOP_CRITICAL_CVES: VulnerabilityCveItem[] = [
+  {
+    cve: "CVE-2025-1001",
+    title: "Remote Code Execution in Active Directory Domain Service",
+    asset: "DC-PRIMARY-01 (10.0.1.5)",
+    assetType: "Domain Controller",
+    cvss: 9.8,
+    status: "Overdue",
+    dueDate: "Yesterday",
+  },
+  {
+    cve: "CVE-2025-2018",
+    title: "Authentication Bypass in Core Edge Gateway",
+    asset: "GW-EDGE-EXT (192.168.1.1)",
+    assetType: "Web Server",
+    cvss: 9.4,
+    status: "Due Soon",
+    dueDate: "In 2 days",
+  },
+  {
+    cve: "CVE-2025-3309",
+    title: "SQL Injection via Unsanitized Stored Procedures",
+    asset: "DB-FIN-PROD-02 (10.0.4.12)",
+    assetType: "Database",
+    cvss: 8.9,
+    status: "In Progress",
+    dueDate: "In 5 days",
+  },
+  {
+    cve: "CVE-2025-4112",
+    title: "Privilege Escalation via Spooler Service Buffer Overflow",
+    asset: "EXCH-MAIL-01 (10.0.2.20)",
+    assetType: "Mail Server",
+    cvss: 8.6,
+    status: "Overdue",
+    dueDate: "3 days ago",
+  },
+  {
+    cve: "CVE-2025-5090",
+    title: "Cross-Site Scripting (XSS) in Customer Portal Backend",
+    asset: "APP-PORTAL-WEB (10.0.3.50)",
+    assetType: "Web Server",
+    cvss: 7.5,
+    status: "Compliant",
+    dueDate: "In 12 days",
+  },
+];
+
+export const CISO_MOCK_VULN_REMEDIATION_TREND_30D = [
+  { day: "Day 1", open: 340, remediated: 40, verified: 35 },
+  { day: "Day 5", open: 335, remediated: 52, verified: 48 },
+  { day: "Day 10", open: 330, remediated: 68, verified: 60 },
+  { day: "Day 15", open: 325, remediated: 84, verified: 78 },
+  { day: "Day 20", open: 320, remediated: 95, verified: 90 },
+  { day: "Day 25", open: 315, remediated: 108, verified: 102 },
+  { day: "Day 30", open: 312, remediated: 120, verified: 114 },
+];
+
+export const CISO_MOCK_VULN_ACTIONS: VulnerabilityActionItem[] = [
+  {
+    id: "VACT-01",
+    title: "Prioritize Critical Patch Deployment for Domain Controllers",
+    priority: "Critical",
+    impact: "Resolves 32 Critical CVEs (CVSS 9.8)",
+    owner: "Infrastructure Team",
+    description: "Expedite emergency change window to deploy cumulative security patches onto DC-PRIMARY-01 and replicas.",
+  },
+  {
+    id: "VACT-02",
+    title: "Enforce Remediation of 104 Overdue Findings",
+    priority: "High",
+    impact: "+14% SLA Compliance Lift",
+    owner: "DevSecOps & IT",
+    description: "Issue escalation notices for all findings exceeding the 14-day SLA deadline across production services.",
+  },
+  {
+    id: "VACT-03",
+    title: "Harden Database Layer & Address High CVSS Injections",
+    priority: "High",
+    impact: "Mitigates Data Exfiltration Vector",
+    owner: "Database Administration",
+    description: "Audit ORM query sanitization and restrict public DB cluster listener endpoints.",
+  },
+];
+
+
 
