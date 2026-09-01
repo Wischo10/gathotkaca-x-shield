@@ -548,3 +548,139 @@ export const CISO_MOCK_POSTURE_ACTIONS: SecurityPostureAction[] = [
   },
 ];
 
+// ----------------------------------------------------
+// INCIDENT PERFORMANCE DETAIL DATA
+// ----------------------------------------------------
+
+export interface IncidentDetailItem {
+  id: string;
+  title: string;
+  category: string;
+  severity: "Critical" | "High" | "Medium" | "Low";
+  status: "Contained" | "Investigating" | "Resolved" | "Closed";
+  mttd: string;
+  mttr: string;
+  owner: string;
+  timestamp: string;
+}
+
+export interface IncidentRecommendationItem {
+  id: string;
+  title: string;
+  impact: string;
+  targetKpi: "MTTD" | "MTTA" | "MTTR" | "MTTC";
+  status: "Planned" | "In Progress" | "Completed";
+  description: string;
+}
+
+export const CISO_MOCK_INCIDENT_TREND_30D = [
+  { day: "Day 1", incidents: 8, resolved: 7 },
+  { day: "Day 5", incidents: 12, resolved: 10 },
+  { day: "Day 10", incidents: 9, resolved: 9 },
+  { day: "Day 15", incidents: 15, resolved: 13 },
+  { day: "Day 20", incidents: 11, resolved: 12 },
+  { day: "Day 25", incidents: 18, resolved: 16 },
+  { day: "Day 30", incidents: 14, resolved: 15 },
+];
+
+export const CISO_MOCK_INCIDENT_SEVERITY_DIST = [
+  { week: "Week 1", critical: 3, high: 8, medium: 14, low: 20 },
+  { week: "Week 2", critical: 2, high: 11, medium: 16, low: 18 },
+  { week: "Week 3", critical: 5, high: 9, medium: 12, low: 22 },
+  { week: "Week 4", critical: 4, high: 7, medium: 15, low: 25 },
+];
+
+export const CISO_MOCK_INCIDENT_CATEGORIES = [
+  { category: "Phishing / Social Eng", count: 42, color: "#3B82F6" },
+  { category: "Malware & Ransomware", count: 28, color: "#EF4444" },
+  { category: "Unauthorized Access", count: 19, color: "#F97316" },
+  { category: "Cloud Misconfig", count: 14, color: "#EAB308" },
+  { category: "DDoS / Volumetric", count: 8, color: "#8B5CF6" },
+];
+
+export const CISO_MOCK_RECENT_INCIDENTS: IncidentDetailItem[] = [
+  {
+    id: "INC-2026-089",
+    title: "Cobalt Strike Beacon in DMZ Bastion Host",
+    category: "Malware & Ransomware",
+    severity: "Critical",
+    status: "Contained",
+    mttd: "14m",
+    mttr: "2h 10m",
+    owner: "Tier-2 SOC",
+    timestamp: "3 hours ago",
+  },
+  {
+    id: "INC-2026-088",
+    title: "Mass Spear-Phishing Campaign Targeting Finance",
+    category: "Phishing / Social Eng",
+    severity: "High",
+    status: "Resolved",
+    mttd: "18m",
+    mttr: "1h 45m",
+    owner: "Email Sec",
+    timestamp: "12 hours ago",
+  },
+  {
+    id: "INC-2026-087",
+    title: "Suspicious API Token Escalation in Kubernetes",
+    category: "Unauthorized Access",
+    severity: "Critical",
+    status: "Investigating",
+    mttd: "25m",
+    mttr: "In Progress",
+    owner: "Cloud Sec",
+    timestamp: "1 day ago",
+  },
+  {
+    id: "INC-2026-086",
+    title: "S3 Bucket Public Read Policy Misconfiguration",
+    category: "Cloud Misconfig",
+    severity: "High",
+    status: "Closed",
+    mttd: "8m",
+    mttr: "45m",
+    owner: "DevSecOps",
+    timestamp: "2 days ago",
+  },
+  {
+    id: "INC-2026-085",
+    title: "Brute Force Burst against VPN Gateway",
+    category: "Unauthorized Access",
+    severity: "Medium",
+    status: "Closed",
+    mttd: "12m",
+    mttr: "35m",
+    owner: "Network Sec",
+    timestamp: "3 days ago",
+  },
+];
+
+export const CISO_MOCK_INCIDENT_RECOMMENDATIONS: IncidentRecommendationItem[] = [
+  {
+    id: "REC-01",
+    title: "SOAR Automated Containment for Endpoint Isolation",
+    impact: "-45% MTTR on Host Malware",
+    targetKpi: "MTTR",
+    status: "In Progress",
+    description: "Deploy automated playbook to sever network connectivity immediately upon EDR critical alert.",
+  },
+  {
+    id: "REC-02",
+    title: "Identity Threat Detection & Response (ITDR) Sensor",
+    impact: "-30% MTTD on Privileged Abuse",
+    targetKpi: "MTTD",
+    status: "Planned",
+    description: "Correlate Kerberos ticket anomalies and session hijacking in real-time.",
+  },
+  {
+    id: "REC-03",
+    title: "Tier-1 Alert Enrichment Playbooks",
+    impact: "-20% MTTA across all queues",
+    targetKpi: "MTTA",
+    status: "Completed",
+    description: "Pre-fetch WHOIS, VirusTotal, and active directory user context upon ticket generation.",
+  },
+];
+
+

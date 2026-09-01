@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Panel } from "@/components/ui/Panel";
 import { CISO_MOCK_INCIDENT_KPI } from "@/mock/ciso-dashboard.mock";
 
@@ -49,9 +50,12 @@ export function IncidentKpiPanel() {
         })}
       </div>
 
-      <div className="mt-3 text-right text-xs font-medium text-brand-blue hover:underline cursor-pointer">
+      <Link
+        href="/dashboard/ciso/incident-performance"
+        className="mt-3 block text-right text-xs font-medium text-brand-blue hover:underline"
+      >
         View incident performance →
-      </div>
+      </Link>
     </Panel>
   );
 }
