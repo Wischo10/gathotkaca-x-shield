@@ -426,3 +426,125 @@ export const CISO_MOCK_AI_BRIEFING: AiCisoBriefingInsight[] = [
     tagColor: "emerald",
   },
 ];
+
+// ----------------------------------------------------
+// SECURITY POSTURE DETAIL DATA
+// ----------------------------------------------------
+
+export interface SecurityPostureFinding {
+  id: string;
+  domain: string;
+  title: string;
+  severity: "Critical" | "High" | "Medium" | "Low";
+  status: "Open" | "In Review" | "Remediated";
+  detectedAt: string;
+  impactScore: number;
+}
+
+export interface SecurityPostureAction {
+  id: string;
+  title: string;
+  domain: string;
+  priority: "High" | "Medium" | "Low";
+  estScoreImpact: string;
+  effort: "Low" | "Medium" | "High";
+  owner: string;
+}
+
+export const CISO_MOCK_POSTURE_TREND_30D = [
+  { day: "Day 1", score: 68, benchmark: 70 },
+  { day: "Day 5", score: 69, benchmark: 70 },
+  { day: "Day 10", score: 71, benchmark: 71 },
+  { day: "Day 15", score: 72, benchmark: 71 },
+  { day: "Day 20", score: 75, benchmark: 72 },
+  { day: "Day 25", score: 76, benchmark: 72 },
+  { day: "Day 30", score: 78, benchmark: 73 },
+];
+
+export const CISO_MOCK_POSTURE_FINDINGS: SecurityPostureFinding[] = [
+  {
+    id: "FND-01",
+    domain: "Protect",
+    title: "Unenforced MFA on Legacy Administrative Endpoints",
+    severity: "Critical",
+    status: "Open",
+    detectedAt: "2 days ago",
+    impactScore: 9.2,
+  },
+  {
+    id: "FND-02",
+    domain: "Detect",
+    title: "Log Ingestion Latency Exceeding Threshold in DMZ SIEM",
+    severity: "High",
+    status: "In Review",
+    detectedAt: "4 days ago",
+    impactScore: 7.8,
+  },
+  {
+    id: "FND-03",
+    domain: "Recover",
+    title: "Disaster Recovery Backup Drill Validation Incomplete",
+    severity: "High",
+    status: "Open",
+    detectedAt: "1 week ago",
+    impactScore: 7.4,
+  },
+  {
+    id: "FND-04",
+    domain: "Identify",
+    title: "Shadow IT Cloud Workloads Unmapped in Asset Inventory",
+    severity: "Medium",
+    status: "In Review",
+    detectedAt: "2 weeks ago",
+    impactScore: 5.6,
+  },
+  {
+    id: "FND-05",
+    domain: "Govern",
+    title: "Annual Security Policy Exception Review Overdue",
+    severity: "Low",
+    status: "Remediated",
+    detectedAt: "3 weeks ago",
+    impactScore: 3.2,
+  },
+];
+
+export const CISO_MOCK_POSTURE_ACTIONS: SecurityPostureAction[] = [
+  {
+    id: "ACT-01",
+    title: "Implement Hardware MFA Enrolment for Tier-1 Admins",
+    domain: "Protect",
+    priority: "High",
+    estScoreImpact: "+3.5 Pts",
+    effort: "Medium",
+    owner: "IAM Team",
+  },
+  {
+    id: "ACT-02",
+    title: "Scale SIEM Pipeline Buffer & Log Forwarders",
+    domain: "Detect",
+    priority: "High",
+    estScoreImpact: "+2.0 Pts",
+    effort: "Low",
+    owner: "SecOps",
+  },
+  {
+    id: "ACT-03",
+    title: "Execute Tabletop Recovery Exercise for Core DBs",
+    domain: "Recover",
+    priority: "Medium",
+    estScoreImpact: "+1.8 Pts",
+    effort: "High",
+    owner: "Infrastructure",
+  },
+  {
+    id: "ACT-04",
+    title: "Automate Cloud Discovery via CloudTrail/Asset API",
+    domain: "Identify",
+    priority: "Medium",
+    estScoreImpact: "+1.2 Pts",
+    effort: "Medium",
+    owner: "Cloud Sec",
+  },
+];
+

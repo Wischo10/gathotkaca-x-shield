@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   Radar,
   RadarChart,
@@ -73,9 +74,12 @@ export function SecurityPostureRadarPanel() {
         </div>
       </div>
 
-      <div className="mt-3 text-right text-xs font-medium text-brand-blue hover:underline cursor-pointer">
+      <Link
+        href="/dashboard/ciso/posture"
+        className="mt-3 block text-right text-xs font-medium text-brand-blue hover:underline"
+      >
         View full security posture →
-      </div>
+      </Link>
     </Panel>
   );
 }
