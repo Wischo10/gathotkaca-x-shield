@@ -813,5 +813,374 @@ export const CISO_MOCK_VULN_ACTIONS: VulnerabilityActionItem[] = [
   },
 ];
 
+// ----------------------------------------------------
+// THREAT INTELLIGENCE DETAIL MOCK DATA
+// ----------------------------------------------------
+
+export interface ThreatIntelKpiItem {
+  id: string;
+  title: string;
+  value: number | string;
+  trendText: string;
+  changePct: number;
+  isPositiveGood?: boolean;
+  trendColor: "blue" | "red" | "orange" | "purple" | "green" | "emerald" | "teal";
+  sparklineColor: string;
+  icon: string;
+  sparklineData: { value: number }[];
+}
+
+export interface IocDistributionItem {
+  name: string;
+  value: number;
+  percentage: string;
+  color: string;
+}
+
+export interface ThreatTrendItem {
+  day: string;
+  newIocs: number;
+  blockedThreats: number;
+}
+
+export interface TopThreatSourceItem {
+  source: string;
+  count: number;
+  confidence: "High" | "Medium" | "Low";
+  category: string;
+}
+
+export interface RecentIocFeedItem {
+  id: string;
+  ioc: string;
+  type: "IP Address" | "Domain" | "URL" | "File Hash" | "Email";
+  confidence: "High" | "Medium" | "Low";
+  source: string;
+  firstSeen: string;
+  status: "Active" | "Blocked" | "Investigating" | "Whitelisted";
+  targetThreat?: string;
+}
+
+export interface MitreAttackCoverageItem {
+  id: string;
+  tactic: string;
+  iocCount: number;
+  campaignsCount: number;
+  riskLevel: "Critical" | "High" | "Medium";
+  coveragePct: number;
+}
+
+export interface ThreatExecutiveInsightItem {
+  id: string;
+  title: string;
+  description: string;
+  tag: string;
+  tagColor: "rose" | "amber" | "blue" | "emerald" | "purple";
+  recommendation: string;
+}
+
+export const CISO_MOCK_THREAT_INTEL_KPIS: ThreatIntelKpiItem[] = [
+  {
+    id: "active-campaigns",
+    title: "Active Threat Campaigns",
+    value: 18,
+    changePct: 12.5,
+    trendText: "+2 campaigns this week",
+    trendColor: "red",
+    sparklineColor: "#f43f5e",
+    isPositiveGood: false,
+    icon: "🎯",
+    sparklineData: [
+      { value: 12 },
+      { value: 14 },
+      { value: 13 },
+      { value: 15 },
+      { value: 16 },
+      { value: 17 },
+      { value: 18 },
+    ],
+  },
+  {
+    id: "new-iocs",
+    title: "New IOCs",
+    value: 247,
+    changePct: 14.0,
+    trendText: "+14% vs last 30 days",
+    trendColor: "orange",
+    sparklineColor: "#f97316",
+    isPositiveGood: false,
+    icon: "🔍",
+    sparklineData: [
+      { value: 190 },
+      { value: 205 },
+      { value: 218 },
+      { value: 226 },
+      { value: 235 },
+      { value: 240 },
+      { value: 247 },
+    ],
+  },
+  {
+    id: "malicious-ips",
+    title: "Malicious IPs",
+    value: 89,
+    changePct: 8.5,
+    trendText: "+7 IPs flagged today",
+    trendColor: "purple",
+    sparklineColor: "#a855f7",
+    isPositiveGood: false,
+    icon: "🌐",
+    sparklineData: [
+      { value: 72 },
+      { value: 76 },
+      { value: 80 },
+      { value: 82 },
+      { value: 85 },
+      { value: 87 },
+      { value: 89 },
+    ],
+  },
+  {
+    id: "malicious-domains",
+    title: "Malicious Domains",
+    value: 56,
+    changePct: -3.4,
+    trendText: "-2 domains taken down",
+    trendColor: "emerald",
+    sparklineColor: "#10b981",
+    isPositiveGood: true,
+    icon: "🔗",
+    sparklineData: [
+      { value: 64 },
+      { value: 62 },
+      { value: 60 },
+      { value: 59 },
+      { value: 58 },
+      { value: 57 },
+      { value: 56 },
+    ],
+  },
+  {
+    id: "high-confidence-threats",
+    title: "High Confidence Threats",
+    value: 31,
+    changePct: 6.9,
+    trendText: "Verified IOC matches",
+    trendColor: "red",
+    sparklineColor: "#ef4444",
+    isPositiveGood: false,
+    icon: "⚡",
+    sparklineData: [
+      { value: 22 },
+      { value: 25 },
+      { value: 27 },
+      { value: 28 },
+      { value: 29 },
+      { value: 30 },
+      { value: 31 },
+    ],
+  },
+];
+
+export const CISO_MOCK_IOC_DISTRIBUTION: IocDistributionItem[] = [
+  { name: "IP Address", value: 89, percentage: "36.0%", color: "#3b82f6" },
+  { name: "Domain", value: 56, percentage: "22.7%", color: "#10b981" },
+  { name: "URL", value: 48, percentage: "19.4%", color: "#f59e0b" },
+  { name: "File Hash", value: 34, percentage: "13.8%", color: "#8b5cf6" },
+  { name: "Email", value: 20, percentage: "8.1%", color: "#f43f5e" },
+];
+
+export const CISO_MOCK_THREAT_TREND_30D: ThreatTrendItem[] = [
+  { day: "Day 1", newIocs: 12, blockedThreats: 10 },
+  { day: "Day 3", newIocs: 15, blockedThreats: 14 },
+  { day: "Day 6", newIocs: 18, blockedThreats: 16 },
+  { day: "Day 9", newIocs: 22, blockedThreats: 19 },
+  { day: "Day 12", newIocs: 19, blockedThreats: 18 },
+  { day: "Day 15", newIocs: 27, blockedThreats: 25 },
+  { day: "Day 18", newIocs: 31, blockedThreats: 28 },
+  { day: "Day 21", newIocs: 26, blockedThreats: 24 },
+  { day: "Day 24", newIocs: 35, blockedThreats: 32 },
+  { day: "Day 27", newIocs: 42, blockedThreats: 39 },
+  { day: "Day 30", newIocs: 48, blockedThreats: 45 },
+];
+
+export const CISO_MOCK_TOP_THREAT_SOURCES: TopThreatSourceItem[] = [
+  { source: "AbuseIPDB", count: 86, confidence: "High", category: "IP Reputation" },
+  { source: "VirusTotal", count: 64, confidence: "High", category: "Malware & Hash Analysis" },
+  { source: "AlienVault OTX", count: 47, confidence: "Medium", category: "Community Pulse" },
+  { source: "MISP", count: 32, confidence: "High", category: "Threat Sharing Platform" },
+  { source: "Internal Detection", count: 18, confidence: "High", category: "EDR & Honeypot Feed" },
+];
+
+export const CISO_MOCK_RECENT_IOCS: RecentIocFeedItem[] = [
+  {
+    id: "IOC-001",
+    ioc: "185.220.101.45",
+    type: "IP Address",
+    confidence: "High",
+    source: "AbuseIPDB",
+    firstSeen: "10 mins ago",
+    status: "Blocked",
+    targetThreat: "Cobalt Strike C2 Node",
+  },
+  {
+    id: "IOC-002",
+    ioc: "login-secure-corp-auth.com",
+    type: "Domain",
+    confidence: "High",
+    source: "VirusTotal",
+    firstSeen: "25 mins ago",
+    status: "Blocked",
+    targetThreat: "Credential Harvesting Phishing",
+  },
+  {
+    id: "IOC-003",
+    ioc: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    type: "File Hash",
+    confidence: "High",
+    source: "MISP",
+    firstSeen: "1 hour ago",
+    status: "Investigating",
+    targetThreat: "LockBit 3.0 Ransomware Dropper",
+  },
+  {
+    id: "IOC-004",
+    ioc: "https://cdn-updates-system.net/payload.bin",
+    type: "URL",
+    confidence: "Medium",
+    source: "AlienVault OTX",
+    firstSeen: "2 hours ago",
+    status: "Blocked",
+    targetThreat: "AsyncRAT Stage 2 Delivery",
+  },
+  {
+    id: "IOC-005",
+    ioc: "hr-payroll-update@secure-support-portal.info",
+    type: "Email",
+    confidence: "Medium",
+    source: "Internal Detection",
+    firstSeen: "3 hours ago",
+    status: "Active",
+    targetThreat: "BEC Spear-Phishing Campaign",
+  },
+  {
+    id: "IOC-006",
+    ioc: "194.26.29.112",
+    type: "IP Address",
+    confidence: "High",
+    source: "AbuseIPDB",
+    firstSeen: "5 hours ago",
+    status: "Blocked",
+    targetThreat: "Brute Force SSH Scanner",
+  },
+  {
+    id: "IOC-007",
+    ioc: "api-telemetry-endpoint.top",
+    type: "Domain",
+    confidence: "Low",
+    source: "AlienVault OTX",
+    firstSeen: "8 hours ago",
+    status: "Investigating",
+    targetThreat: "Suspicious Dynamic DNS Beacon",
+  },
+  {
+    id: "IOC-008",
+    ioc: "7a8f1b98c347d018b827e7d698fba4d352b21cf923058a74e53c43152a512c1b",
+    type: "File Hash",
+    confidence: "High",
+    source: "VirusTotal",
+    firstSeen: "12 hours ago",
+    status: "Blocked",
+    targetThreat: "RedLine Stealer Executable",
+  },
+];
+
+export const CISO_MOCK_MITRE_COVERAGE: MitreAttackCoverageItem[] = [
+  {
+    id: "TA0001",
+    tactic: "Initial Access",
+    iocCount: 74,
+    campaignsCount: 8,
+    riskLevel: "Critical",
+    coveragePct: 92,
+  },
+  {
+    id: "TA0002",
+    tactic: "Execution",
+    iocCount: 42,
+    campaignsCount: 5,
+    riskLevel: "High",
+    coveragePct: 84,
+  },
+  {
+    id: "TA0003",
+    tactic: "Persistence",
+    iocCount: 31,
+    campaignsCount: 4,
+    riskLevel: "Medium",
+    coveragePct: 78,
+  },
+  {
+    id: "TA0004",
+    tactic: "Privilege Escalation",
+    iocCount: 28,
+    campaignsCount: 3,
+    riskLevel: "High",
+    coveragePct: 81,
+  },
+  {
+    id: "TA0011",
+    tactic: "Command & Control",
+    iocCount: 53,
+    campaignsCount: 7,
+    riskLevel: "Critical",
+    coveragePct: 88,
+  },
+  {
+    id: "TA0010",
+    tactic: "Exfiltration",
+    iocCount: 19,
+    campaignsCount: 2,
+    riskLevel: "Medium",
+    coveragePct: 75,
+  },
+];
+
+export const CISO_MOCK_THREAT_EXECUTIVE_INSIGHTS: ThreatExecutiveInsightItem[] = [
+  {
+    id: "TINS-01",
+    title: "Phishing Menjadi Ancaman Dominan Minggu Ini",
+    description: "Terdeteksi peningkatan 38% kampanye spear-phishing bertema invoice dan HR portal yang menargetkan kredensial karyawan eksekutif.",
+    tag: "Phishing Campaign",
+    tagColor: "rose",
+    recommendation: "Aktifkan enhanced email spoofing protection dan jalankan simulasi phishing ad-hoc pada divisi Finance dan HR.",
+  },
+  {
+    id: "TINS-02",
+    title: "IOC Baru Meningkat 14% Dibandingkan Bulan Lalu",
+    description: "Lonjakan 247 entitas IOC baru didominasi oleh malicious IP subnet di Eropa Timur dan domain spoofing baru yang terdaftar.",
+    tag: "IOC Volume Spike",
+    tagColor: "amber",
+    recommendation: "Pastikan auto-sync feed IOC ke edge firewall dan cloud WAF berjalan setiap interval 15 menit.",
+  },
+  {
+    id: "TINS-03",
+    title: "AbuseIPDB Menjadi Kontributor Feed Terbesar",
+    description: "AbuseIPDB menyumbang 86 malicious IPs terkonfirmasi (34.8% dari total feed) dengan confidence score rata-rata di atas 95%.",
+    tag: "Feed Reliability",
+    tagColor: "blue",
+    recommendation: "Pertahankan integrasi API rate limit tier Enterprise untuk menjamin realtime automated blocking.",
+  },
+  {
+    id: "TINS-04",
+    title: "Perlu Monitoring Tambahan pada Command & Control",
+    description: "53 IOC dan 7 threat campaigns aktif terindikasi menggunakan teknik C2 (Cobalt Strike & AsyncRAT) untuk evasive outbound beacons.",
+    tag: "C2 Threat Vectored",
+    tagColor: "purple",
+    recommendation: "Tingkatkan inspeksi deep packet DNS query dan enforce TLS decryption pada perimeter egress proxy.",
+  },
+];
+
+
 
 
