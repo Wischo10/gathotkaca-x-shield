@@ -2312,6 +2312,408 @@ export const CISO_MOCK_COMPLIANCE_EXECUTIVE_RECOMMENDATIONS: ComplianceExecutive
   },
 ];
 
+// ----------------------------------------------------
+// THIRD-PARTY RISK DETAIL MOCK DATA
+// ----------------------------------------------------
+
+export interface VendorKpiItem {
+  id: string;
+  title: string;
+  value: number | string;
+  trendText: string;
+  changePct: number;
+  isPositiveGood?: boolean;
+  trendColor: "blue" | "red" | "orange" | "purple" | "green" | "emerald" | "teal";
+  sparklineColor: string;
+  icon: string;
+  sparklineData: { value: number }[];
+}
+
+export interface VendorRiskDistributionItem {
+  name: string;
+  tier: "High" | "Medium" | "Low";
+  count: number;
+  percentage: string;
+  color: string;
+}
+
+export interface VendorAssessmentStatusItem {
+  status: string;
+  count: number;
+  color: string;
+  percentage: string;
+}
+
+export interface CriticalVendorItem {
+  id: string;
+  vendor: string;
+  service: string;
+  category: string;
+  riskLevel: "High" | "Medium" | "Low";
+  compliance: string[];
+  criticalAccess: "Yes" | "Limited" | "No";
+  lastAssessment: string;
+  nextReview: string;
+  status: "Active" | "Review" | "Overdue";
+  assessmentProgress: number;
+  owner: string;
+}
+
+export interface VendorTrendMonthItem {
+  month: string;
+  highRiskVendors: number;
+  vendorIncidents: number;
+  assessedVendors: number;
+}
+
+export interface VendorFindingCategoryItem {
+  category: string;
+  findingsCount: number;
+  highSeverityCount: number;
+  riskScore: number; // 0-100
+}
+
+export interface VendorExecutiveRecommendationItem {
+  id: string;
+  title: string;
+  description: string;
+  horizon: "Immediate (0–30 hari)" | "Short Term (30–90 hari)" | "Long Term (>90 hari)";
+  priority: "Critical" | "High" | "Medium";
+  action: string;
+  impactedVendors: string;
+}
+
+export const CISO_MOCK_VENDOR_KPIS: VendorKpiItem[] = [
+  {
+    id: "total-vendors",
+    title: "Total Active Vendors",
+    value: 146,
+    changePct: 4.2,
+    trendText: "+6 vendors onboarded this quarter",
+    trendColor: "blue",
+    sparklineColor: "#3b82f6",
+    isPositiveGood: true,
+    icon: "🏢",
+    sparklineData: [
+      { value: 135 },
+      { value: 138 },
+      { value: 140 },
+      { value: 142 },
+      { value: 143 },
+      { value: 145 },
+      { value: 146 },
+    ],
+  },
+  {
+    id: "high-risk-vendors",
+    title: "High Risk Vendors",
+    value: 18,
+    changePct: -10.0,
+    trendText: "2 downgraded after remediation",
+    trendColor: "emerald",
+    sparklineColor: "#ef4444",
+    isPositiveGood: true,
+    icon: "🚨",
+    sparklineData: [
+      { value: 24 },
+      { value: 22 },
+      { value: 21 },
+      { value: 20 },
+      { value: 19 },
+      { value: 18 },
+      { value: 18 },
+    ],
+  },
+  {
+    id: "assessment-overdue",
+    title: "Assessment Overdue",
+    value: 27,
+    changePct: -15.6,
+    trendText: "5 completed reviews this week",
+    trendColor: "emerald",
+    sparklineColor: "#f59e0b",
+    isPositiveGood: true,
+    icon: "⏳",
+    sparklineData: [
+      { value: 36 },
+      { value: 34 },
+      { value: 32 },
+      { value: 30 },
+      { value: 29 },
+      { value: 28 },
+      { value: 27 },
+    ],
+  },
+  {
+    id: "vendor-incidents",
+    title: "Vendor Incidents",
+    value: 9,
+    changePct: 12.5,
+    trendText: "+1 third-party advisory logged",
+    trendColor: "orange",
+    sparklineColor: "#f43f5e",
+    isPositiveGood: false,
+    icon: "⚠️",
+    sparklineData: [
+      { value: 6 },
+      { value: 7 },
+      { value: 7 },
+      { value: 8 },
+      { value: 8 },
+      { value: 9 },
+      { value: 9 },
+    ],
+  },
+];
+
+export const CISO_MOCK_VENDOR_RISK_DISTRIBUTION: VendorRiskDistributionItem[] = [
+  { name: "High Risk", tier: "High", count: 18, percentage: "12.3%", color: "#ef4444" },
+  { name: "Medium Risk", tier: "Medium", count: 52, percentage: "35.6%", color: "#f59e0b" },
+  { name: "Low Risk", tier: "Low", count: 76, percentage: "52.1%", color: "#10b981" },
+];
+
+export const CISO_MOCK_VENDOR_ASSESSMENTS: VendorAssessmentStatusItem[] = [
+  { status: "Completed", count: 82, color: "#10b981", percentage: "56.2%" },
+  { status: "In Review", count: 26, color: "#3b82f6", percentage: "17.8%" },
+  { status: "Overdue", count: 27, color: "#ef4444", percentage: "18.5%" },
+  { status: "Not Started", count: 11, color: "#94a3b8", percentage: "7.5%" },
+];
+
+export const CISO_MOCK_VENDOR_TABLE: CriticalVendorItem[] = [
+  {
+    id: "VND-001",
+    vendor: "AWS Cloud Infrastructure",
+    service: "Primary Cloud Hosting & VPC",
+    category: "Cloud Hosting",
+    riskLevel: "High",
+    compliance: ["ISO 27001", "SOC 2 Type II", "PCI DSS"],
+    criticalAccess: "Yes",
+    lastAssessment: "2026-06-10",
+    nextReview: "2026-12-10",
+    status: "Active",
+    assessmentProgress: 100,
+    owner: "Cloud Platform",
+  },
+  {
+    id: "VND-002",
+    vendor: "Microsoft 365 Enterprise",
+    service: "Productivity, Email & Azure AD",
+    category: "SaaS / Identity",
+    riskLevel: "High",
+    compliance: ["ISO 27001", "SOC 2", "UU PDP"],
+    criticalAccess: "Yes",
+    lastAssessment: "2026-05-15",
+    nextReview: "2026-11-15",
+    status: "Active",
+    assessmentProgress: 95,
+    owner: "IAM Team",
+  },
+  {
+    id: "VND-003",
+    vendor: "Cloudflare Edge Security",
+    service: "WAF, DDoS Scrubbing & DNS",
+    category: "Edge Protection",
+    riskLevel: "Medium",
+    compliance: ["SOC 2 Type II", "PCI DSS"],
+    criticalAccess: "Limited",
+    lastAssessment: "2026-07-01",
+    nextReview: "2027-01-01",
+    status: "Active",
+    assessmentProgress: 100,
+    owner: "SecOps Lead",
+  },
+  {
+    id: "VND-004",
+    vendor: "CrowdStrike Falcon",
+    service: "Managed EDR & Threat Hunting",
+    category: "Endpoint Security",
+    riskLevel: "High",
+    compliance: ["ISO 27001", "SOC 2 Type II"],
+    criticalAccess: "Yes",
+    lastAssessment: "2026-07-20",
+    nextReview: "2027-01-20",
+    status: "Active",
+    assessmentProgress: 100,
+    owner: "SOC Division",
+  },
+  {
+    id: "VND-005",
+    vendor: "GitHub Enterprise Cloud",
+    service: "Source Code & CI/CD Pipelines",
+    category: "DevSecOps",
+    riskLevel: "High",
+    compliance: ["ISO 27001", "SOC 2"],
+    criticalAccess: "Yes",
+    lastAssessment: "2026-03-12",
+    nextReview: "2026-09-12",
+    status: "Review",
+    assessmentProgress: 60,
+    owner: "DevOps Lead",
+  },
+  {
+    id: "VND-006",
+    vendor: "Atlassian Cloud (Jira/Confluence)",
+    service: "Engineering Workflow & Wiki",
+    category: "SaaS Workflow",
+    riskLevel: "Medium",
+    compliance: ["ISO 27001", "SOC 2"],
+    criticalAccess: "Limited",
+    lastAssessment: "2026-02-18",
+    nextReview: "2026-08-18",
+    status: "Overdue",
+    assessmentProgress: 35,
+    owner: "IT Operations",
+  },
+  {
+    id: "VND-007",
+    vendor: "Twilio API Messaging",
+    service: "2FA SMS & Customer OTP Gateway",
+    category: "Communications",
+    riskLevel: "Medium",
+    compliance: ["SOC 2", "UU PDP"],
+    criticalAccess: "Limited",
+    lastAssessment: "2026-06-25",
+    nextReview: "2026-12-25",
+    status: "Active",
+    assessmentProgress: 100,
+    owner: "App Engineering",
+  },
+  {
+    id: "VND-008",
+    vendor: "Salesforce CRM Platform",
+    service: "Enterprise Customer Leads & PII",
+    category: "Enterprise SaaS",
+    riskLevel: "High",
+    compliance: ["ISO 27001", "SOC 2", "UU PDP"],
+    criticalAccess: "Yes",
+    lastAssessment: "2026-01-10",
+    nextReview: "2026-07-10",
+    status: "Overdue",
+    assessmentProgress: 40,
+    owner: "CRM Operations",
+  },
+  {
+    id: "VND-009",
+    vendor: "Datadog Observability",
+    service: "Infrastructure Monitoring & APM",
+    category: "Monitoring",
+    riskLevel: "Low",
+    compliance: ["SOC 2 Type II"],
+    criticalAccess: "No",
+    lastAssessment: "2026-08-05",
+    nextReview: "2027-02-05",
+    status: "Active",
+    assessmentProgress: 100,
+    owner: "Site Reliability Eng",
+  },
+  {
+    id: "VND-010",
+    vendor: "External Security Audit Firm",
+    service: "Annual Penetration Testing",
+    category: "Consulting",
+    riskLevel: "Medium",
+    compliance: ["ISO 27001", "CREST"],
+    criticalAccess: "Limited",
+    lastAssessment: "2026-04-14",
+    nextReview: "2026-10-14",
+    status: "Active",
+    assessmentProgress: 85,
+    owner: "Cyber Governance",
+  },
+  {
+    id: "VND-011",
+    vendor: "Payment Aggregator Midtrans",
+    service: "Customer Checkout & Settlement",
+    category: "Fintech Gateway",
+    riskLevel: "High",
+    compliance: ["PCI DSS Level 1", "UU PDP", "ISO 27001"],
+    criticalAccess: "Yes",
+    lastAssessment: "2026-05-30",
+    nextReview: "2026-11-30",
+    status: "Active",
+    assessmentProgress: 100,
+    owner: "Finance Engineering",
+  },
+  {
+    id: "VND-012",
+    vendor: "Zendesk Support Helpdesk",
+    service: "Customer Support Ticketing",
+    category: "Customer Service",
+    riskLevel: "Low",
+    compliance: ["SOC 2", "UU PDP"],
+    criticalAccess: "No",
+    lastAssessment: "2026-03-05",
+    nextReview: "2026-09-05",
+    status: "Review",
+    assessmentProgress: 70,
+    owner: "Customer Experience",
+  },
+];
+
+export const CISO_MOCK_VENDOR_TREND: VendorTrendMonthItem[] = [
+  { month: "Oct '25", highRiskVendors: 26, vendorIncidents: 12, assessedVendors: 98 },
+  { month: "Nov '25", highRiskVendors: 25, vendorIncidents: 11, assessedVendors: 104 },
+  { month: "Dec '25", highRiskVendors: 24, vendorIncidents: 10, assessedVendors: 112 },
+  { month: "Jan '26", highRiskVendors: 23, vendorIncidents: 9, assessedVendors: 118 },
+  { month: "Feb '26", highRiskVendors: 22, vendorIncidents: 8, assessedVendors: 124 },
+  { month: "Mar '26", highRiskVendors: 21, vendorIncidents: 8, assessedVendors: 130 },
+  { month: "Apr '26", highRiskVendors: 20, vendorIncidents: 7, assessedVendors: 134 },
+  { month: "May '26", highRiskVendors: 19, vendorIncidents: 7, assessedVendors: 138 },
+  { month: "Jun '26", highRiskVendors: 19, vendorIncidents: 8, assessedVendors: 140 },
+  { month: "Jul '26", highRiskVendors: 18, vendorIncidents: 8, assessedVendors: 142 },
+  { month: "Aug '26", highRiskVendors: 18, vendorIncidents: 9, assessedVendors: 145 },
+  { month: "Sep '26", highRiskVendors: 18, vendorIncidents: 9, assessedVendors: 146 },
+];
+
+export const CISO_MOCK_VENDOR_FINDINGS: VendorFindingCategoryItem[] = [
+  { category: "Access Control & MFA", findingsCount: 38, highSeverityCount: 14, riskScore: 84 },
+  { category: "Data Protection & DLP", findingsCount: 32, highSeverityCount: 11, riskScore: 78 },
+  { category: "Contractual SLA & Security", findingsCount: 26, highSeverityCount: 6, riskScore: 68 },
+  { category: "Logging & Central SIEM", findingsCount: 22, highSeverityCount: 5, riskScore: 62 },
+  { category: "Business Continuity & DR", findingsCount: 18, highSeverityCount: 4, riskScore: 54 },
+  { category: "Incident Escalation SLA", findingsCount: 14, highSeverityCount: 2, riskScore: 45 },
+];
+
+export const CISO_MOCK_VENDOR_INSIGHTS: VendorExecutiveRecommendationItem[] = [
+  {
+    id: "VREC-01",
+    title: "Prioritaskan Assessment Mendesak untuk Vendor High-Risk Overdue",
+    description: "Vendor Salesforce dan Atlassian telah melewati tenggat waktu audit tahunan lebih dari 30 hari, sementara keduanya mengelola data operasional dan akses sensitif.",
+    horizon: "Immediate (0–30 hari)",
+    priority: "Critical",
+    action: "Terbitkan pemberitahuan eskalasi audit dan lakukan review kuesioner SIG Lite sebelum tanggal 20 bulan ini.",
+    impactedVendors: "Salesforce CRM, Atlassian Cloud",
+  },
+  {
+    id: "VREC-02",
+    title: "Tingkatkan Pemantauan Telemetri pada Vendor Akses Kritikal",
+    description: "11 vendor memiliki akses API/VPC langsung ke database dan environment produksi yang rentan menjadi jalur supply chain compromise.",
+    horizon: "Immediate (0–30 hari)",
+    priority: "High",
+    action: "Enforce Just-in-Time (JIT) access elevation dan batasi egress IP whitelisting hanya dari subnet proxy terverifikasi.",
+    impactedVendors: "AWS, CrowdStrike, GitHub Enterprise",
+  },
+  {
+    id: "VREC-03",
+    title: "Percepat Remediasi Temuan Access Control & MFA Pihak Ketiga",
+    description: "38 temuan audit vendor berkaitan dengan ketiadaan enforced MFA pada portal admin eksternal dan lambatnya de-provisioning user vendor.",
+    horizon: "Short Term (30–90 hari)",
+    priority: "High",
+    action: "Wajibkan Single Sign-On (SSO) SAML federated identity untuk seluruh login konsol pihak ketiga.",
+    impactedVendors: "7 Vendor SaaS Tier-2",
+  },
+  {
+    id: "VREC-04",
+    title: "Validasi Klausul Kontrak Keamanan & Sertifikasi Ulang UU PDP",
+    description: "Pastikan seluruh penyedia pemrosesan data konsumen memperbarui dokumen Data Processing Agreement (DPA) sesuai regulasi UU PDP nasional.",
+    horizon: "Long Term (>90 hari)",
+    priority: "Medium",
+    action: "Audit ulang klausul liabilitas insiden siber pada seluruh perpanjangan kontrak vendor tahun 2027.",
+    impactedVendors: "Seluruh 146 Vendor Aktif",
+  },
+];
+
+
 
 
 

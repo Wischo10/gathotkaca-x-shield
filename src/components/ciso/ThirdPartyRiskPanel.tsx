@@ -1,5 +1,4 @@
-"use client";
-
+import Link from "next/link";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { Panel } from "@/components/ui/Panel";
 import { CISO_MOCK_THIRD_PARTY_RISK } from "@/mock/ciso-dashboard.mock";
@@ -81,8 +80,13 @@ export function ThirdPartyRiskPanel() {
         </div>
       </div>
 
-      <div className="mt-3 text-right text-xs font-medium text-brand-blue hover:underline cursor-pointer">
-        View third-party risk →
+      <div className="mt-3 text-right">
+        <Link
+          href="/dashboard/ciso/third-party"
+          className="text-xs font-medium text-brand-blue hover:underline cursor-pointer"
+        >
+          View third-party risk →
+        </Link>
       </div>
     </Panel>
   );
