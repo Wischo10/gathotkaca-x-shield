@@ -1851,6 +1851,468 @@ export const CISO_MOCK_ALL_RISKS_INSIGHTS: AllRiskExecutiveInsight[] = [
   },
 ];
 
+// ----------------------------------------------------
+// COMPLIANCE DASHBOARD DETAIL MOCK DATA
+// ----------------------------------------------------
+
+export interface ComplianceKpiItem {
+  id: string;
+  title: string;
+  value: number | string;
+  trendText: string;
+  changePct: number;
+  isPositiveGood?: boolean;
+  trendColor: "blue" | "red" | "orange" | "purple" | "green" | "emerald" | "teal";
+  sparklineColor: string;
+  icon: string;
+  sparklineData: { value: number }[];
+}
+
+export interface FrameworkComplianceItem {
+  id: string;
+  framework: string;
+  standard: string;
+  score: number;
+  targetScore: number;
+  totalControls: number;
+  compliantControls: number;
+  partialControls: number;
+  nonCompliantControls: number;
+  status: "Compliant" | "Partial" | "Non-Compliant";
+  color: string;
+}
+
+export interface ComplianceFindingsStatusItem {
+  name: string;
+  status: "Compliant" | "Partial" | "Non-Compliant" | "Not Assessed";
+  count: number;
+  percentage: string;
+  color: string;
+}
+
+export interface RegulatoryTrackingItem {
+  id: string;
+  framework: string;
+  standardScope: string;
+  owner: string;
+  status: "Compliant" | "Partial" | "Pending";
+  evidenceCount: number;
+  evidenceStatus: "Verified" | "Under Review" | "Missing Evidence";
+  lastReview: string;
+  nextReview: string;
+  auditFrequency: string;
+}
+
+export interface AuditTimelineItem {
+  id: string;
+  title: string;
+  category: "Internal Audit" | "External Review" | "Regulatory Assessment" | "Validation" | "Evidence Audit";
+  date: string;
+  status: "Completed" | "In Progress" | "Upcoming" | "Scheduled";
+  leadAuditor: string;
+  scope: string;
+  findingsCount: number;
+  resultSummary: string;
+}
+
+export interface ComplianceGapItem {
+  domain: string;
+  gapScore: number; // percentage gap needing closure (0-100)
+  totalRequirements: number;
+  identifiedGaps: number;
+  priority: "Critical" | "High" | "Medium";
+  mitigationStatus: string;
+}
+
+export interface ComplianceTrendMonthItem {
+  month: string;
+  complianceScore: number;
+  targetScore: number;
+  closedFindings: number;
+}
+
+export interface ComplianceExecutiveRecommendationItem {
+  id: string;
+  title: string;
+  description: string;
+  priority: "Critical" | "High" | "Medium";
+  action: string;
+  targetFramework: string;
+}
+
+export const CISO_MOCK_COMPLIANCE_DETAIL_KPIS: ComplianceKpiItem[] = [
+  {
+    id: "overall-score",
+    title: "Overall Compliance Score",
+    value: "82%",
+    changePct: 4.5,
+    trendText: "+4.5% vs last quarter",
+    trendColor: "emerald",
+    sparklineColor: "#10b981",
+    isPositiveGood: true,
+    icon: "📜",
+    sparklineData: [
+      { value: 74 },
+      { value: 76 },
+      { value: 77 },
+      { value: 79 },
+      { value: 80 },
+      { value: 81 },
+      { value: 82 },
+    ],
+  },
+  {
+    id: "frameworks-assessed",
+    title: "Frameworks Assessed",
+    value: 5,
+    changePct: 0.0,
+    trendText: "5 active regulatory baselines",
+    trendColor: "blue",
+    sparklineColor: "#3b82f6",
+    isPositiveGood: true,
+    icon: "🏛️",
+    sparklineData: [
+      { value: 4 },
+      { value: 4 },
+      { value: 5 },
+      { value: 5 },
+      { value: 5 },
+      { value: 5 },
+      { value: 5 },
+    ],
+  },
+  {
+    id: "open-findings",
+    title: "Open Findings",
+    value: 64,
+    changePct: -12.3,
+    trendText: "-9 findings closed this month",
+    trendColor: "emerald",
+    sparklineColor: "#f59e0b",
+    isPositiveGood: true,
+    icon: "📋",
+    sparklineData: [
+      { value: 82 },
+      { value: 78 },
+      { value: 75 },
+      { value: 72 },
+      { value: 69 },
+      { value: 66 },
+      { value: 64 },
+    ],
+  },
+  {
+    id: "overdue-findings",
+    title: "Overdue Findings",
+    value: 18,
+    changePct: -10.0,
+    trendText: "2 resolved this sprint",
+    trendColor: "emerald",
+    sparklineColor: "#ef4444",
+    isPositiveGood: true,
+    icon: "⏳",
+    sparklineData: [
+      { value: 24 },
+      { value: 23 },
+      { value: 22 },
+      { value: 21 },
+      { value: 20 },
+      { value: 19 },
+      { value: 18 },
+    ],
+  },
+];
+
+export const CISO_MOCK_FRAMEWORK_SCORES: FrameworkComplianceItem[] = [
+  {
+    id: "FW-ISO27001",
+    framework: "ISO/IEC 27001",
+    standard: "ISMS 2022 Revision",
+    score: 88,
+    targetScore: 90,
+    totalControls: 93,
+    compliantControls: 82,
+    partialControls: 8,
+    nonCompliantControls: 3,
+    status: "Compliant",
+    color: "#3b82f6",
+  },
+  {
+    id: "FW-NISTCSF",
+    framework: "NIST CSF 2.0",
+    standard: "Cybersecurity Framework",
+    score: 81,
+    targetScore: 85,
+    totalControls: 108,
+    compliantControls: 87,
+    partialControls: 16,
+    nonCompliantControls: 5,
+    status: "Partial",
+    color: "#10b981",
+  },
+  {
+    id: "FW-UUPDP",
+    framework: "UU PDP (Personal Data)",
+    standard: "Law No. 27/2022 Mandate",
+    score: 84,
+    targetScore: 90,
+    totalControls: 64,
+    compliantControls: 54,
+    partialControls: 8,
+    nonCompliantControls: 2,
+    status: "Compliant",
+    color: "#8b5cf6",
+  },
+  {
+    id: "FW-CIS",
+    framework: "CIS Controls v8",
+    standard: "Implementation Group 2",
+    score: 76,
+    targetScore: 85,
+    totalControls: 153,
+    compliantControls: 116,
+    partialControls: 28,
+    nonCompliantControls: 9,
+    status: "Partial",
+    color: "#f59e0b",
+  },
+  {
+    id: "FW-MITRE",
+    framework: "MITRE ATT&CK Coverage",
+    standard: "Enterprise Matrix v14",
+    score: 72,
+    targetScore: 80,
+    totalControls: 120,
+    compliantControls: 86,
+    partialControls: 24,
+    nonCompliantControls: 10,
+    status: "Partial",
+    color: "#f43f5e",
+  },
+];
+
+export const CISO_MOCK_COMPLIANCE_FINDINGS_STATUS: ComplianceFindingsStatusItem[] = [
+  { name: "Compliant", status: "Compliant", count: 184, percentage: "70.8%", color: "#10b981" },
+  { name: "Partial", status: "Partial", count: 46, percentage: "17.7%", color: "#f59e0b" },
+  { name: "Non-Compliant", status: "Non-Compliant", count: 18, percentage: "6.9%", color: "#ef4444" },
+  { name: "Not Assessed", status: "Not Assessed", count: 12, percentage: "4.6%", color: "#94a3b8" },
+];
+
+export const CISO_MOCK_REGULATORY_TRACKING_TABLE: RegulatoryTrackingItem[] = [
+  {
+    id: "REG-01",
+    framework: "ISO/IEC 27001:2022",
+    standardScope: "Enterprise Cloud & On-Prem ISMS",
+    owner: "Information Security Team",
+    status: "Compliant",
+    evidenceCount: 142,
+    evidenceStatus: "Verified",
+    lastReview: "2026-06-15",
+    nextReview: "2026-12-15",
+    auditFrequency: "Annual Surveillance",
+  },
+  {
+    id: "REG-02",
+    framework: "NIST CSF 2.0 Profile",
+    standardScope: "Core Banking & Cyber Defense Operations",
+    owner: "Security Operations & Infra",
+    status: "Partial",
+    evidenceCount: 98,
+    evidenceStatus: "Under Review",
+    lastReview: "2026-07-20",
+    nextReview: "2026-10-20",
+    auditFrequency: "Semi-Annual Review",
+  },
+  {
+    id: "REG-03",
+    framework: "UU Perlindungan Data Pribadi (PDP)",
+    standardScope: "Customer PII Processing & CRM Portals",
+    owner: "Data Protection Officer (DPO)",
+    status: "Compliant",
+    evidenceCount: 64,
+    evidenceStatus: "Verified",
+    lastReview: "2026-08-01",
+    nextReview: "2026-11-01",
+    auditFrequency: "Quarterly Assessment",
+  },
+  {
+    id: "REG-04",
+    framework: "CIS Critical Security Controls v8",
+    standardScope: "Server Hardening & Endpoint Baseline",
+    owner: "DevSecOps & IT Governance",
+    status: "Partial",
+    evidenceCount: 112,
+    evidenceStatus: "Under Review",
+    lastReview: "2026-05-18",
+    nextReview: "2026-09-30",
+    auditFrequency: "Quarterly Audit",
+  },
+  {
+    id: "REG-05",
+    framework: "MITRE ATT&CK Defense Mapping",
+    standardScope: "SIEM Detection Rules & EDR Coverage",
+    owner: "Threat Intel & SOC Lead",
+    status: "Pending",
+    evidenceCount: 38,
+    evidenceStatus: "Missing Evidence",
+    lastReview: "2026-04-10",
+    nextReview: "2026-09-15",
+    auditFrequency: "Monthly Gap Sync",
+  },
+];
+
+export const CISO_MOCK_AUDIT_TIMELINE: AuditTimelineItem[] = [
+  {
+    id: "AUD-01",
+    title: "Internal ISMS & Access Control Audit",
+    category: "Internal Audit",
+    date: "Aug 2026",
+    status: "Completed",
+    leadAuditor: "Internal Audit Division",
+    scope: "Active Directory Privilege & Vault Access Policies",
+    findingsCount: 4,
+    resultSummary: "Closed 12 prior remediation items. 4 minor observations logged.",
+  },
+  {
+    id: "AUD-02",
+    title: "ISO/IEC 27001 Surveillance Stage-1",
+    category: "External Review",
+    date: "Sep 2026",
+    status: "In Progress",
+    leadAuditor: "TÜV Rheinland External Registrar",
+    scope: "Cloud Infrastructure, Backup Systems & Change Management",
+    findingsCount: 6,
+    resultSummary: "Evidence verification in progress across DevSecOps pipelines.",
+  },
+  {
+    id: "AUD-03",
+    title: "UU PDP Compliance & Data Flow Assessment",
+    category: "Regulatory Assessment",
+    date: "Oct 2026",
+    status: "Scheduled",
+    leadAuditor: "External Legal & Cyber Counsel",
+    scope: "Customer Consent Architecture & Third-Party Vendor Data Sharing",
+    findingsCount: 0,
+    resultSummary: "Scheduled kickoff on Oct 12, 2026 with business unit stakeholders.",
+  },
+  {
+    id: "AUD-04",
+    title: "Control Validation & Disaster Recovery Drill",
+    category: "Validation",
+    date: "Nov 2026",
+    status: "Upcoming",
+    leadAuditor: "BCP / DR Governance Committee",
+    scope: "Failover testing for Production Core DB & Immutable Snapshot Restore",
+    findingsCount: 0,
+    resultSummary: "Simulation scheduled across Primary and Secondary Data Centers.",
+  },
+  {
+    id: "AUD-05",
+    title: "Year-End Evidence & SOC2 Type II Review",
+    category: "Evidence Audit",
+    date: "Dec 2026",
+    status: "Upcoming",
+    leadAuditor: "Big 4 Accounting & Assurance Firm",
+    scope: "Comprehensive 12-Month Security Control Operating Effectiveness",
+    findingsCount: 0,
+    resultSummary: "Final assurance reporting cycle for enterprise banking clients.",
+  },
+];
+
+export const CISO_MOCK_COMPLIANCE_GAP_ANALYSIS: ComplianceGapItem[] = [
+  {
+    domain: "Access Control & PAM",
+    gapScore: 28,
+    totalRequirements: 25,
+    identifiedGaps: 7,
+    priority: "Critical",
+    mitigationStatus: "Session recording rollout in progress",
+  },
+  {
+    domain: "Logging & Centralized SIEM",
+    gapScore: 22,
+    totalRequirements: 18,
+    identifiedGaps: 4,
+    priority: "High",
+    mitigationStatus: "Edge firewall syslog forwarding ongoing",
+  },
+  {
+    domain: "Immutable Backup & DR",
+    gapScore: 16,
+    totalRequirements: 19,
+    identifiedGaps: 3,
+    priority: "High",
+    mitigationStatus: "Air-gapped WORM storage validated",
+  },
+  {
+    domain: "Incident Response Playbooks",
+    gapScore: 12,
+    totalRequirements: 22,
+    identifiedGaps: 3,
+    priority: "Medium",
+    mitigationStatus: "Ransomware playbook drill completed",
+  },
+  {
+    domain: "Asset Management & Shadow IT",
+    gapScore: 24,
+    totalRequirements: 16,
+    identifiedGaps: 4,
+    priority: "High",
+    mitigationStatus: "Agent discovery sweep in progress",
+  },
+];
+
+export const CISO_MOCK_COMPLIANCE_TREND_12M: ComplianceTrendMonthItem[] = [
+  { month: "Oct '25", complianceScore: 68, targetScore: 85, closedFindings: 14 },
+  { month: "Nov '25", complianceScore: 70, targetScore: 85, closedFindings: 18 },
+  { month: "Dec '25", complianceScore: 72, targetScore: 85, closedFindings: 22 },
+  { month: "Jan '26", complianceScore: 73, targetScore: 85, closedFindings: 19 },
+  { month: "Feb '26", complianceScore: 75, targetScore: 85, closedFindings: 25 },
+  { month: "Mar '26", complianceScore: 76, targetScore: 85, closedFindings: 21 },
+  { month: "Apr '26", complianceScore: 78, targetScore: 85, closedFindings: 28 },
+  { month: "May '26", complianceScore: 79, targetScore: 85, closedFindings: 24 },
+  { month: "Jun '26", complianceScore: 80, targetScore: 85, closedFindings: 30 },
+  { month: "Jul '26", complianceScore: 81, targetScore: 85, closedFindings: 26 },
+  { month: "Aug '26", complianceScore: 82, targetScore: 85, closedFindings: 32 },
+  { month: "Sep '26", complianceScore: 82, targetScore: 85, closedFindings: 34 },
+];
+
+export const CISO_MOCK_COMPLIANCE_EXECUTIVE_RECOMMENDATIONS: ComplianceExecutiveRecommendationItem[] = [
+  {
+    id: "CREC-01",
+    title: "Prioritaskan Kontrol yang Berstatus 'Partial' pada NIST & CIS",
+    description: "Terdapat 46 kontrol Partial yang membutuhkan penyesuaian konfigurasi teknis minor untuk segera meningkatkan kepatuhan menuju target 85%+.",
+    priority: "Critical",
+    action: "Alokasikan sprint perbaikan 2 pekan untuk menyelesaikan backlog kontrol teknis DevSecOps.",
+    targetFramework: "NIST CSF & CIS Controls",
+  },
+  {
+    id: "CREC-02",
+    title: "Jadwalkan Assessment UU PDP & Legal Review Tepat Waktu",
+    description: "Assessment berkala kuartal IV wajib dilaksanakan untuk memastikan kepatuhan pemrosesan data konsumen sesuai mandat regulasi UU No. 27/2022.",
+    priority: "High",
+    action: "Koordinasikan dengan DPO dan tim legal untuk finalisasi dokumen Data Processing Agreement (DPA).",
+    targetFramework: "UU PDP Mandate",
+  },
+  {
+    id: "CREC-03",
+    title: "Lengkapi Evidence Repository untuk Kontrol Kritikal",
+    description: "Sebanyak 38 kontrol pada mapping deteksi MITRE ATT&CK dan 4 kontrol logging masih berstatus Missing Evidence pada audit trail.",
+    priority: "High",
+    action: "Integrasikan evidence automation pipeline dari EDR dan SIEM ke centralized audit repository.",
+    targetFramework: "Evidence Repository & SIEM",
+  },
+  {
+    id: "CREC-04",
+    title: "Tingkatkan Coverage Deteksi pada MITRE ATT&CK",
+    description: "Cakupan rule deteksi MITRE ATT&CK saat ini berada di 72%, tertinggal dari baseline target 80% pada taktik Exfiltration dan Defense Evasion.",
+    priority: "Medium",
+    action: "Deploy 15 rule korelasi SIEM baru yang difokuskan pada deteksi bypass EDR dan PowerShell script abuse.",
+    targetFramework: "MITRE ATT&CK Matrix",
+  },
+];
+
+
 
 
 
