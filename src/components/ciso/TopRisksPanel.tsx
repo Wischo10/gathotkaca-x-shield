@@ -1,5 +1,4 @@
-"use client";
-
+import Link from "next/link";
 import { Panel } from "@/components/ui/Panel";
 import { CISO_MOCK_TOP_RISKS } from "@/mock/ciso-dashboard.mock";
 
@@ -48,8 +47,13 @@ export function TopRisksPanel() {
         </table>
       </div>
 
-      <div className="mt-3 text-right text-xs font-medium text-brand-blue hover:underline cursor-pointer">
-        View all risks →
+      <div className="mt-3 text-right">
+        <Link
+          href="/dashboard/ciso/all-risks"
+          className="text-xs font-medium text-brand-blue hover:underline cursor-pointer"
+        >
+          View all risks →
+        </Link>
       </div>
     </Panel>
   );

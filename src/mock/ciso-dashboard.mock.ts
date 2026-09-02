@@ -1574,6 +1574,284 @@ export const CISO_MOCK_RISK_EXECUTIVE_RECOMMENDATIONS: RiskExecutiveRecommendati
   },
 ];
 
+// ----------------------------------------------------
+// ALL RISKS DETAIL MOCK DATA
+// ----------------------------------------------------
+
+export interface AllRiskItem {
+  id: string;
+  riskName: string;
+  category: string;
+  severity: "Critical" | "High" | "Medium" | "Low";
+  impact: "Very High" | "High" | "Medium" | "Low" | "Very Low";
+  impactScore: number;
+  likelihood: "Almost Certain" | "Likely" | "Possible" | "Unlikely" | "Rare";
+  likelihoodScore: number;
+  owner: string;
+  status: "Open" | "In Progress" | "Mitigated" | "Accepted" | "Closed";
+  dueDate: string;
+  treatment: string;
+  isOverdue?: boolean;
+}
+
+export interface AllRiskExecutiveInsight {
+  id: string;
+  title: string;
+  description: string;
+  tag: string;
+  tagColor: "rose" | "amber" | "blue" | "emerald" | "purple";
+  recommendation: string;
+}
+
+export const CISO_MOCK_ALL_RISKS_TABLE: AllRiskItem[] = [
+  {
+    id: "RSK-101",
+    riskName: "Ransomware Attack on Core Banking Subnets",
+    category: "Malware & Ransomware",
+    severity: "Critical",
+    impact: "Very High",
+    impactScore: 5,
+    likelihood: "Likely",
+    likelihoodScore: 4,
+    owner: "SecOps & Infra",
+    status: "In Progress",
+    dueDate: "2026-09-15",
+    treatment: "Microsegmentation & Immutable Backups",
+    isOverdue: false,
+  },
+  {
+    id: "RSK-102",
+    riskName: "Customer Financial Data Breach via Exposed S3",
+    category: "Data Privacy",
+    severity: "Critical",
+    impact: "Very High",
+    impactScore: 5,
+    likelihood: "Possible",
+    likelihoodScore: 3,
+    owner: "Cloud Platform",
+    status: "Open",
+    dueDate: "2026-09-08",
+    treatment: "Bucket Policy Hardening & DLP Scan",
+    isOverdue: true,
+  },
+  {
+    id: "RSK-103",
+    riskName: "Executive Phishing Campaign & Wire Fraud",
+    category: "Social Engineering",
+    severity: "Critical",
+    impact: "High",
+    impactScore: 4,
+    likelihood: "Almost Certain",
+    likelihoodScore: 5,
+    owner: "Security Awareness",
+    status: "In Progress",
+    dueDate: "2026-09-20",
+    treatment: "DMARC Enforcement & Hardware FIDO Keys",
+    isOverdue: false,
+  },
+  {
+    id: "RSK-104",
+    riskName: "Privilege Misuse & Unrestricted Domain Admin",
+    category: "Identity & Access",
+    severity: "High",
+    impact: "High",
+    impactScore: 4,
+    likelihood: "Possible",
+    likelihoodScore: 3,
+    owner: "IAM Team",
+    status: "In Progress",
+    dueDate: "2026-09-28",
+    treatment: "PAM Vaulting & Session Monitoring",
+    isOverdue: false,
+  },
+  {
+    id: "RSK-105",
+    riskName: "Third-Party SaaS Vendor Infrastructure Failure",
+    category: "Supply Chain",
+    severity: "High",
+    impact: "High",
+    impactScore: 4,
+    likelihood: "Likely",
+    likelihoodScore: 4,
+    owner: "Vendor Risk Mgmt",
+    status: "Mitigated",
+    dueDate: "2026-08-30",
+    treatment: "Dual-Cloud Disaster Recovery Redundancy",
+    isOverdue: false,
+  },
+  {
+    id: "RSK-106",
+    riskName: "Cloud Misconfiguration in Production Kubernetes",
+    category: "Cloud Security",
+    severity: "High",
+    impact: "High",
+    impactScore: 4,
+    likelihood: "Possible",
+    likelihoodScore: 3,
+    owner: "DevSecOps",
+    status: "Open",
+    dueDate: "2026-09-02",
+    treatment: "OPA Gatekeeper & CIS Benchmark Audit",
+    isOverdue: true,
+  },
+  {
+    id: "RSK-107",
+    riskName: "Insider Threat & Intellectual Property Exfiltration",
+    category: "Insider Risk",
+    severity: "High",
+    impact: "High",
+    impactScore: 4,
+    likelihood: "Unlikely",
+    likelihoodScore: 2,
+    owner: "SecOps & Legal",
+    status: "In Progress",
+    dueDate: "2026-10-05",
+    treatment: "Endpoint UEBA & USB Port Locking",
+    isOverdue: false,
+  },
+  {
+    id: "RSK-108",
+    riskName: "Credential Theft via Infostealer Malware",
+    category: "Endpoint Security",
+    severity: "High",
+    impact: "High",
+    impactScore: 4,
+    likelihood: "Likely",
+    likelihoodScore: 4,
+    owner: "SecOps Team",
+    status: "In Progress",
+    dueDate: "2026-09-18",
+    treatment: "MFA Step-Up & Darkweb Leak Monitoring",
+    isOverdue: false,
+  },
+  {
+    id: "RSK-109",
+    riskName: "Malware Infection via Unmonitored Shadow IT",
+    category: "Endpoint Security",
+    severity: "Medium",
+    impact: "Medium",
+    impactScore: 3,
+    likelihood: "Possible",
+    likelihoodScore: 3,
+    owner: "IT Operations",
+    status: "Accepted",
+    dueDate: "2026-11-15",
+    treatment: "CASB Discovery & BYOD Isolation",
+    isOverdue: false,
+  },
+  {
+    id: "RSK-110",
+    riskName: "DDoS Attack on Public Payment API Gateways",
+    category: "Availability",
+    severity: "Medium",
+    impact: "Medium",
+    impactScore: 3,
+    likelihood: "Possible",
+    likelihoodScore: 3,
+    owner: "Network Ops",
+    status: "Mitigated",
+    dueDate: "2026-08-25",
+    treatment: "Anycast Scrubbing & Cloudflare Rate Limit",
+    isOverdue: false,
+  },
+  {
+    id: "RSK-111",
+    riskName: "Zero-Day Vulnerability in Web Framework Core",
+    category: "AppSec",
+    severity: "Critical",
+    impact: "Very High",
+    impactScore: 5,
+    likelihood: "Unlikely",
+    likelihoodScore: 2,
+    owner: "AppSec Team",
+    status: "Open",
+    dueDate: "2026-09-04",
+    treatment: "Virtual Patching via WAF Rule Injection",
+    isOverdue: false,
+  },
+  {
+    id: "RSK-112",
+    riskName: "Expired SSL/TLS Certificates on API Gateway",
+    category: "Operations",
+    severity: "Low",
+    impact: "Low",
+    impactScore: 2,
+    likelihood: "Rare",
+    likelihoodScore: 1,
+    owner: "IT Operations",
+    status: "Closed",
+    dueDate: "2026-08-10",
+    treatment: "Automated Let's Encrypt Cert-Manager",
+    isOverdue: false,
+  },
+  {
+    id: "RSK-113",
+    riskName: "Physical Tailgating into Tier-3 Server Room",
+    category: "Physical Security",
+    severity: "Low",
+    impact: "Low",
+    impactScore: 2,
+    likelihood: "Rare",
+    likelihoodScore: 1,
+    owner: "Facilities",
+    status: "Closed",
+    dueDate: "2026-08-15",
+    treatment: "Biometric Mantraps & 24/7 CCTV AI Detection",
+    isOverdue: false,
+  },
+  {
+    id: "RSK-114",
+    riskName: "Unencrypted Database Backups on Staging Servers",
+    category: "Data Privacy",
+    severity: "High",
+    impact: "High",
+    impactScore: 4,
+    likelihood: "Possible",
+    likelihoodScore: 3,
+    owner: "DBA Team",
+    status: "In Progress",
+    dueDate: "2026-09-12",
+    treatment: "Transparent Data Encryption (TDE) & KMS",
+    isOverdue: false,
+  },
+];
+
+export const CISO_MOCK_ALL_RISKS_INSIGHTS: AllRiskExecutiveInsight[] = [
+  {
+    id: "ARI-01",
+    title: "Ransomware Tetap Menjadi Risiko Prioritas Tertinggi",
+    description: "Vektor infeksi ransomware melalui subnet core banking berpotensi mengakibatkan disrupsi operasional dan kerugian reputasi kritis.",
+    tag: "Priority Risk",
+    tagColor: "rose",
+    recommendation: "Percepat implementasi microsegmentation network dan enforce immutable snapshot backup harian.",
+  },
+  {
+    id: "ARI-02",
+    title: "18 Risiko Masih Overdue Melewati Target Due Date",
+    description: "Terdapat 18 item risiko (didominasi konfigurasi cloud dan review audit vendor) yang melewati tenggat waktu mitigasi kuartal ini.",
+    tag: "SLA Overdue",
+    tagColor: "amber",
+    recommendation: "Lakukan sesi eskalasi prioritas bersama tim DevSecOps dan Procurement untuk unblock hambatan rilis.",
+  },
+  {
+    id: "ARI-03",
+    title: "Treatment Progress Mencapai 64% Secara Keseluruhan",
+    description: "Tingkat penyelesaian mitigasi meningkat +12% dalam 30 hari terakhir didorong oleh penutupan risiko kepatuhan dan sertifikasi.",
+    tag: "Mitigation Rate",
+    tagColor: "emerald",
+    recommendation: "Pertahankan momentum treatment dengan mengunci backlog keamanan pada setiap sprint engineering.",
+  },
+  {
+    id: "ARI-04",
+    title: "Fokus Mitigasi pada Vendor Pihak Ketiga Berisiko Tinggi",
+    description: "Evaluasi rantai pasok menunjukkan 4 penyedia layanan eksternal membutuhkan audit kepatuhan SOC2 dan SLA integrasi ulang.",
+    tag: "Vendor Risk",
+    tagColor: "blue",
+    recommendation: "Terbitkan Corrective Action Plan (CAP) formal dengan jangka waktu penyelesaian maksimal 30 hari.",
+  },
+];
+
+
 
 
 
