@@ -1,5 +1,4 @@
-"use client";
-
+import Link from "next/link";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { Panel } from "@/components/ui/Panel";
 import { CISO_MOCK_RISK_REGISTER } from "@/mock/ciso-dashboard.mock";
@@ -56,8 +55,13 @@ export function RiskRegisterPanel() {
         </div>
       </div>
 
-      <div className="mt-3 text-right text-xs font-medium text-brand-blue hover:underline cursor-pointer">
-        View risk register →
+      <div className="mt-3 text-right">
+        <Link
+          href="/dashboard/ciso/risk-register"
+          className="text-xs font-medium text-brand-blue hover:underline cursor-pointer"
+        >
+          View risk register →
+        </Link>
       </div>
     </Panel>
   );

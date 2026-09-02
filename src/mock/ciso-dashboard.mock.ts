@@ -1181,6 +1181,400 @@ export const CISO_MOCK_THREAT_EXECUTIVE_INSIGHTS: ThreatExecutiveInsightItem[] =
   },
 ];
 
+// ----------------------------------------------------
+// RISK REGISTER DETAIL MOCK DATA
+// ----------------------------------------------------
+
+export interface RiskRegisterKpiItem {
+  id: string;
+  title: string;
+  value: number | string;
+  trendText: string;
+  changePct: number;
+  isPositiveGood?: boolean;
+  trendColor: "blue" | "red" | "orange" | "purple" | "green" | "emerald" | "teal";
+  sparklineColor: string;
+  icon: string;
+  sparklineData: { value: number }[];
+}
+
+export interface RiskDistributionDetailItem {
+  name: string;
+  severity: "Critical" | "High" | "Medium" | "Low";
+  count: number;
+  percentage: string;
+  color: string;
+}
+
+export interface RiskTreatmentStatusItem {
+  status: string;
+  count: number;
+  color: string;
+  percentage: string;
+}
+
+export interface RiskMatrixItem {
+  id: string;
+  name: string;
+  category: string;
+  impactScore: number; // 1 to 5 (1=Very Low, 5=Very High)
+  likelihoodScore: number; // 1 to 5 (1=Rare, 5=Almost Certain)
+  severity: "Critical" | "High" | "Medium" | "Low";
+  owner: string;
+}
+
+export interface PriorityRiskTableItem {
+  id: string;
+  risk: string;
+  category: string;
+  owner: string;
+  impact: "Very High" | "High" | "Medium" | "Low" | "Very Low";
+  likelihood: "Almost Certain" | "Likely" | "Possible" | "Unlikely" | "Rare";
+  severity: "Critical" | "High" | "Medium" | "Low";
+  status: "Open" | "In Progress" | "Mitigated" | "Accepted" | "Closed";
+  dueDate: string;
+  progressPct: number;
+}
+
+export interface RiskTrendItem {
+  day: string;
+  openRisks: number;
+  closedRisks: number;
+}
+
+export interface RiskExecutiveRecommendationItem {
+  id: string;
+  title: string;
+  description: string;
+  priority: "Critical" | "High" | "Medium";
+  owner: string;
+  action: string;
+}
+
+export const CISO_MOCK_RISK_DETAIL_KPIS: RiskRegisterKpiItem[] = [
+  {
+    id: "total-risks",
+    title: "Total Risks",
+    value: 126,
+    changePct: -3.8,
+    trendText: "-5 risks vs last month",
+    trendColor: "emerald",
+    sparklineColor: "#3b82f6",
+    isPositiveGood: true,
+    icon: "📊",
+    sparklineData: [
+      { value: 135 },
+      { value: 132 },
+      { value: 130 },
+      { value: 129 },
+      { value: 128 },
+      { value: 127 },
+      { value: 126 },
+    ],
+  },
+  {
+    id: "critical-risks",
+    title: "Critical Risks",
+    value: 22,
+    changePct: -8.3,
+    trendText: "2 downgraded this week",
+    trendColor: "emerald",
+    sparklineColor: "#ef4444",
+    isPositiveGood: true,
+    icon: "🚨",
+    sparklineData: [
+      { value: 26 },
+      { value: 25 },
+      { value: 24 },
+      { value: 24 },
+      { value: 23 },
+      { value: 23 },
+      { value: 22 },
+    ],
+  },
+  {
+    id: "high-risks",
+    title: "High Risks",
+    value: 47,
+    changePct: 4.4,
+    trendText: "+2 newly assessed",
+    trendColor: "orange",
+    sparklineColor: "#f97316",
+    isPositiveGood: false,
+    icon: "⚠️",
+    sparklineData: [
+      { value: 42 },
+      { value: 43 },
+      { value: 44 },
+      { value: 45 },
+      { value: 46 },
+      { value: 46 },
+      { value: 47 },
+    ],
+  },
+  {
+    id: "treatment-progress",
+    title: "Treatment Progress",
+    value: "64%",
+    changePct: 12.0,
+    trendText: "+12% completion rate",
+    trendColor: "emerald",
+    sparklineColor: "#10b981",
+    isPositiveGood: true,
+    icon: "📈",
+    sparklineData: [
+      { value: 48 },
+      { value: 52 },
+      { value: 55 },
+      { value: 58 },
+      { value: 60 },
+      { value: 62 },
+      { value: 64 },
+    ],
+  },
+];
+
+export const CISO_MOCK_RISK_DISTRIBUTION_DETAIL: RiskDistributionDetailItem[] = [
+  { name: "Critical", severity: "Critical", count: 22, percentage: "17.5%", color: "#ef4444" },
+  { name: "High", severity: "High", count: 47, percentage: "37.3%", color: "#f97316" },
+  { name: "Medium", severity: "Medium", count: 38, percentage: "30.2%", color: "#eab308" },
+  { name: "Low", severity: "Low", count: 19, percentage: "15.0%", color: "#10b981" },
+];
+
+export const CISO_MOCK_RISK_TREATMENT_STATUS: RiskTreatmentStatusItem[] = [
+  { status: "Open", count: 28, color: "#ef4444", percentage: "22.2%" },
+  { status: "In Progress", count: 42, color: "#f59e0b", percentage: "33.3%" },
+  { status: "Mitigated", count: 35, color: "#3b82f6", percentage: "27.8%" },
+  { status: "Accepted", count: 12, color: "#8b5cf6", percentage: "9.5%" },
+  { status: "Closed", count: 9, color: "#10b981", percentage: "7.2%" },
+];
+
+export const CISO_MOCK_RISK_MATRIX_ITEMS: RiskMatrixItem[] = [
+  {
+    id: "RSK-001",
+    name: "Ransomware Attack on Production DB",
+    category: "Infrastructure",
+    impactScore: 5,
+    likelihoodScore: 4,
+    severity: "Critical",
+    owner: "SecOps & Infra",
+  },
+  {
+    id: "RSK-002",
+    name: "Customer PII Data Breach",
+    category: "Data Privacy",
+    impactScore: 5,
+    likelihoodScore: 3,
+    severity: "Critical",
+    owner: "Data Governance",
+  },
+  {
+    id: "RSK-003",
+    name: "Executive Spear-Phishing & BEC",
+    category: "Social Engineering",
+    impactScore: 4,
+    likelihoodScore: 5,
+    severity: "Critical",
+    owner: "Security Awareness",
+  },
+  {
+    id: "RSK-004",
+    name: "Privilege Misuse & Insider Leak",
+    category: "Identity & Access",
+    impactScore: 4,
+    likelihoodScore: 3,
+    severity: "High",
+    owner: "IAM Team",
+  },
+  {
+    id: "RSK-005",
+    name: "Third-Party SaaS Vendor Breach",
+    category: "Supply Chain",
+    impactScore: 4,
+    likelihoodScore: 4,
+    severity: "High",
+    owner: "Vendor Risk Management",
+  },
+  {
+    id: "RSK-006",
+    name: "Unpatched Zero-Day Edge Exposure",
+    category: "Vulnerability",
+    impactScore: 5,
+    likelihoodScore: 2,
+    severity: "High",
+    owner: "DevSecOps",
+  },
+  {
+    id: "RSK-007",
+    name: "Cloud IAM Key Exfiltration",
+    category: "Cloud Security",
+    impactScore: 4,
+    likelihoodScore: 2,
+    severity: "High",
+    owner: "Cloud Platform",
+  },
+  {
+    id: "RSK-008",
+    name: "DDoS Disruption on Payment Gateway",
+    category: "Availability",
+    impactScore: 3,
+    likelihoodScore: 3,
+    severity: "Medium",
+    owner: "Network Ops",
+  },
+  {
+    id: "RSK-009",
+    name: "Certificate Expiration Outage",
+    category: "Operations",
+    impactScore: 2,
+    likelihoodScore: 2,
+    severity: "Low",
+    owner: "IT Ops",
+  },
+  {
+    id: "RSK-010",
+    name: "Physical Data Center Tailgating",
+    category: "Physical Security",
+    impactScore: 2,
+    likelihoodScore: 1,
+    severity: "Low",
+    owner: "Facilities",
+  },
+];
+
+export const CISO_MOCK_PRIORITY_RISKS_TABLE: PriorityRiskTableItem[] = [
+  {
+    id: "RSK-001",
+    risk: "Enterprise Ransomware Propagation via Active Directory",
+    category: "Threat / Malware",
+    owner: "SecOps & Infra",
+    impact: "Very High",
+    likelihood: "Likely",
+    severity: "Critical",
+    status: "In Progress",
+    dueDate: "In 7 days",
+    progressPct: 75,
+  },
+  {
+    id: "RSK-002",
+    risk: "Customer Financial Data Exfiltration via SQL Injection",
+    category: "Data Privacy",
+    owner: "AppSec Team",
+    impact: "Very High",
+    likelihood: "Possible",
+    severity: "Critical",
+    status: "Open",
+    dueDate: "In 3 days",
+    progressPct: 20,
+  },
+  {
+    id: "RSK-003",
+    risk: "Executive BEC Wire Transfer Fraud via Spear-Phishing",
+    category: "Social Engineering",
+    owner: "Security Awareness",
+    impact: "High",
+    likelihood: "Almost Certain",
+    severity: "Critical",
+    status: "In Progress",
+    dueDate: "In 14 days",
+    progressPct: 60,
+  },
+  {
+    id: "RSK-004",
+    risk: "Excessive Domain Admin Privilege Misuse & Lateral Movement",
+    category: "IAM",
+    owner: "IAM Team",
+    impact: "High",
+    likelihood: "Possible",
+    severity: "High",
+    status: "In Progress",
+    dueDate: "In 21 days",
+    progressPct: 50,
+  },
+  {
+    id: "RSK-005",
+    risk: "Critical Cloud Payment Gateway Outage via CDN Failover",
+    category: "Supply Chain",
+    owner: "Cloud Platform",
+    impact: "High",
+    likelihood: "Likely",
+    severity: "High",
+    status: "Mitigated",
+    dueDate: "Completed",
+    progressPct: 100,
+  },
+  {
+    id: "RSK-006",
+    risk: "Unsanitized API Rate Limiting Causing Resource Exhaustion",
+    category: "API Security",
+    owner: "Backend Engineering",
+    impact: "Medium",
+    likelihood: "Possible",
+    severity: "Medium",
+    status: "Accepted",
+    dueDate: "In 45 days",
+    progressPct: 30,
+  },
+  {
+    id: "RSK-007",
+    risk: "Secondary VPN Gateway SSL Certificate Expiration",
+    category: "Network Ops",
+    owner: "IT Operations",
+    impact: "Low",
+    likelihood: "Rare",
+    severity: "Low",
+    status: "Closed",
+    dueDate: "Resolved",
+    progressPct: 100,
+  },
+];
+
+export const CISO_MOCK_RISK_TREND_30D: RiskTrendItem[] = [
+  { day: "Day 1", openRisks: 142, closedRisks: 20 },
+  { day: "Day 5", openRisks: 139, closedRisks: 26 },
+  { day: "Day 10", openRisks: 136, closedRisks: 32 },
+  { day: "Day 15", openRisks: 133, closedRisks: 39 },
+  { day: "Day 20", openRisks: 130, closedRisks: 45 },
+  { day: "Day 25", openRisks: 128, closedRisks: 52 },
+  { day: "Day 30", openRisks: 126, closedRisks: 60 },
+];
+
+export const CISO_MOCK_RISK_EXECUTIVE_RECOMMENDATIONS: RiskExecutiveRecommendationItem[] = [
+  {
+    id: "REC-01",
+    title: "Prioritaskan Mitigasi Ransomware pada Core Banking & DB",
+    description: "Risiko RSK-001 memiliki potensi kerugian finansial dan reputasi tertinggi. Enforce offline immutable backup snapshot dan percepat isolasi EDR agent pada domain controller.",
+    priority: "Critical",
+    owner: "SecOps & Infrastructure",
+    action: "Selesaikan rollout Microsegmentation & EDR Tamper Protection sebelum akhir kuartal.",
+  },
+  {
+    id: "REC-02",
+    title: "Tingkatkan Kontrol Terhadap Privilege Misuse & PAM",
+    description: "Ditemukan 14 akun privileged yang belum mengaktifkan session recording dan Just-in-Time (JIT) access elevation di Active Directory.",
+    priority: "High",
+    owner: "IAM Team",
+    action: "Wajibkan approval 2-party untuk seluruh kredensial tier-0 dan review akses bulanan.",
+  },
+  {
+    id: "REC-03",
+    title: "Evaluasi Mendalam Vendor Pihak Ketiga Berisiko Tinggi",
+    description: "4 vendor SaaS tier-1 memiliki temuan audit kepatuhan SOC2 yang belum diselesaikan dan berpotensi menjadi celah rantai pasok.",
+    priority: "High",
+    owner: "Vendor Risk Management",
+    action: "Kirimkan surat perbaikan wajib (Corrective Action Plan) dengan SLA 30 hari kalender.",
+  },
+  {
+    id: "REC-04",
+    title: "Pantau & Eskalasi Risiko yang Masih Overdue",
+    description: "Sebanyak 6 item risiko kategori High telah melewati due date mitigasi awal karena keterbatasan dependensi jadwal rilis software.",
+    priority: "Medium",
+    owner: "DevSecOps & IT Governance",
+    action: "Jadwalkan rapat eskalasi mingguan bersama Engineering Lead untuk unblock mitigasi.",
+  },
+];
+
+
 
 
 
