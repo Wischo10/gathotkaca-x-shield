@@ -1,0 +1,38 @@
+FITUR DAN PEMBARUAN: EXECUTIVE DASHBOARD
+========================================
+
+1. Reusable Modal Component (Komponen Modal)
+--------------------------------------------
+- Dibuat komponen `Modal.tsx` di `src/components/ui/Modal.tsx`.
+- Berfungsi untuk menampilkan informasi mendetail secara pop-up di atas halaman utama tanpa perlu berpindah halaman (navigasi).
+- Fitur modal mencakup desain responsif, tombol close yang intuitif, dan integrasi dengan mode gelap (dark mode).
+
+2. Interactive "View Detail" pada Executive Dashboard
+-----------------------------------------------------
+- Halaman `src/app/dashboard/executive/page.tsx` diperbarui dengan integrasi state untuk mengontrol modal yang terbuka.
+- Semua tombol/link "View ..." di setiap panel telah dihubungkan untuk memicu modal pop-up interaktif sesuai dengan konteks masing-masing.
+
+3. Executive Insight & Data Interaktif (Mock Data)
+--------------------------------------------------
+Terdapat 9 modal pop-up yang ditambahkan dan diperkaya dengan analisis serta data spesifik:
+- Alert Analytics Detail: Menjabarkan perbandingan Critical dan High alerts.
+- Full Alerts Analytics: Menampilkan tren volume alert dari hari ke hari dan rasio otomatisasi penanganan.
+- Alert Status Trend Details: Menyajikan data numerik tabel tren insiden berdasarkan severity dari Critical hingga Low.
+- Risk Register Analysis: Menganalisis risiko-risiko paling berbahaya bagi perusahaan (contoh: Ransomware, Data Breach) beserta skor risikonya.
+- Global Threat Map (Expanded): Memvisualisasikan dari negara mana saja mayoritas serangan berasal (contoh: Rusia, Tiongkok, dsb).
+- Attack Method Analytics: Detail persentase vektor serangan (Phishing, Malware, dsb).
+- Comprehensive Victim List: Daftar aset yang paling diserang (contoh: Server Finance, Workstation HR).
+- Full AI Executive Summary: Ringkasan naratif otomatis berbasis AI mengenai postur keamanan minggu ini beserta rekomendasi mitigasinya.
+- Board Report Details: Tampilan presentatif untuk rapat direksi mengenai performa keamanan dan alokasi sumber daya.
+- Incident Log (All): Catatan historis seluruh insiden beserta status dan waktu kejadian.
+
+4. Actionable Insights & Rekomendasi Eksekutif
+----------------------------------------------
+Setiap pop-up kini dilengkapi dengan blok:
+- "Executive Insight": Penjelasan 'so-what' (makna bisnis/strategis) dari data yang ditampilkan, sehingga Eksekutif tidak hanya membaca data mentah.
+- "Recommended Actions": Tombol-tombol aksi proaktif (action items) yang bisa diambil oleh level manajemen, seperti:
+   - "Authorize Emergency Patching"
+   - "Initiate Emergency Zero-Trust Rollout" 
+   - "Authorize Strict Geo-Blocking"
+   - "Declare Major Incident (P1)"
+   - "Isolate" (Untuk mengkarantina perangkat pada tabel Victim List).

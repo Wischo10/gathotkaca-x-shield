@@ -2,7 +2,7 @@
 
 import { Panel } from "@/components/ui/Panel";
 import { Topbar } from "@/components/layout/Topbar";
-import { useSidebarToggle } from "@/app/dashboard/layout";
+import { useSidebarToggle } from "@/app/dashboard/SidebarContext";
 import { Modal } from "@/components/ui/Modal";
 import { useState } from "react";
 import {
@@ -721,7 +721,7 @@ export default function ExecutiveDashboardPage() {
             <div className="prose prose-sm dark:prose-invert max-w-none text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-purple-100 dark:border-purple-900/30 p-5 rounded-lg shadow-sm">
               <p className="font-medium text-lg text-slate-800 dark:text-white mb-3">Weekly Posture Review</p>
               <p>This week, the organization's overall security score improved by 6%, reaching a score of 78/100. This improvement is largely attributed to the successful rollout of EDR updates across 85% of corporate endpoints and faster automated response times by the SOC team.</p>
-              <p>However, despite the improved score, the threat landscape remains highly active. We observed an 18% surge in targeted phishing campaigns directed specifically at the Finance and Human Resources departments. Concurrently, external scans detected 64 internet-facing assets with critical vulnerabilities (CVSS > 9.0) that require immediate patching.</p>
+              <p>However, despite the improved score, the threat landscape remains highly active. We observed an 18% surge in targeted phishing campaigns directed specifically at the Finance and Human Resources departments. Concurrently, external scans detected 64 internet-facing assets with critical vulnerabilities (CVSS &gt; 9.0) that require immediate patching.</p>
               <p><strong>Primary Concern:</strong> The convergence of high phishing volume and exposed critical vulnerabilities significantly elevates the risk of a successful Ransomware deployment or Data Breach event. If left unmitigated, these vectors could lead to severe operational disruption within the next 14 days.</p>
             </div>
 

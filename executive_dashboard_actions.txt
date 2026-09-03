@@ -1,0 +1,41 @@
+Penjelasan Tombol Action pada View/Modal Executive Dashboard
+
+1. Modal "Active Incidents / Critical Alerts"
+   - Tombol: "Authorize Emergency Patching"
+   - Kegunaan: Mengotorisasi patching darurat (perbaikan celah keamanan) pada aset untuk mencegah terjadinya kebocoran data (breach) dari ancaman yang bersifat kritikal.
+
+2. Modal "Full Alerts Analytics"
+   - Tombol: "Review Automation Rules" dan "Increase L1 SOC Capacity"
+   - Kegunaan: Meninjau ulang aturan otomasi penanganan peringatan keamanan dan menambah kapasitas personel Security Operations Center (SOC) Level 1 untuk mempercepat pemrosesan peringatan manual.
+
+3. Modal "Alert Status Trend Details"
+   - Tombol: "Initiate Threat Hunting"
+   - Kegunaan: Memulai proses perburuan ancaman secara proaktif ke dalam sistem, merespons tren peningkatan insiden kritikal agar sistem pertahanan dapat beradaptasi.
+
+4. Modal "Risk Register Analysis"
+   - Tombol: "Authorize Emergency Zero-Trust Rollout" dan "Review Backup Strategy"
+   - Kegunaan: Menyetujui implementasi arsitektur "Zero-Trust" darurat dan meninjau strategi backup data untuk memitigasi risiko tinggi seperti Ransomware dan kebocoran data.
+
+5. Modal "Global Threat Map (Expanded)"
+   - Tombol: "Authorize Strict Geo-Blocking"
+   - Kegunaan: Memberikan otorisasi untuk memblokir akses jaringan secara ketat dari lokasi geografis tertentu (misalnya Rusia, China, dll.) untuk mengurangi permukaan serangan.
+
+6. Modal "Attack Method Analytics"
+   - Tombol: "Mandate Company-Wide Anti-Phishing Training"
+   - Kegunaan: Mewajibkan pelatihan anti-phishing untuk seluruh karyawan guna mengurangi kerentanan dari sisi manusia, mengingat tingginya persentase serangan phishing.
+
+7. Modal "Comprehensive Victim List"
+   - Tombol: "Isolate Top 3 Vulnerable Assets" dan "Audit Access Logs on Finance Servers"
+   - Kegunaan: Mengisolasi 3 aset paling rentan dari jaringan dan mengaudit log akses pada server keuangan yang menjadi target utama serangan untuk mencegah eksfiltrasi data penting.
+
+8. Modal "Full AI Executive Summary"
+   - Tombol: "Declare Major Incident (P1) for Internet-Facing Vulns"
+   - Kegunaan: Mendeklarasikan insiden besar (Prioritas 1) untuk segera menambal (patch) kerentanan kritikal pada aset yang terekspos ke internet.
+
+9. Modal "Board Report Details"
+   - Tombol: "Approve Additional Q3 Security Budget"
+   - Kegunaan: Menyetujui penambahan anggaran keamanan untuk kuartal ke-3 (Q3) agar dapat berinvestasi pada pengurangan permukaan serangan sesuai prioritas strategis.
+
+10. Modal "Incident Log (All)"
+    - Tombol: "Escalate Unresolved Incidents to CISO"
+    - Kegunaan: Mengeskalasikan insiden-insiden kritikal yang belum terselesaikan (seperti aktivitas Ransomware) langsung kepada Chief Information Security Officer (CISO) untuk penanganan segera.

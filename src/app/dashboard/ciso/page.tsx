@@ -2,7 +2,7 @@
 
 import { Panel } from "@/components/ui/Panel";
 import { Topbar } from "@/components/layout/Topbar";
-import { useSidebarToggle } from "@/app/dashboard/layout";
+import { useSidebarToggle } from "@/app/dashboard/SidebarContext";
 import { LineChart, Line, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
 const sparklineData = Array.from({ length: 7 }, (_, i) => ({ value: Math.random() * 100 }));

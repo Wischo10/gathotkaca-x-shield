@@ -59,3 +59,43 @@ export type ApiResult<T> =
   | { status: "ok"; data: T }
   | { status: "empty" }
   | { status: "error"; message: string; code?: string };
+
+export interface L2Alert {
+  id: string;
+  title: string;
+  description: string;
+  severity: Severity;
+  source: string;
+  asset: string;
+  status: "New" | "In Progress" | "Closed";
+  assignee?: string;
+  firstSeen: string;
+  lastSeen: string;
+  totalEvents: number;
+}
+
+export interface TimelineEvent {
+  id: string;
+  time: string;
+  description: string;
+}
+
+export interface RelatedEntity {
+  id: string;
+  type: string;
+  value: string;
+}
+
+export interface IoC {
+  id: string;
+  type: string;
+  value: string;
+  confidence: number;
+}
+
+export interface InvestigationCase {
+  alert: L2Alert;
+  timeline: TimelineEvent[];
+  entities: RelatedEntity[];
+  iocs: IoC[];
+}

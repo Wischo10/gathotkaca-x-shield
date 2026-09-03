@@ -25,9 +25,4 @@ export default function DashboardLayout({
   );
 }
 
-import { createContext, useContext } from "react";
-
-export const SidebarToggleContext = createContext<() => void>(() => {});
-export function useSidebarToggle() {
-  return useContext(SidebarToggleContext);
-}
+import { SidebarToggleContext } from "./SidebarContext";

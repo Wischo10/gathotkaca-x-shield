@@ -1,6 +1,6 @@
 "use client";
 import { Topbar } from "@/components/layout/Topbar";
-import { useSidebarToggle } from "@/app/dashboard/layout";
+import { useSidebarToggle } from "@/app/dashboard/SidebarContext";
 import { Panel } from "@/components/ui/Panel";
 
 export default function CopilotPage() {
