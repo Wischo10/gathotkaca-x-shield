@@ -104,8 +104,22 @@ export function InvestigationWorkspace({ investigationCase, user }: Investigatio
       
       {/* Content Area */}
       <div className="p-4 bg-slate-50/50 dark:bg-slate-950/50 flex-1">
-        {activeTab === "Timeline" && (
+        {activeTab === "Overview" && (
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            <div className="xl:col-span-2 flex flex-col gap-4">
+              <CaseSummary investigationCase={investigationCase} user={user} />
+              <EvidenceList />
+            </div>
+            <div className="xl:col-span-1 flex flex-col gap-4">
+              <RelatedEntities />
+              <IOCs />
+              <ResponseActions investigationCase={investigationCase} />
+            </div>
+          </div>
+        )}
+
+        {activeTab === "Timeline" && (
+          <div className="grid grid-cols-1 gap-4">
             
             {/* Timeline Column */}
             <div className="xl:col-span-1">
@@ -152,32 +166,31 @@ export function InvestigationWorkspace({ investigationCase, user }: Investigatio
                 </div>
               </Panel>
             </div>
-            
-            {/* Details Column */}
-            <div className="xl:col-span-1">
-              <CaseSummary investigationCase={investigationCase} user={user} />
-            </div>
-
-            {/* Entities & IOCs Column */}
-            <div className="xl:col-span-1 flex flex-col gap-4">
-              <RelatedEntities />
-              <IOCs />
-            </div>
-
-            {/* Bottom Row */}
-            <div className="xl:col-span-2">
-              <EvidenceList />
-            </div>
-            <div className="xl:col-span-1">
-              <ResponseActions investigationCase={investigationCase} />
-            </div>
 
           </div>
         )}
         
-        {activeTab !== "Timeline" && (
-          <div className="flex items-center justify-center h-64 text-slate-400">
-            Content for {activeTab} will go here.
+        {activeTab === "Entities" && (
+          <div className="grid grid-cols-1 gap-4">
+            <RelatedEntities />
+          </div>
+        )}
+
+        {activeTab === "IOCs" && (
+          <div className="grid grid-cols-1 gap-4">
+            <IOCs />
+          </div>
+        )}
+
+        {activeTab === "Evidence" && (
+          <div className="grid grid-cols-1 gap-4">
+            <EvidenceList />
+          </div>
+        )}
+
+        {activeTab === "Response" && (
+          <div className="grid grid-cols-1 gap-4">
+            <ResponseActions investigationCase={investigationCase} />
           </div>
         )}
       </div>

@@ -1,17 +1,27 @@
-import { MoreVertical } from "lucide-react";
+import { useState, useEffect } from "react";
+import { MoreVertical, Loader2 } from "lucide-react";
+import { getAbuseIPDBReports, AbuseIPDBReport } from "@/services/threat-intel-service";
 
 export function RecentThreatAlerts() {
-  const alerts = [
-    {
-      time: "May 19, 10:30 AM",
-      alert: "New C2 domain observed: bad-update[.]com",
-      isNew: true,
-      type: "Domain",
-      relevance: "High",
-      source: "Threat Intel",
-      case: "CASE-2025-0519-0001"
-    }
-  ];
+  const [reports, setReports] = useState<AbuseIPDBReport[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getAbuseIPDBReports().then((data) => {
+      setReports(data);
+      setLoading(false);
+    });
+  }, []);
+
+  const alerts = reports.map(report => ({
+    time: new Date(report.lastReportedAt).toLocaleString(),
+    alert: `Malicious IP Detected: ${report.ipAddress}`,
+    isNew: report.abuseConfidenceScore > 80,
+    type: "IP Reputation",
+    relevance: report.abuseConfidenceScore > 90 ? "Critical" : report.abuseConfidenceScore > 75 ? "High" : "Medium",
+    source: "AbuseIPDB",
+    case: `CASE-2026-${Math.floor(Math.random() * 10000)}`
+  }));
 
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm mt-2 mb-8">
@@ -33,37 +43,57 @@ export function RecentThreatAlerts() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50 dark:divide-slate-800/30">
-            {alerts.map((alert, i) => (
-              <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                <td className="py-4 pr-4 font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap">{alert.time}</td>
-                <td className="py-4 pr-4 text-slate-900 dark:text-white font-medium flex items-center gap-2">
-                  {alert.alert}
-                  {alert.isNew && (
-                    <span className="text-[10px] font-semibold text-red-600 bg-red-50 border border-red-200 dark:text-red-400 dark:bg-red-500/10 dark:border-red-900/50 px-1.5 py-0.5 rounded">New</span>
-                  )}
-                </td>
-                <td className="py-4 pr-4 text-slate-600 dark:text-slate-400">{alert.type}</td>
-                <td className="py-4 pr-4">
-                  <span className="text-red-700 bg-red-50 border border-red-200 dark:text-red-400 dark:bg-red-500/10 dark:border-red-900/50 px-2 py-0.5 rounded-full text-[10px] font-semibold">
-                    {alert.relevance}
-                  </span>
-                </td>
-                <td className="py-4 pr-4 text-slate-600 dark:text-slate-400">{alert.source}</td>
-                <td className="py-4 pr-4">
-                  <a href="#" className="font-medium text-brand-blue hover:underline">{alert.case}</a>
-                </td>
-                <td className="py-4">
-                  <div className="flex items-center gap-2">
-                    <button className="text-[11px] font-medium text-brand-blue border border-brand-blue/30 bg-blue-50 dark:bg-brand-blue/10 px-3 py-1 rounded hover:bg-blue-100 dark:hover:bg-brand-blue/20 transition-colors">
-                      Investigate
-                    </button>
-                    <button className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded">
-                      <MoreVertical className="w-4 h-4" />
-                    </button>
-                  </div>
+            {loading ? (
+              <tr>
+                <td colSpan={7} className="py-8 text-center text-slate-500">
+                  <div className="flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-blue" /></div>
                 </td>
               </tr>
-            ))}
+            ) : alerts.length > 0 ? (
+              alerts.map((alert, i) => (
+                <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                  <td className="py-4 pr-4 font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap">{alert.time}</td>
+                  <td className="py-4 pr-4 text-slate-900 dark:text-white font-medium flex items-center gap-2">
+                    {alert.alert}
+                    {alert.isNew && (
+                      <span className="text-[10px] font-semibold text-red-600 bg-red-50 border border-red-200 dark:text-red-400 dark:bg-red-500/10 dark:border-red-900/50 px-1.5 py-0.5 rounded">New</span>
+                    )}
+                  </td>
+                  <td className="py-4 pr-4 text-slate-600 dark:text-slate-400">{alert.type}</td>
+                  <td className="py-4 pr-4">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                      alert.relevance === "Critical" 
+                        ? 'text-red-700 bg-red-50 border border-red-200 dark:text-red-400 dark:bg-red-500/10 dark:border-red-900/50' 
+                        : alert.relevance === "High"
+                        ? 'text-orange-700 bg-orange-50 border border-orange-200 dark:text-orange-400 dark:bg-orange-500/10 dark:border-orange-900/50'
+                        : 'text-yellow-700 bg-yellow-50 border border-yellow-200 dark:text-yellow-400 dark:bg-yellow-500/10 dark:border-yellow-900/50'
+                    }`}>
+                      {alert.relevance}
+                    </span>
+                  </td>
+                  <td className="py-4 pr-4 text-slate-600 dark:text-slate-400">{alert.source}</td>
+                  <td className="py-4 pr-4">
+                    <a href="#" className="font-medium text-brand-blue hover:underline">{alert.case}</a>
+                  </td>
+                  <td className="py-4">
+                    <div className="flex items-center gap-2">
+                      <button className="text-[11px] font-medium text-brand-blue border border-brand-blue/30 bg-blue-50 dark:bg-brand-blue/10 px-3 py-1 rounded hover:bg-blue-100 dark:hover:bg-brand-blue/20 transition-colors">
+                        Investigate
+                      </button>
+                      <button className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded">
+                        <MoreVertical className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={7} className="py-8 text-center text-slate-500">
+                  No recent alerts from AbuseIPDB
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

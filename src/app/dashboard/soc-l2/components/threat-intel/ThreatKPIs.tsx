@@ -1,7 +1,20 @@
+import { useState, useEffect } from "react";
 import { ShieldAlert, Bug, Target, UserX, Ghost, Globe, ArrowUp } from "lucide-react";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
+import { getThreatFoxIOCs } from "@/services/threat-intel-service";
 
 export function ThreatKPIs() {
+  const [iocCount, setIocCount] = useState<number>(0);
+  const [malwareFamilies, setMalwareFamilies] = useState<number>(0);
+
+  useEffect(() => {
+    getThreatFoxIOCs().then((data) => {
+      setIocCount(data.length);
+      const uniqueMalware = new Set(data.map(d => d.malware_printable).filter(Boolean));
+      setMalwareFamilies(uniqueMalware.size);
+    });
+  }, []);
+
   const generateSparkline = () => Array.from({ length: 10 }, () => ({ value: Math.floor(Math.random() * 100) }));
 
   const kpis = [
@@ -18,8 +31,8 @@ export function ThreatKPIs() {
       isHigh: true,
     },
     {
-      title: "New IOCs (This Week)",
-      value: "2,843",
+      title: "New IOCs (Today)",
+      value: iocCount.toLocaleString() || "0",
       trend: "+ 18%",
       icon: Bug, // The image has a biohazard icon, Bug is close enough
       color: "text-blue-500",
@@ -51,8 +64,8 @@ export function ThreatKPIs() {
       data: generateSparkline(),
     },
     {
-      title: "Malware Families",
-      value: "342",
+      title: "Malware Families (Today)",
+      value: malwareFamilies.toLocaleString() || "0",
       trend: "+ 11%",
       icon: Ghost, // Virus/bug in image
       color: "text-orange-500",

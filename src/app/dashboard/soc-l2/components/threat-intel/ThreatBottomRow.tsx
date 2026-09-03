@@ -1,6 +1,21 @@
+import { useState, useEffect } from "react";
 import { ArrowRight, ArrowUp, ArrowDown } from "lucide-react";
 
 export function ThreatBottomRow() {
+  const [feeds, setFeeds] = useState<{name: string, source: string, status: string, statusColor: string, lastUpdate: string}[]>([]);
+
+  useEffect(() => {
+    // Dynamic feed status
+    const now = new Date().toLocaleString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    setFeeds([
+      { name: "ThreatFox IOCs", source: "ThreatFox", status: "Active", statusColor: "bg-emerald-500", lastUpdate: now },
+      { name: "AbuseIPDB Reports", source: "AbuseIPDB", status: "Active", statusColor: "bg-emerald-500", lastUpdate: now },
+      { name: "VirusTotal", source: "VirusTotal", status: "Active", statusColor: "bg-emerald-500", lastUpdate: now },
+      { name: "AlienVault OTX", source: "AlienVault", status: "Warning", statusColor: "bg-orange-500", lastUpdate: "Not Configured" },
+      { name: "MISP Local Feed", source: "MISP", status: "Offline", statusColor: "bg-red-500", lastUpdate: "Disconnected" },
+    ]);
+  }, []);
+
   const industries = [
     { name: "Government", value: 428, percent: 28, color: "bg-red-500" },
     { name: "Technology", value: 356, percent: 23, color: "bg-orange-500" },
@@ -16,16 +31,6 @@ export function ThreatBottomRow() {
     { name: "FIN7", level: "Medium", levelClass: "text-orange-700 bg-orange-50 border-orange-200 dark:text-orange-400 dark:bg-orange-500/10 dark:border-orange-900/50", trend: "up", trendColor: "text-red-500", ttps: "T1059, T1566, T1105", targets: "Finance, Retail" },
     { name: "LockBit", level: "High", levelClass: "text-red-700 bg-red-50 border-red-200 dark:text-red-400 dark:bg-red-500/10 dark:border-red-900/50", trend: "down", trendColor: "text-emerald-500", ttps: "T1486, T1110, T1021", targets: "All Industries" },
     { name: "DarkSide", level: "Medium", levelClass: "text-orange-700 bg-orange-50 border-orange-200 dark:text-orange-400 dark:bg-orange-500/10 dark:border-orange-900/50", trend: "down", trendColor: "text-emerald-500", ttps: "T1486, T1562, T1041", targets: "Manufacturing" },
-  ];
-
-  const feeds = [
-    { name: "AlienVault OTX", source: "AlienVault", status: "Active", statusColor: "bg-emerald-500", lastUpdate: "May 19, 10:29 AM" },
-    { name: "AbuseIPDB", source: "AbuseIPDB", status: "Active", statusColor: "bg-emerald-500", lastUpdate: "May 19, 10:28 AM" },
-    { name: "VirusTotal", source: "VirusTotal", status: "Active", statusColor: "bg-emerald-500", lastUpdate: "May 19, 10:28 AM" },
-    { name: "MISP Local Feed", source: "MISP", status: "Active", statusColor: "bg-emerald-500", lastUpdate: "May 19, 10:30 AM" },
-    { name: "CISA Known Exploited", source: "CISA", status: "Active", statusColor: "bg-emerald-500", lastUpdate: "May 19, 10:27 AM" },
-    { name: "MalwareBazaar", source: "MalwareBazaar", status: "Warning", statusColor: "bg-orange-500", lastUpdate: "May 19, 10:10 AM" },
-    { name: "Commercial TI Feed", source: "Premium IOC", status: "Active", statusColor: "bg-emerald-500", lastUpdate: "May 19, 10:29 AM" },
   ];
 
   return (

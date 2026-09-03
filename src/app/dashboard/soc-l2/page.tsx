@@ -8,6 +8,7 @@ import { getL2Alerts, getInvestigationCase } from "@/services/soc-l2-service";
 import { AlertQueue } from "./components/alert-queue/AlertQueue";
 import { InvestigationList } from "./components/investigation/InvestigationList";
 import { InvestigationWorkspace } from "./components/InvestigationWorkspace";
+import { AlertDetailWorkspace } from "./components/alert-queue/AlertDetailWorkspace";
 import { CaseNote, Note } from "./components/CaseNote";
 import { CasesView } from "./components/cases/CasesView";
 import { ThreatIntelligenceView } from "./components/threat-intel/ThreatIntelligenceView";
@@ -147,10 +148,17 @@ export default function SOCL2DashboardPage() {
                 </div>
 
                 <div className="xl:col-span-3 h-full overflow-hidden">
-                  <InvestigationWorkspace 
-                    investigationCase={investigationCase} 
-                    user={user}
-                  />
+                  {activeTab === "Alert Queue" ? (
+                    <AlertDetailWorkspace 
+                      investigationCase={investigationCase} 
+                      user={user}
+                    />
+                  ) : (
+                    <InvestigationWorkspace 
+                      investigationCase={investigationCase} 
+                      user={user}
+                    />
+                  )}
                 </div>
               </div>
 
