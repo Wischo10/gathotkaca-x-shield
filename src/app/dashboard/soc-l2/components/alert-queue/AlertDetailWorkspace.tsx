@@ -107,7 +107,7 @@ export function AlertDetailWorkspace({ investigationCase, user }: AlertDetailWor
         
         {/* Right Column: Raw Logs / Payload */}
         <div className="xl:col-span-2">
-          <Panel title="Raw Log Data" icon={<Terminal className="w-4 h-4" />} className="h-full">
+          <Panel title="Raw Log Data" className="h-full">
             <div className="bg-slate-900 rounded-lg p-4 mt-2 overflow-x-auto h-[500px]">
               <pre className="text-xs text-green-400 font-mono">
                 {`{

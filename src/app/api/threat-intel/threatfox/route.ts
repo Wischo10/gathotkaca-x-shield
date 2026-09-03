@@ -31,10 +31,9 @@ export async function GET() {
     const data = await response.json();
     return NextResponse.json(data);
   } catch (error: any) {
-    console.error("ThreatFox API error:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch data from ThreatFox" },
-      { status: 500 }
-    );
+    // Gracefully handle ThreatFox API failures by returning empty data instead of 500 error
+    // so the frontend doesn't crash or show ugly errors.
+    console.warn("ThreatFox API error (gracefully handled):", error.message);
+    return NextResponse.json({ data: [] });
   }
 }

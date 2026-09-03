@@ -27,10 +27,7 @@ export async function GET() {
     const data = await response.json();
     return NextResponse.json(data);
   } catch (error: any) {
-    console.error("AbuseIPDB API error:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch data from AbuseIPDB" },
-      { status: 500 }
-    );
+    console.warn("AbuseIPDB API error (gracefully handled):", error.message);
+    return NextResponse.json({ data: [] });
   }
 }

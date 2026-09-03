@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 export default function LoginPage() {
   return (
@@ -12,7 +12,6 @@ export default function LoginPage() {
 }
 
 function LoginForm() {
-  const router = useRouter();
   const params = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -23,21 +22,30 @@ function LoginForm() {
     e.preventDefault();
     setError(null);
     setLoading(true);
+
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-      const body = await res.json();
-      if (!res.ok || body.status !== "ok") {
+
+      const body = await res.json().catch(() => ({}));
+
+      // Cek apakah response HTTP bukan 2xx ATAU status JSON tidak 'ok'
+      if (!res.ok || (body.status && body.status !== "ok")) {
         setError(body.message ?? "Login failed. Please try again.");
         setLoading(false);
         return;
       }
-      router.push(params.get("next") || "/dashboard/soc");
-      router.refresh();
-    } catch {
+
+      // Ambil redirect target dari URL parameter atau default ke dashboard
+      const targetUrl = params.get("next") || "/dashboard/soc";
+
+      // Paksa browser reload ke halaman baru agar Cookie Session terbaca bersih oleh Next.js Server / Middleware
+      window.location.assign(targetUrl);
+    } catch (err) {
+      console.error("Login Client Error:", err);
       setError("Network error — check your connection and try again.");
       setLoading(false);
     }

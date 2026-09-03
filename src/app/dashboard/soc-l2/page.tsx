@@ -4,7 +4,6 @@ import { useSidebarToggle } from "@/app/dashboard/SidebarContext";
 import { useState, useEffect } from "react";
 import { L2Alert, InvestigationCase } from "@/types/soc";
 import { SessionUser } from "@/lib/auth";
-import { getL2Alerts, getInvestigationCase } from "@/services/soc-l2-service";
 import { AlertQueue } from "./components/alert-queue/AlertQueue";
 import { InvestigationList } from "./components/investigation/InvestigationList";
 import { InvestigationWorkspace } from "./components/InvestigationWorkspace";
@@ -36,9 +35,14 @@ export default function SOCL2DashboardPage() {
 
   useEffect(() => {
     // Load alerts and user session on mount
-    getL2Alerts().then(data => {
-      setAlerts(data);
-    });
+    fetch("/api/soc/l2-alerts")
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === "ok") {
+          setAlerts(data.data);
+        }
+      })
+      .catch(console.error);
 
     fetch("/api/auth/me")
       .then(res => res.json())
@@ -52,9 +56,14 @@ export default function SOCL2DashboardPage() {
 
   useEffect(() => {
     if (selectedAlertId) {
-      getInvestigationCase(selectedAlertId).then(data => {
-        setInvestigationCase(data);
-      });
+      fetch(`/api/soc/l2-cases?id=${selectedAlertId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === "ok") {
+            setInvestigationCase(data.data);
+          }
+        })
+        .catch(console.error);
     } else {
       setInvestigationCase(null);
     }

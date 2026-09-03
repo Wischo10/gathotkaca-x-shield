@@ -1,5 +1,9 @@
 import "server-only";
+import { env } from "@/lib/env";
 
+if (env.wazuh.allowSelfSigned()) {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+}
 export class HttpError extends Error {
   constructor(
     message: string,

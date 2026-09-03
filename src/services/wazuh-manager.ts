@@ -44,10 +44,24 @@ export interface AgentsSummary {
 
 /** Agent connectivity summary — used to sanity-check data source health. */
 export async function getAgentsSummary(): Promise<AgentsSummary> {
-  // --- MOCK DATA IMPLEMENTATION ---
-  return {
-    total: 100,
-    active: 85,
-    disconnected: 15,
-  };
+  try {
+    const token = await getToken();
+    const res = await fetchJson<{ data: { total: number; active: number; disconnected: number } }>(
+      `${env.wazuh.apiUrl().replace(/\/$/, "")}/agents/summary/status`,
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+        timeoutMs: env.wazuh.requestTimeoutMs(),
+      }
+    );
+    
+    return {
+      total: res.data.total || 0,
+      active: res.data.active || 0,
+      disconnected: res.data.disconnected || 0,
+    };
+  } catch (err) {
+    console.error("Wazuh API Error (getAgentsSummary):", err);
+    return { total: 0, active: 0, disconnected: 0 };
+  }
 }
