@@ -4,6 +4,8 @@ import { Panel } from "@/components/ui/Panel";
 import { Topbar } from "@/components/layout/Topbar";
 import { useSidebarToggle } from "@/app/dashboard/layout";
 import { LineChart, Line, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { ThreatIntelPanel } from "@/components/dashboard/ThreatIntelPanel";
+import { ComplianceOverviewPanel } from "@/components/dashboard/ComplianceOverviewPanel";
 
 const sparklineData = Array.from({ length: 7 }, (_, i) => ({ value: Math.random() * 100 }));
 const Sparkline = ({ color }: { color: string }) => (
@@ -102,10 +104,7 @@ export default function CISODashboardPage() {
 
         {/* ROW 3 & 4 (Simplified panels matching headers) */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <Panel title="Threat Intelligence Overview" className="h-64 flex flex-col justify-between">
-             <div className="text-sm text-slate-400 p-4">[List of Threat Campaigns & IOCs]</div>
-             <div className="text-right text-xs text-brand-blue hover:underline cursor-pointer">View threat intelligence →</div>
-          </Panel>
+          <ThreatIntelPanel />
           <Panel title="Risk Register Summary" className="h-64 flex flex-col justify-between">
              <div className="text-sm text-slate-400 p-4">[Risk Register Donut Chart]</div>
              <div className="text-right text-xs text-brand-blue hover:underline cursor-pointer">View risk register →</div>
@@ -117,10 +116,7 @@ export default function CISODashboardPage() {
         </div>
         
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <Panel title="Compliance Overview" className="h-64 flex flex-col justify-between">
-             <div className="text-sm text-slate-400 p-4">[Compliance Frameworks Table]</div>
-             <div className="text-right text-xs text-brand-blue hover:underline cursor-pointer">View compliance dashboard →</div>
-          </Panel>
+          <ComplianceOverviewPanel />
           <Panel title="Third-Party Risk Overview" className="h-64 flex flex-col justify-between">
              <div className="text-sm text-slate-400 p-4">[Vendor Risk Donut Chart]</div>
              <div className="text-right text-xs text-brand-blue hover:underline cursor-pointer">View third-party risk →</div>
