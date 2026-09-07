@@ -1,11 +1,12 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getTopVictims } from "@/services/wazuh-indexer";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const data = await getTopVictims(10);
+    const range = req.nextUrl.searchParams.get("range") ?? "30d";
+    const data = await getTopVictims(10, range);
     return NextResponse.json({ status: "ok", data });
   } catch (error: any) {
     console.error("Top Victims API error:", error);
