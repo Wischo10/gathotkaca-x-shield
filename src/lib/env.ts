@@ -54,7 +54,7 @@ export const env = {
     abuseIpDbApiKey: () => optional("ABUSEIPDB_API_KEY"),
   },
   database: {
-    url: () => required("DATABASE_URL"),
+    url: () => optional("DATABASE_URL"),
   },
   jwtSecret: () => required("JWT_SECRET"),
 };

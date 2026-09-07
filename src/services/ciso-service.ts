@@ -2,7 +2,8 @@ import "server-only";
 import https from "node:https";
 import { env } from "@/lib/env";
 import { getComplianceOverview } from "@/services/compliance-service";
-import type { CisoMetricsData, MetricCardValue, VulnerabilitySlaOverview } from "@/types/ciso";
+import { calculateRealIncidentKpis } from "@/services/incident-lifecycle-service";
+import type { CisoMetricsData, MetricCardValue, VulnerabilitySlaOverview, IncidentKpiOverview, IncidentKpiItem } from "@/types/ciso";
 
 const httpsAgent = new https.Agent({
   rejectUnauthorized: !env.wazuh.allowSelfSigned(),
@@ -712,6 +713,45 @@ async function getVulnerabilitySlaOverview(): Promise<VulnerabilitySlaOverview> 
 }
 
 /**
+ * 6. Incident KPI Engine (Last 30 Days)
+ *
+ * Evaluates live Bitdefender GravityZone incidents:
+ * - MTTD (Mean Time to Detect) = mean(detected_at - occurred_at)
+ * - MTTA (Mean Time to Acknowledge) = mean(acknowledged_at - detected_at)
+ * - MTTR (Mean Time to Respond) = mean(responded_at - detected_at)
+ * - MTTC (Mean Time to Contain) = mean(contained_at - detected_at)
+ *
+ * Audit findings on Bitdefender GravityZone API:
+ * - `created`: Timestamp when incident was created/detected by GravityZone.
+ * - `lastUpdated`: Timestamp when incident was last modified in GravityZone.
+ * - `lastProcessed`: Pipeline processing timestamp.
+ * - `details.alerts[].date`: Timestamp of the sensor detection event (detection timestamp).
+ * - `status`: 'open' or 'closed' (no 'in_progress' lifecycle events).
+ * - Acknowledgement timestamp: None in API (no `acknowledged_at`, `assigned_at`, or triage lifecycle timestamp).
+ * - Occurrence timestamp: None in API (sensor detection time is the earliest record; true pre-detection occurrence timestamp is not captured).
+ * - Response / Containment timestamp: No dedicated `responded_at` or `contained_at` field.
+ *
+ * According to strict rule: "Jika source tidak menyediakan timestamp yang diperlukan, nilai KPI harus null / N/A. JANGAN mengasumsikan timestamp."
+ */
+/**
+ * Real Incident KPI calculation.
+ * 
+ * Sourced from:
+ * 1. Bitdefender sensor alert timestamps (`details.alerts[].date`) for detection
+ * 2. Real analyst lifecycle events in `incident_lifecycle_events` table (acknowledge, respond, contain)
+ * 3. MTTD remains N/A due to absence of pre-detection occurrence timestamp (`occurred_at`).
+ */
+async function getIncidentKpiOverview(totalIncidentsBaseline?: number): Promise<IncidentKpiOverview> {
+  try {
+    const bitdefenderTotal = totalIncidentsBaseline ?? cachedBitdefender?.total ?? 0;
+    return await calculateRealIncidentKpis(bitdefenderTotal);
+  } catch (err) {
+    console.warn("[CISO Metrics] Incident KPI overview failed:", err instanceof Error ? err.message : err);
+    return calculateRealIncidentKpis(0);
+  }
+}
+
+/**
  * Aggregate all CISO Dashboard metrics strictly based on data availability
  */
 export async function getCisoMetrics(): Promise<CisoMetricsData> {
@@ -719,11 +759,12 @@ export async function getCisoMetrics(): Promise<CisoMetricsData> {
   const agentsSummary = await getAgentsSummary();
   const totalAgents = agentsSummary.total > 0 ? agentsSummary.total : 169;
 
-  const [activeIncidents, criticalVulnerabilities, complianceScore, vulnerabilitySla] = await Promise.all([
+  const [activeIncidents, criticalVulnerabilities, complianceScore, vulnerabilitySla, incidentKpi] = await Promise.all([
     getBitdefenderActiveIncidents(),
     getCriticalVulnerabilities(totalAgents),
     getOverallComplianceScore(),
     getVulnerabilitySlaOverview(),
+    getIncidentKpiOverview(),
   ]);
 
   // Extract real telemetry inputs
@@ -778,6 +819,7 @@ export async function getCisoMetrics(): Promise<CisoMetricsData> {
     riskTreatmentProgress,
     vulnerabilitySla,
     vulnerabilitySlaOverview: vulnerabilitySla,
+    incidentKpi,
     updatedAt: new Date().toISOString(),
   };
 }

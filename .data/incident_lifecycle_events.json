@@ -1,0 +1,62 @@
+[
+  {
+    "id": "evt_61171bdb-45d7-4a82-9f46-7af98ba4fe0f",
+    "incident_id": "6a9e287c1e50bb73c145d00c",
+    "event_type": "detected",
+    "event_timestamp": "2026-09-07T02:57:31.000Z",
+    "actor_id": "system:bitdefender",
+    "actor_name": "Bitdefender Sensor",
+    "source": "bitdefender_sensor",
+    "metadata": {
+      "bitdefenderIncidentId": "6a9e287c1e50bb73c145d00c",
+      "alertCount": 6,
+      "originalDetectionDate": "2026-09-07T09:57:31+07:00"
+    },
+    "created_at": "2026-09-07T09:09:25.288Z"
+  },
+  {
+    "id": "evt_024e6d8f-8803-4f5a-ab03-167f047a5638",
+    "incident_id": "6a9e287c1e50bb73c145d00c",
+    "event_type": "acknowledged",
+    "event_timestamp": "2026-09-07T09:09:25.288Z",
+    "actor_id": "mock-user-1",
+    "actor_name": "Admin Dummy",
+    "source": "ciso_dashboard_action",
+    "metadata": {
+      "source": "e2e_test",
+      "recordedByRole": "admin",
+      "recordedByEmail": "admin@test.com"
+    },
+    "created_at": "2026-09-07T09:09:25.289Z"
+  },
+  {
+    "id": "evt_d3188ad1-146d-4605-b419-40330a84254c",
+    "incident_id": "6a9e287c1e50bb73c145d00c",
+    "event_type": "response_started",
+    "event_timestamp": "2026-09-07T09:09:25.306Z",
+    "actor_id": "mock-user-1",
+    "actor_name": "Admin Dummy",
+    "source": "ciso_dashboard_action",
+    "metadata": {
+      "source": "e2e_test",
+      "recordedByRole": "admin",
+      "recordedByEmail": "admin@test.com"
+    },
+    "created_at": "2026-09-07T09:09:25.306Z"
+  },
+  {
+    "id": "evt_0ffb6e75-6dd0-481d-a527-10969db351ca",
+    "incident_id": "6a9e287c1e50bb73c145d00c",
+    "event_type": "contained",
+    "event_timestamp": "2026-09-07T09:09:25.324Z",
+    "actor_id": "mock-user-1",
+    "actor_name": "Admin Dummy",
+    "source": "ciso_dashboard_action",
+    "metadata": {
+      "source": "e2e_test",
+      "recordedByRole": "admin",
+      "recordedByEmail": "admin@test.com"
+    },
+    "created_at": "2026-09-07T09:09:25.324Z"
+  }
+]

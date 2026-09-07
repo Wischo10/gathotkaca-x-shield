@@ -2,10 +2,11 @@
 
 import { Panel } from "@/components/ui/Panel";
 import { Topbar } from "@/components/layout/Topbar";
-import { useSidebarToggle } from "@/app/dashboard/layout";
+import { useSidebarToggle } from "@/context/sidebar-context";
 import { LineChart, Line, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { ThreatIntelPanel } from "@/components/dashboard/ThreatIntelPanel";
 import { ComplianceOverviewPanel } from "@/components/dashboard/ComplianceOverviewPanel";
+import { IncidentResponsePanel } from "@/components/dashboard/IncidentResponsePanel";
 
 import { useApiResult } from "@/hooks/useApiResult";
 import type { CisoMetricsData } from "@/types/ciso";
@@ -121,6 +122,28 @@ export default function CISODashboardPage() {
     return `Updated ${diffMin} min ago`;
   };
 
+  const formatDuration = (minutes: number | null | undefined): string => {
+    if (minutes === null || minutes === undefined) return "N/A";
+    if (minutes < 60) return `${Math.round(minutes)}m`;
+    const h = Math.floor(minutes / 60);
+    const m = Math.round(minutes % 60);
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  };
+
+  const renderTrend = (trend30d: number | null | undefined, trendAvailable: boolean | undefined) => {
+    if (!trendAvailable || trend30d === null || trend30d === undefined) {
+      return <span className="text-[10px] text-slate-400 font-normal ml-1">—</span>;
+    }
+    const isImproved = trend30d < 0;
+    const color = isImproved ? "text-green-500" : "text-red-500";
+    const arrow = trend30d < 0 ? "↓ " : trend30d > 0 ? "↑ " : "→ ";
+    return (
+      <span className={`text-[10px] font-normal ml-1 ${color}`}>
+        {arrow}{Math.abs(trend30d)}%
+      </span>
+    );
+  };
+
   return (
     <>
       <Topbar title="CISO Dashboard" subtitle="Deep dive into security risk, performance, and compliance" onMenuClick={openSidebar} />
@@ -204,7 +227,7 @@ export default function CISODashboardPage() {
           />
         </div>
 
-        {/* ROW 2 */}
+        {/* ROW 2: Analytical Panels */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <Panel title="Security Posture Overview" action={<span className="text-xs text-slate-400">30 Days</span>}>
             <div className="h-56 flex items-center justify-center text-slate-400 text-sm bg-slate-100 dark:bg-slate-800 rounded">
@@ -214,21 +237,45 @@ export default function CISODashboardPage() {
           </Panel>
           <Panel title="Incident KPI" action={<select className="text-xs bg-transparent"><option>Last 30 Days</option></select>}>
             <div className="grid grid-cols-2 gap-4 h-56">
-              <div className="flex flex-col justify-center gap-1 border-r border-b border-slate-100 dark:border-slate-800 p-2">
+              <div 
+                className="flex flex-col justify-center gap-1 border-r border-b border-slate-100 dark:border-slate-800 p-2"
+                title={metrics?.incidentKpi?.mttd?.explanation}
+              >
                 <span className="text-xs text-slate-500">MTTD (Mean Time to Detect)</span>
-                <div className="text-2xl font-bold text-slate-800 dark:text-white">21m <span className="text-[10px] text-green-500 font-normal">↓ 16%</span></div>
+                <div className="text-2xl font-bold text-slate-800 dark:text-white flex items-baseline">
+                  {formatDuration(metrics?.incidentKpi?.mttd?.value)}
+                  {renderTrend(metrics?.incidentKpi?.mttd?.trend30d, metrics?.incidentKpi?.mttd?.trendAvailable)}
+                </div>
               </div>
-              <div className="flex flex-col justify-center gap-1 border-b border-slate-100 dark:border-slate-800 p-2">
+              <div 
+                className="flex flex-col justify-center gap-1 border-b border-slate-100 dark:border-slate-800 p-2"
+                title={metrics?.incidentKpi?.mtta?.explanation}
+              >
                 <span className="text-xs text-slate-500">MTTA (Mean Time to Acknowledge)</span>
-                <div className="text-2xl font-bold text-slate-800 dark:text-white">32m <span className="text-[10px] text-green-500 font-normal">↓ 11%</span></div>
+                <div className="text-2xl font-bold text-slate-800 dark:text-white flex items-baseline">
+                  {formatDuration(metrics?.incidentKpi?.mtta?.value)}
+                  {renderTrend(metrics?.incidentKpi?.mtta?.trend30d, metrics?.incidentKpi?.mtta?.trendAvailable)}
+                </div>
               </div>
-              <div className="flex flex-col justify-center gap-1 border-r border-slate-100 dark:border-slate-800 p-2">
+              <div 
+                className="flex flex-col justify-center gap-1 border-r border-slate-100 dark:border-slate-800 p-2"
+                title={metrics?.incidentKpi?.mttr?.explanation}
+              >
                 <span className="text-xs text-slate-500">MTTR (Mean Time to Respond)</span>
-                <div className="text-2xl font-bold text-slate-800 dark:text-white">4h 12m <span className="text-[10px] text-green-500 font-normal">↓ 18%</span></div>
+                <div className="text-2xl font-bold text-slate-800 dark:text-white flex items-baseline">
+                  {formatDuration(metrics?.incidentKpi?.mttr?.value)}
+                  {renderTrend(metrics?.incidentKpi?.mttr?.trend30d, metrics?.incidentKpi?.mttr?.trendAvailable)}
+                </div>
               </div>
-              <div className="flex flex-col justify-center gap-1 p-2">
+              <div 
+                className="flex flex-col justify-center gap-1 p-2"
+                title={metrics?.incidentKpi?.mttc?.explanation}
+              >
                 <span className="text-xs text-slate-500">MTTC (Mean Time to Contain)</span>
-                <div className="text-2xl font-bold text-slate-800 dark:text-white">2h 45m <span className="text-[10px] text-red-500 font-normal">↑ 14%</span></div>
+                <div className="text-2xl font-bold text-slate-800 dark:text-white flex items-baseline">
+                  {formatDuration(metrics?.incidentKpi?.mttc?.value)}
+                  {renderTrend(metrics?.incidentKpi?.mttc?.trend30d, metrics?.incidentKpi?.mttc?.trendAvailable)}
+                </div>
               </div>
             </div>
             <div className="mt-2 text-right text-xs text-brand-blue hover:underline cursor-pointer">View incident performance →</div>
@@ -282,7 +329,7 @@ export default function CISODashboardPage() {
                           stroke="none" 
                         />
                         <text x="50%" y="45%" textAnchor="middle" dominantBaseline="middle" className="text-lg font-bold fill-slate-800 dark:fill-white">
-                          {sla.totalCritical.toLocaleString()}
+                          {sla.totalCritical !== null ? sla.totalCritical.toLocaleString() : "—"}
                         </text>
                         <text x="50%" y="60%" textAnchor="middle" dominantBaseline="middle" className="text-[10px] fill-slate-500">
                           Total Critical
@@ -297,7 +344,7 @@ export default function CISODashboardPage() {
                         <span className="w-2 h-2 rounded-full bg-red-500"></span> Overdue
                       </span>
                       <span className="font-semibold text-slate-700 dark:text-slate-300">
-                        {sla.overdue !== null ? `${sla.overdue} (${sla.overduePct ?? Math.round((sla.overdue / sla.totalCritical) * 100)}%)` : "N/A"}
+                        {sla.overdue !== null ? `${sla.overdue} (${sla.overduePct ?? (sla.totalCritical ? Math.round((sla.overdue / sla.totalCritical) * 100) : 0)}%)` : "N/A"}
                       </span>
                     </div>
 
@@ -307,7 +354,7 @@ export default function CISODashboardPage() {
                         <span className="w-2 h-2 rounded-full bg-orange-500"></span> Due Soon
                       </span>
                       <span className="font-semibold text-slate-700 dark:text-slate-300">
-                        {sla.dueSoon !== null ? `${sla.dueSoon} (${sla.dueSoonPct ?? Math.round((sla.dueSoon / sla.totalCritical) * 100)}%)` : "N/A"}
+                        {sla.dueSoon !== null ? `${sla.dueSoon} (${sla.dueSoonPct ?? (sla.totalCritical ? Math.round((sla.dueSoon / sla.totalCritical) * 100) : 0)}%)` : "N/A"}
                       </span>
                     </div>
 
@@ -327,7 +374,7 @@ export default function CISODashboardPage() {
                         <span className="w-2 h-2 rounded-full bg-green-500"></span> Compliant
                       </span>
                       <span className="font-semibold text-slate-700 dark:text-slate-300">
-                        {sla.compliant !== null ? `${sla.compliant} (${sla.compliantPct ?? Math.round((sla.compliant / sla.totalCritical) * 100)}%)` : "N/A"}
+                        {sla.compliant !== null ? `${sla.compliant} (${sla.compliantPct ?? (sla.totalCritical ? Math.round((sla.compliant / sla.totalCritical) * 100) : 0)}%)` : "N/A"}
                       </span>
                     </div>
                   </div>
@@ -345,7 +392,12 @@ export default function CISODashboardPage() {
           </Panel>
         </div>
 
-        {/* ROW 3 & 4 (Simplified panels matching headers) */}
+        {/* ROW 3: Active Incident Lifecycle Actions */}
+        <div className="grid grid-cols-1 gap-4">
+          <IncidentResponsePanel onActionCompleted={metricsState.reload} />
+        </div>
+
+        {/* ROW 4 & 5 (Simplified panels matching headers) */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <ThreatIntelPanel />
           <Panel title="Risk Register Summary" className="h-64 flex flex-col justify-between">
