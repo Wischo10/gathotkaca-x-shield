@@ -104,41 +104,53 @@ function fetchOpenSearch<T>(
 
 /**
  * Fetch real MITRE ATT&CK technique coverage from Wazuh Indexer alerts.
- * Aggregates unique 'rule.mitre.id' values in the last 30 days.
- * Returns null if indexer is unreachable or fields are absent.
+ * Aggregates unique 'rule.mitre.id' values in current 30 days (now-30d to now)
+ * and compares against previous 30 days (now-60d to now-30d).
  */
 async function getMitreAttackCoverage(): Promise<{
   score: number;
   evaluated: number;
   passed: number;
+  trend30d: number | null;
+  previousScore: number | null;
 } | null> {
   try {
     const alertsIndex = env.wazuhIndexer.alertsIndex();
     const query = {
       size: 0,
-      query: {
-        bool: {
-          filter: [
-            {
-              range: {
-                "@timestamp": {
-                  gte: "now-30d/d",
-                  lte: "now",
-                },
+      aggs: {
+        current_30d: {
+          filter: {
+            range: {
+              "@timestamp": {
+                gte: "now-30d/d",
+                lte: "now",
               },
             },
-            {
-              exists: {
+          },
+          aggs: {
+            unique_mitre_ids: {
+              cardinality: {
                 field: "rule.mitre.id",
               },
             },
-          ],
+          },
         },
-      },
-      aggs: {
-        unique_mitre_ids: {
-          cardinality: {
-            field: "rule.mitre.id",
+        previous_30d: {
+          filter: {
+            range: {
+              "@timestamp": {
+                gte: "now-60d/d",
+                lt: "now-30d/d",
+              },
+            },
+          },
+          aggs: {
+            unique_mitre_ids: {
+              cardinality: {
+                field: "rule.mitre.id",
+              },
+            },
           },
         },
       },
@@ -146,25 +158,41 @@ async function getMitreAttackCoverage(): Promise<{
 
     const res = await fetchOpenSearch<{
       aggregations?: {
-        unique_mitre_ids?: { value: number };
+        current_30d?: { unique_mitre_ids?: { value: number } };
+        previous_30d?: { unique_mitre_ids?: { value: number } };
       };
     }>(getIndexerUrl(`/${alertsIndex}/_search`), query, 25000);
 
-    const uniqueCount = res?.aggregations?.unique_mitre_ids?.value || 0;
+    const currentUnique = res?.aggregations?.current_30d?.unique_mitre_ids?.value || 0;
+    const previousUnique = res?.aggregations?.previous_30d?.unique_mitre_ids?.value || 0;
 
-    if (uniqueCount <= 0) {
+    if (currentUnique <= 0) {
       return null;
     }
 
-    const calculatedScore = Math.min(
+    const currentScore = Math.min(
       100,
-      Math.round((uniqueCount / TOTAL_ENTERPRISE_MITRE_TECHNIQUES) * 100)
+      Math.round((currentUnique / TOTAL_ENTERPRISE_MITRE_TECHNIQUES) * 100)
     );
 
+    let trend30d: number | null = null;
+    let previousScore: number | null = null;
+
+    if (previousUnique > 0) {
+      previousScore = Math.min(
+        100,
+        Math.round((previousUnique / TOTAL_ENTERPRISE_MITRE_TECHNIQUES) * 100)
+      );
+      // Formula: ((current - previous) / previous) * 100
+      trend30d = Math.round(((currentScore - previousScore) / previousScore) * 100);
+    }
+
     return {
-      score: calculatedScore,
-      passed: uniqueCount,
+      score: currentScore,
+      passed: currentUnique,
       evaluated: TOTAL_ENTERPRISE_MITRE_TECHNIQUES,
+      trend30d,
+      previousScore,
     };
   } catch {
     return null;
@@ -352,6 +380,7 @@ export async function getComplianceOverview(): Promise<ComplianceOverviewData> {
         score = mitreTelemetry.score;
         passedControls = mitreTelemetry.passed;
         evaluatedControls = mitreTelemetry.evaluated;
+        trend30d = mitreTelemetry.trend30d;
       } else if (def.id === "cis-v8" && cisTelemetry) {
         score = cisTelemetry.score;
         passedControls = cisTelemetry.passed;
@@ -359,11 +388,11 @@ export async function getComplianceOverview(): Promise<ComplianceOverviewData> {
       }
       // For iso27001, nist-csf, and uu-pdp without DB assessment: score remains null (Not Assessed)
 
-      // Calculate real trend if 30-day snapshot exists in DB
-      if (score !== null) {
-        const oldScore = dbTrends[def.id];
-        if (oldScore !== undefined && oldScore !== null) {
-          trend30d = Math.round(score - oldScore);
+      // Calculate real trend if 30-day snapshot exists in DB (takes precedence if DB snapshots exist)
+      if (score !== null && dbTrends[def.id] !== undefined && dbTrends[def.id] !== null) {
+        const oldScore = dbTrends[def.id]!;
+        if (oldScore > 0) {
+          trend30d = Math.round(((score - oldScore) / oldScore) * 100);
         }
       }
 
@@ -374,6 +403,7 @@ export async function getComplianceOverview(): Promise<ComplianceOverviewData> {
         name: def.name,
         code: def.code,
         score,
+        previousScore: def.id === "mitre" ? (mitreTelemetry?.previousScore ?? null) : (dbTrends[def.id] ?? null),
         trend30d,
         status,
         passedControls,

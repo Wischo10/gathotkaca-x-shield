@@ -1,12 +1,52 @@
 import "server-only";
+import https from "node:https";
 import { env } from "@/lib/env";
-import { fetchJson } from "@/lib/http";
 
-/**
- * Service layer for the Wazuh Manager REST API (distinct from the Wazuh
- * Indexer above). Handles the login handshake and caches the short-lived
- * JWT it issues so we don't re-authenticate on every request.
- */
+const httpsAgent = new https.Agent({
+  rejectUnauthorized: !env.wazuh.allowSelfSigned(),
+});
+
+function fetchWazuhApi<T>(
+  path: string,
+  options: { method?: string; headers?: Record<string, string>; body?: string } = {}
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const parsedUrl = new URL(`${env.wazuh.apiUrl().replace(/\/$/, "")}${path}`);
+    const req = https.request(
+      {
+        hostname: parsedUrl.hostname,
+        port: parsedUrl.port || 55000,
+        path: parsedUrl.pathname + parsedUrl.search,
+        method: options.method || "GET",
+        headers: options.headers || {},
+        agent: httpsAgent,
+        timeout: env.wazuh.requestTimeoutMs(),
+      },
+      (res) => {
+        let raw = "";
+        res.on("data", (chunk) => (raw += chunk));
+        res.on("end", () => {
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+            try {
+              resolve(JSON.parse(raw) as T);
+            } catch (err) {
+              reject(err);
+            }
+          } else {
+            reject(new Error(`Wazuh API error ${res.statusCode}: ${raw}`));
+          }
+        });
+      }
+    );
+
+    req.on("timeout", () => {
+      req.destroy(new Error(`Wazuh API request timed out after ${env.wazuh.requestTimeoutMs()}ms`));
+    });
+    req.on("error", (err) => reject(err));
+    if (options.body) req.write(options.body);
+    req.end();
+  });
+}
 
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
@@ -19,16 +59,14 @@ async function getToken(): Promise<string> {
     `${env.wazuh.username()}:${env.wazuh.password()}`
   ).toString("base64");
 
-  const res = await fetchJson<{ data: { token: string } }>(
-    `${env.wazuh.apiUrl().replace(/\/$/, "")}/security/user/authenticate`,
+  const res = await fetchWazuhApi<{ data: { token: string } }>(
+    "/security/user/authenticate",
     {
       method: "POST",
       headers: { Authorization: `Basic ${basicAuth}` },
-      timeoutMs: env.wazuh.requestTimeoutMs(),
     }
   );
 
-  // Wazuh JWTs are typically valid for 15 minutes; refresh a little early.
   cachedToken = {
     token: res.data.token,
     expiresAt: Date.now() + 13 * 60 * 1000,
@@ -40,14 +78,44 @@ export interface AgentsSummary {
   total: number;
   active: number;
   disconnected: number;
+  never_connected: number;
+  pending: number;
 }
 
-/** Agent connectivity summary — used to sanity-check data source health. */
+/** Agent connectivity summary — fetches live from Wazuh Manager API. */
 export async function getAgentsSummary(): Promise<AgentsSummary> {
-  // --- MOCK DATA IMPLEMENTATION ---
-  return {
-    total: 100,
-    active: 85,
-    disconnected: 15,
-  };
+  try {
+    const token = await getToken();
+    const res = await fetchWazuhApi<{
+      data: {
+        connection: {
+          total: number;
+          active: number;
+          disconnected: number;
+          never_connected: number;
+          pending: number;
+        };
+      };
+    }>("/agents/summary/status", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    const conn = res.data?.connection;
+    return {
+      total: conn?.total ?? 0,
+      active: conn?.active ?? 0,
+      disconnected: conn?.disconnected ?? 0,
+      never_connected: conn?.never_connected ?? 0,
+      pending: conn?.pending ?? 0,
+    };
+  } catch (err) {
+    console.warn("[Wazuh Manager] getAgentsSummary failed:", err instanceof Error ? err.message : err);
+    return {
+      total: 0,
+      active: 0,
+      disconnected: 0,
+      never_connected: 0,
+      pending: 0,
+    };
+  }
 }
