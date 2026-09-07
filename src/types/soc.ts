@@ -67,7 +67,7 @@ export interface L2Alert {
   severity: Severity;
   source: string;
   asset: string;
-  status: "New" | "In Progress" | "Closed";
+  status: "New" | "In Progress" | "Closed" | "On Hold";
   assignee?: string;
   firstSeen: string;
   lastSeen: string;

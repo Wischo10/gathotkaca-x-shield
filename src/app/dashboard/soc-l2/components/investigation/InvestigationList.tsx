@@ -1,6 +1,7 @@
 import { Panel } from "@/components/ui/Panel";
 import { L2Alert } from "@/types/soc";
 import { Filter, MoreVertical, Search, ChevronLeft, ChevronRight, ShieldAlert, Bug, Activity, Mail, ChevronDown } from "lucide-react";
+import { useState } from "react";
 
 interface InvestigationListProps {
   alerts: L2Alert[];
@@ -9,6 +10,10 @@ interface InvestigationListProps {
 }
 
 export function InvestigationList({ alerts, selectedAlertId, onSelectAlert }: InvestigationListProps) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+  const totalPages = Math.max(1, Math.ceil(alerts.length / itemsPerPage));
+  const displayedAlerts = alerts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   const getSeverityBadge = (severity: string) => {
     switch (severity.toLowerCase()) {
       case "critical":
@@ -40,10 +45,10 @@ export function InvestigationList({ alerts, selectedAlertId, onSelectAlert }: In
   };
 
   const tabs = [
-    { name: "All", count: "128", active: true },
-    { name: "In Progress", count: "24", active: false },
-    { name: "On Hold", count: "6", active: false },
-    { name: "Closed", count: "98", active: false },
+    { name: "All", count: alerts.length.toString(), active: true },
+    { name: "In Progress", count: alerts.filter(a => a.status === "In Progress").length.toString(), active: false },
+    { name: "On Hold", count: "0", active: false },
+    { name: "Closed", count: alerts.filter(a => a.status === "Closed").length.toString(), active: false },
   ];
 
   return (
@@ -99,7 +104,7 @@ export function InvestigationList({ alerts, selectedAlertId, onSelectAlert }: In
       </div>
 
       <div className="flex-1 overflow-y-auto space-y-1 px-3 pb-3">
-        {alerts.map((alert, index) => {
+        {displayedAlerts.map((alert, index) => {
           const isSelected = selectedAlertId === alert.id;
           return (
             <div 
@@ -121,14 +126,14 @@ export function InvestigationList({ alerts, selectedAlertId, onSelectAlert }: In
                       {alert.title}
                     </h4>
                     <span className="text-[10px] text-slate-500 whitespace-nowrap ml-2">
-                      {new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                      {new Date(alert.firstSeen).toLocaleTimeString('id-ID', { hour: 'numeric', minute: '2-digit', hour12: false })}
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 mb-1.5" title={alert.description}>
                     {alert.description || `${alert.title} targeting ${alert.asset}`}
                   </p>
                   <p className="text-[10px] font-mono text-slate-400 dark:text-slate-500 mb-2.5">
-                    CASE-2025-0519-000{index + 1}
+                    CASE-{alert.id.split('-').slice(0, 3).join('-')}
                   </p>
                   <div className="flex justify-between items-center mt-1">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium capitalize ${getSeverityBadge(alert.severity)}`}>
@@ -147,26 +152,44 @@ export function InvestigationList({ alerts, selectedAlertId, onSelectAlert }: In
 
       <div className="border-t border-slate-100 dark:border-slate-800/50 p-4 flex items-center justify-between mt-auto bg-white dark:bg-slate-900 rounded-b-xl">
         <span className="text-[10px] text-slate-500 dark:text-slate-400">
-          Showing 1 to {Math.min(5, alerts.length)} of 128 investigations
+          Showing {alerts.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} to {Math.min(currentPage * itemsPerPage, alerts.length)} of {alerts.length} investigations
         </span>
         <div className="flex items-center gap-0.5">
-          <button className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+          <button 
+            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+            disabled={currentPage === 1}
+            className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 disabled:opacity-50"
+          >
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <button className="w-6 h-6 flex items-center justify-center rounded text-xs bg-brand-blue/10 text-brand-blue font-medium border border-brand-blue/20">
-            1
-          </button>
-          <button className="w-6 h-6 flex items-center justify-center rounded text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">
-            2
-          </button>
-          <button className="w-6 h-6 flex items-center justify-center rounded text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">
-            3
-          </button>
-          <span className="text-slate-400 px-1 text-xs">...</span>
-          <button className="w-6 h-6 flex items-center justify-center rounded text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">
-            26
-          </button>
-          <button className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+          {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+            const pageNum = i + 1;
+            return (
+              <button 
+                key={pageNum} 
+                onClick={() => setCurrentPage(pageNum)}
+                className={`w-6 h-6 flex items-center justify-center rounded text-xs ${pageNum === currentPage ? 'bg-brand-blue/10 text-brand-blue font-medium border border-brand-blue/20' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+              >
+                {pageNum}
+              </button>
+            );
+          })}
+          {totalPages > 5 && (
+            <>
+              <span className="text-slate-400 px-1 text-xs">...</span>
+              <button 
+                onClick={() => setCurrentPage(totalPages)}
+                className={`w-6 h-6 flex items-center justify-center rounded text-xs ${totalPages === currentPage ? 'bg-brand-blue/10 text-brand-blue font-medium border border-brand-blue/20' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+              >
+                {totalPages}
+              </button>
+            </>
+          )}
+          <button 
+            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+            disabled={currentPage === totalPages}
+            className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 disabled:opacity-50"
+          >
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>

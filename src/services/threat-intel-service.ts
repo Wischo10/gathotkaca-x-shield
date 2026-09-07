@@ -46,3 +46,23 @@ export async function getAbuseIPDBReports(): Promise<AbuseIPDBReport[]> {
     return [];
   }
 }
+
+export interface FeedStatus {
+  name: string;
+  source: string;
+  status: string;
+  statusColor: string;
+  lastUpdate: string;
+}
+
+export async function getFeedStatus(): Promise<FeedStatus[]> {
+  try {
+    const response = await fetch("/api/threat-intel/feed-status");
+    if (!response.ok) return [];
+    const data = await response.json();
+    return data.data || [];
+  } catch (error) {
+    console.error("Error fetching feed status:", error);
+    return [];
+  }
+}

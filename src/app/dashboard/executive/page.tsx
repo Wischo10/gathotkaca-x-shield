@@ -129,14 +129,8 @@ function MetricCard({
 export default function ExecutiveDashboardPage() {
   const openSidebar = useSidebarToggle();
 
-  // ── Per-panel range filters ──────────────────────────────────────────────────
-  const [rangeAlerts,       setRangeAlerts]       = useState<RangeValue>("7d");
-  const [rangeTrend,        setRangeTrend]         = useState<RangeValue>("7d");
-  const [rangeStatusTrend,  setRangeStatusTrend]   = useState<RangeValue>("7d");
-  const [rangeRisks,        setRangeRisks]         = useState<RangeValue>("30d");
-  const [rangeAttackMethods,setRangeAttackMethods] = useState<RangeValue>("30d");
-  const [rangeVictims,      setRangeVictims]       = useState<RangeValue>("30d");
-  const [rangeHeatmap,      setRangeHeatmap]       = useState<RangeValue>("30d");
+  // ── Global range filter ──────────────────────────────────────────────────
+  const [globalRange, setGlobalRange] = useState<RangeValue>("24h");
 
   // ── Data state ───────────────────────────────────────────────────────────────
   const [alerts,        setAlerts]        = useState<any>(null);
@@ -209,16 +203,19 @@ export default function ExecutiveDashboardPage() {
       .catch(() => setHeatmapData([]));
   }, []);
 
-  // ── Initial load (static / non-filtered data) ────────────────────────────────
+  // ── Initial load & re-fetch when global range changes ────────────────────────
   useEffect(() => {
-    fetchAlerts(rangeAlerts);
-    fetchTrend(rangeTrend);
-    fetchAttackMethods(rangeAttackMethods);
-    fetchTopVictims(rangeVictims);
-    fetchTopRisks(rangeRisks);
-    fetchHeatmap(rangeHeatmap);
+    fetchAlerts(globalRange);
+    fetchTrend(globalRange);
+    fetchStatusTrend(globalRange);
+    fetchAttackMethods(globalRange);
+    fetchTopVictims(globalRange);
+    fetchTopRisks(globalRange);
+    fetchHeatmap(globalRange);
+  }, [globalRange, fetchAlerts, fetchTrend, fetchStatusTrend, fetchAttackMethods, fetchTopVictims, fetchTopRisks, fetchHeatmap]);
 
-    // These don't have a per-panel time range filter
+  useEffect(() => {
+    // These don't have a time range filter
     fetch("/api/soc/recent-incidents")
       .then(r => r.json()).then(r => setIncidents(r.status === "ok" ? r.data : []))
       .catch(() => setIncidents([]));
@@ -228,17 +225,7 @@ export default function ExecutiveDashboardPage() {
     fetch("/api/executive/board-report")
       .then(r => r.json()).then(r => setBoardReport(r.status === "ok" ? r.data : null))
       .catch(() => setBoardReport(null));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // ── Re-fetch when individual range filters change ────────────────────────────
-  useEffect(() => { fetchAlerts(rangeAlerts); },             [rangeAlerts,        fetchAlerts]);
-  useEffect(() => { fetchTrend(rangeTrend); },               [rangeTrend,         fetchTrend]);
-  useEffect(() => { fetchStatusTrend(rangeStatusTrend); },   [rangeStatusTrend,   fetchStatusTrend]);
-  useEffect(() => { fetchAttackMethods(rangeAttackMethods); },[rangeAttackMethods, fetchAttackMethods]);
-  useEffect(() => { fetchTopVictims(rangeVictims); },        [rangeVictims,       fetchTopVictims]);
-  useEffect(() => { fetchTopRisks(rangeRisks); },            [rangeRisks,         fetchTopRisks]);
-  useEffect(() => { fetchHeatmap(rangeHeatmap); },           [rangeHeatmap,       fetchHeatmap]);
 
   // ── Derived data ─────────────────────────────────────────────────────────────
   const totalAlerts = alerts ? alerts.total : 0;
@@ -266,6 +253,7 @@ export default function ExecutiveDashboardPage() {
         title="Executive Dashboard"
         subtitle="Strategic overview of cybersecurity posture, threats, and performance"
         onMenuClick={openSidebar}
+        action={<RangeSelect value={globalRange} onChange={setGlobalRange} />}
       />
       <main className="flex-1 space-y-4 p-4 sm:p-6 bg-slate-50 dark:bg-slate-950">
 
@@ -367,7 +355,6 @@ export default function ExecutiveDashboardPage() {
           {/* Alerts by Status */}
           <Panel
             title="Alerts by Status"
-            action={<RangeSelect value={rangeAlerts} onChange={setRangeAlerts} />}
           >
             <div className="flex h-56 items-center">
               <div className="h-full w-1/2">
@@ -398,7 +385,6 @@ export default function ExecutiveDashboardPage() {
           {/* Alerts Trend */}
           <Panel
             title="Alerts Trend"
-            action={<RangeSelect value={rangeTrend} onChange={setRangeTrend} />}
           >
             <div className="h-56 w-full">
               {trend.length === 0 ? <div className="flex h-full items-center justify-center text-xs text-slate-400">Loading...</div> :
@@ -418,7 +404,6 @@ export default function ExecutiveDashboardPage() {
           {/* Alerts by Status Trend */}
           <Panel
             title="Alerts by Status Trend"
-            action={<RangeSelect value={rangeStatusTrend} onChange={setRangeStatusTrend} />}
           >
             <div className="flex items-center justify-center gap-4 text-[10px] text-slate-500 mb-2">
               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#ef4444]"></span> Critical</span>
@@ -447,7 +432,6 @@ export default function ExecutiveDashboardPage() {
           {/* Top Risks by Domain */}
           <Panel
             title="Top Risks by Domain"
-            action={<RangeSelect value={rangeRisks} onChange={setRangeRisks} />}
           >
             <div className="flex h-56 flex-col gap-2.5 overflow-y-auto pt-1 pr-1">
               {!topRisks ? (
@@ -499,7 +483,6 @@ export default function ExecutiveDashboardPage() {
           {/* Attack Country Heatmap */}
           <Panel
             title="Attack Country Heatmap"
-            action={<RangeSelect value={rangeHeatmap} onChange={setRangeHeatmap} />}
           >
             <div className="h-56 relative">
               {heatmapData === null ? (
@@ -514,7 +497,6 @@ export default function ExecutiveDashboardPage() {
           {/* Attack Method Distribution */}
           <Panel
             title="Attack Method Distribution"
-            action={<RangeSelect value={rangeAttackMethods} onChange={setRangeAttackMethods} />}
           >
             <div className="flex h-56 items-center">
               <div className="h-full w-1/2">
@@ -545,7 +527,6 @@ export default function ExecutiveDashboardPage() {
           {/* Top 10 Victim */}
           <Panel
             title="Top 10 Victim (By Alerts)"
-            action={<RangeSelect value={rangeVictims} onChange={setRangeVictims} />}
           >
             <div className="h-56 w-full text-[10px]">
               {!topVictims ? <div className="flex h-full items-center justify-center text-xs text-slate-400">Loading...</div> :

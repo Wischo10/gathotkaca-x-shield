@@ -6,10 +6,12 @@ export function Topbar({
   title,
   subtitle,
   onMenuClick,
+  action,
 }: {
   title: string;
   subtitle: string;
   onMenuClick: () => void;
+  action?: React.ReactNode;
 }) {
   const router = useRouter();
 
@@ -47,9 +49,9 @@ export function Topbar({
         >
           <option value="all">All Business Units</option>
         </select>
-        <span className="rounded-md border border-slate-200 px-2 py-1.5 text-slate-600 dark:border-slate-700 dark:text-slate-300">
-          Last 7 days
-        </span>
+        
+        {action}
+
         <button
           onClick={handleLogout}
           className="rounded-md border border-slate-200 px-2 py-1.5 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"

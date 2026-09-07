@@ -10,13 +10,7 @@ interface Evidence {
   addedBy: string;
 }
 
-const MOCK_EVIDENCE: Evidence[] = [
-  { id: "1", name: "waf-01-20250519.log", type: "Log File", source: "WAF-01", addedAt: "10:32:22 AM", addedBy: "Fandi Junerry" },
-  { id: "2", name: "vpn-gateway.log", type: "Log File", source: "VPN-GW-01", addedAt: "10:32:25 AM", addedBy: "Fandi Junerry" },
-  { id: "3", name: "firewall-block.log", type: "Log File", source: "Firewall", addedAt: "10:32:27 AM", addedBy: "Fandi Junerry" },
-  { id: "4", name: "failed-login-screenshot.png", type: "Screenshot", source: "WAF-01", addedAt: "10:32:30 AM", addedBy: "Fandi Junerry" },
-  { id: "5", name: "brute-force-summary.txt", type: "Report", source: "SIEM-01", addedAt: "10:32:35 AM", addedBy: "Fandi Junerry" },
-];
+const MOCK_EVIDENCE: Evidence[] = [];
 
 export function EvidenceList() {
   const getIcon = (type: string) => {
@@ -43,7 +37,9 @@ export function EvidenceList() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
-            {MOCK_EVIDENCE.map(item => (
+            {MOCK_EVIDENCE.length === 0 ? (
+              <tr><td colSpan={6} className="py-4 text-center text-slate-500">No evidence attached yet.</td></tr>
+            ) : MOCK_EVIDENCE.map(item => (
               <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                 <td className="py-2.5 px-1 font-medium text-slate-900 dark:text-white flex items-center gap-2">
                   {item.name}

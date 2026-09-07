@@ -1,26 +1,21 @@
 import { Search, ChevronLeft, ChevronRight, ChevronDown, ListFilter, LayoutGrid } from "lucide-react";
 import { useState } from "react";
 
-export function CasesTable({ onSelectCase, selectedCaseId }: { onSelectCase: (id: string) => void, selectedCaseId?: string }) {
+import { L2Alert } from "@/types/soc";
+
+export function CasesTable({ onSelectCase, selectedCaseId, alerts = [] }: { onSelectCase: (id: string) => void, selectedCaseId?: string, alerts?: L2Alert[] }) {
   const [activeTab, setActiveTab] = useState("All Cases");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const tabs = [
-    { name: "All Cases", count: 128 },
-    { name: "My Cases", count: 12 },
-    { name: "Unassigned", count: 4 },
-    { name: "SLA Breach", count: 3 },
+    { name: "All Cases", count: alerts.length },
+    { name: "My Cases", count: alerts.filter(a => a.assignee === "Me").length },
+    { name: "Unassigned", count: alerts.filter(a => !a.assignee).length },
+    { name: "SLA Breach", count: 0 },
   ];
 
-  const mockCases = [
-    { id: "CASE-2025-0519-0001", title: "Brute Force Login Detected", status: "In Progress", severity: "Critical", priority: "P1", category: "Authentication", assignee: "Fandi Junerry", created: "May 19, 2025\n10:31 AM", sla: 85, updated: "10:55 AM" },
-    { id: "CASE-2025-0519-0002", title: "Malware Execution Blocked", status: "In Progress", severity: "High", priority: "P1", category: "Malware", assignee: "Rizky Pratama", created: "May 19, 2025\n10:28 AM", sla: 60, updated: "10:52 AM" },
-    { id: "CASE-2025-0519-0003", title: "Web Application Attack", status: "In Progress", severity: "High", priority: "P2", category: "Web Attack", assignee: "Siti Aisyah", created: "May 19, 2025\n10:24 AM", sla: 72, updated: "10:50 AM" },
-    { id: "CASE-2025-0519-0004", title: "Data Exfiltration Attempt", status: "On Hold", severity: "Medium", priority: "P2", category: "Data Loss", assignee: "Andi Wijaya", created: "May 19, 2025\n10:22 AM", sla: 40, updated: "10:45 AM" },
-    { id: "CASE-2025-0518-0007", title: "Suspicious PowerShell Activity", status: "In Progress", severity: "High", priority: "P1", category: "Suspicious Activity", assignee: "Rizky Pratama", created: "May 18, 2025\n09:15 PM", sla: 75, updated: "10:40 AM" },
-    { id: "CASE-2025-0518-0006", title: "Phishing Email Clicked", status: "In Progress", severity: "Medium", priority: "P3", category: "Phishing", assignee: "Dewi Lestari", created: "May 18, 2025\n08:45 PM", sla: 55, updated: "10:35 AM" },
-    { id: "CASE-2025-0518-0005", title: "C2 Communication Detected", status: "Closed", severity: "High", priority: "P1", category: "C2 / Command & Control", assignee: "Fandi Junerry", created: "May 18, 2025\n07:30 PM", sla: 100, updated: "May 19, 2025\n09:10 AM" },
-    { id: "CASE-2025-0518-0004", title: "Privilege Escalation", status: "Closed", severity: "Medium", priority: "P2", category: "Privilege Abuse", assignee: "Andi Wijaya", created: "May 18, 2025\n08:40 PM", sla: 100, updated: "May 19, 2025\n08:50 AM" },
-  ];
+
 
   const getSeverityBadge = (severity: string) => {
     switch (severity.toLowerCase()) {
@@ -46,6 +41,22 @@ export function CasesTable({ onSelectCase, selectedCaseId }: { onSelectCase: (id
     return "text-red-500";
   };
 
+  const filteredAlerts = alerts.filter(a => {
+    if (activeTab === "My Cases") return a.assignee === "Me";
+    if (activeTab === "Unassigned") return !a.assignee;
+    if (activeTab === "SLA Breach") return false; // mock
+    return true; // "All Cases"
+  });
+
+  const totalPages = Math.max(1, Math.ceil(filteredAlerts.length / itemsPerPage));
+  const displayedAlerts = filteredAlerts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  // Reset page when tab changes
+  const handleTabChange = (tabName: string) => {
+    setActiveTab(tabName);
+    setCurrentPage(1);
+  };
+
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm flex flex-col mt-4">
       
@@ -54,7 +65,7 @@ export function CasesTable({ onSelectCase, selectedCaseId }: { onSelectCase: (id
         {tabs.map(tab => (
           <button 
             key={tab.name}
-            onClick={() => setActiveTab(tab.name)}
+            onClick={() => handleTabChange(tab.name)}
             className={`pb-3 pt-2 px-4 text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 border-b-2 ${
               activeTab === tab.name 
                 ? "border-brand-blue text-brand-blue" 
@@ -105,46 +116,71 @@ export function CasesTable({ onSelectCase, selectedCaseId }: { onSelectCase: (id
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
-            {mockCases.map((c) => (
+            {displayedAlerts.length === 0 ? (
+              <tr><td colSpan={11} className="py-4 text-center text-slate-500">No cases found.</td></tr>
+            ) : displayedAlerts.map((c) => {
+              let priority = "P3";
+              if (c.severity === "critical" || c.severity === "high") priority = "P1";
+              else if (c.severity === "medium") priority = "P2";
+
+              const formatDate = (isoString: string) => {
+                try {
+                  const d = new Date(isoString);
+                  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) + "\n" + d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+                } catch {
+                  return isoString;
+                }
+              };
+              
+              const title = c.title || "No Title";
+              const status = c.status || "New";
+              const severity = c.severity ? c.severity.charAt(0).toUpperCase() + c.severity.slice(1) : "Unknown";
+              const category = c.source || "Unknown";
+              const assignee = c.assignee || "Unassigned";
+              const created = formatDate(c.firstSeen || new Date().toISOString());
+              const updated = formatDate(c.lastSeen || new Date().toISOString());
+              const sla = 100; // placeholder SLA
+              
+              return (
               <tr 
-                key={c.id} 
+                key={c.id || Math.random().toString()} 
                 onClick={() => onSelectCase(c.id)}
                 className={`cursor-pointer transition-colors ${selectedCaseId === c.id ? "bg-blue-50 dark:bg-blue-900/10" : "hover:bg-slate-50 dark:hover:bg-slate-800/50"}`}
               >
                 <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
                   <input type="checkbox" className="rounded border-slate-300" />
                 </td>
-                <td className="py-3 px-4 font-medium text-slate-900 dark:text-white whitespace-nowrap">{c.id}</td>
-                <td className="py-3 px-4 font-medium text-slate-900 dark:text-white min-w-[200px]">{c.title}</td>
+                <td className="py-3 px-4 font-medium text-slate-900 dark:text-white whitespace-nowrap">{c.id ? c.id.substring(0, 8) : "N/A"}</td>
+                <td className="py-3 px-4 font-medium text-slate-900 dark:text-white min-w-[200px]">{title}</td>
                 <td className="py-3 px-4">
-                  <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${getStatusBadge(c.status)}`}>
-                    {c.status}
+                  <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${getStatusBadge(status)}`}>
+                    {status}
                   </span>
                 </td>
                 <td className="py-3 px-4">
-                  <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold border ${getSeverityBadge(c.severity)}`}>
-                    {c.severity}
+                  <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold border ${getSeverityBadge(severity)}`}>
+                    {severity}
                   </span>
                 </td>
-                <td className="py-3 px-4 font-semibold text-slate-700 dark:text-slate-200">{c.priority}</td>
-                <td className="py-3 px-4 whitespace-nowrap">{c.category}</td>
-                <td className="py-3 px-4 whitespace-nowrap">{c.assignee}</td>
-                <td className="py-3 px-4 text-xs whitespace-pre-line leading-tight">{c.created}</td>
+                <td className="py-3 px-4 font-semibold text-slate-700 dark:text-slate-200">{priority}</td>
+                <td className="py-3 px-4 whitespace-nowrap">{category}</td>
+                <td className="py-3 px-4 whitespace-nowrap">{assignee}</td>
+                <td className="py-3 px-4 text-xs whitespace-pre-line leading-tight">{created}</td>
                 <td className="py-3 px-4">
                   <div className="flex items-center gap-2">
                     {/* SVG Circle Progress */}
                     <div className="relative w-6 h-6">
                       <svg className="w-6 h-6 transform -rotate-90">
                         <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5" fill="transparent" className="text-slate-200 dark:text-slate-700" />
-                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5" fill="transparent" strokeDasharray={`${2 * Math.PI * 10}`} strokeDashoffset={`${2 * Math.PI * 10 * (1 - c.sla / 100)}`} className={getSLACircleColor(c.sla)} />
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5" fill="transparent" strokeDasharray={`${2 * Math.PI * 10}`} strokeDashoffset={`${2 * Math.PI * 10 * (1 - sla / 100)}`} className={getSLACircleColor(sla)} />
                       </svg>
                     </div>
-                    <span className="font-semibold text-slate-700 dark:text-slate-200">{c.sla}%</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-200">{sla}%</span>
                   </div>
                 </td>
-                <td className="py-3 px-4 text-xs whitespace-pre-line leading-tight">{c.updated}</td>
+                <td className="py-3 px-4 text-xs whitespace-pre-line leading-tight">{updated}</td>
               </tr>
-            ))}
+            )})}
           </tbody>
         </table>
       </div>
@@ -152,25 +188,47 @@ export function CasesTable({ onSelectCase, selectedCaseId }: { onSelectCase: (id
       {/* Pagination */}
       <div className="border-t border-slate-200 dark:border-slate-800 p-4 flex items-center justify-between mt-auto">
         <span className="text-sm text-slate-500 dark:text-slate-400">
-          Showing 1 to 8 of 128 cases
+          Showing {filteredAlerts.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} to {Math.min(currentPage * itemsPerPage, filteredAlerts.length)} of {filteredAlerts.length} cases
         </span>
         <div className="flex items-center gap-1">
-          <button className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+          <button 
+            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+            disabled={currentPage === 1}
+            className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 disabled:opacity-50"
+          >
             <ChevronLeft className="w-5 h-5" />
           </button>
-          {[1, 2, 3, 4, 5].map((page) => (
-            <button 
-              key={page} 
-              className={`w-7 h-7 flex items-center justify-center rounded text-sm ${page === 1 ? 'bg-brand-blue/10 text-brand-blue font-medium' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-            >
-              {page}
-            </button>
-          ))}
-          <span className="text-slate-400 px-1">...</span>
-          <button className="w-7 h-7 flex items-center justify-center rounded text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">
-            16
-          </button>
-          <button className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+          
+          {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+            const pageNum = i + 1;
+            return (
+              <button 
+                key={pageNum} 
+                onClick={() => setCurrentPage(pageNum)}
+                className={`w-7 h-7 flex items-center justify-center rounded text-sm ${pageNum === currentPage ? 'bg-brand-blue/10 text-brand-blue font-medium' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+              >
+                {pageNum}
+              </button>
+            );
+          })}
+          
+          {totalPages > 5 && (
+            <>
+              <span className="text-slate-400 px-1">...</span>
+              <button 
+                onClick={() => setCurrentPage(totalPages)}
+                className={`w-7 h-7 flex items-center justify-center rounded text-sm ${totalPages === currentPage ? 'bg-brand-blue/10 text-brand-blue font-medium' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+              >
+                {totalPages}
+              </button>
+            </>
+          )}
+
+          <button 
+            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+            disabled={currentPage === totalPages}
+            className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 disabled:opacity-50"
+          >
             <ChevronRight className="w-5 h-5" />
           </button>
         </div>

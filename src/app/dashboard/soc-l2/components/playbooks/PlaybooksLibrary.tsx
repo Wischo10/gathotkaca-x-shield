@@ -1,104 +1,7 @@
 import { Search, Filter, Play, Edit, MoreVertical, Shield, Bug, Mail, Database, Key, Server, Cloud } from "lucide-react";
 import { useState } from "react";
 
-const playbooksData = [
-  {
-    id: 1,
-    name: "Brute Force - Account Lockout",
-    category: "Authentication",
-    categoryColor: "text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-900/30",
-    type: "Response",
-    description: "Detect & respond to brute force login attempts and lock suspicious accounts.",
-    lastUpdated: "May 18, 2025\n09:15 AM",
-    status: "Active",
-    usage: 28,
-    icon: Shield
-  },
-  {
-    id: 2,
-    name: "Malware Detected - Endpoint",
-    category: "Malware",
-    categoryColor: "text-red-600 bg-red-50 dark:text-red-400 dark:bg-red-900/30",
-    type: "Response",
-    description: "Contain and remediate malware detected on endpoints.",
-    lastUpdated: "May 17, 2025\n02:45 PM",
-    status: "Active",
-    usage: 20,
-    icon: Bug
-  },
-  {
-    id: 3,
-    name: "Phishing Email Reported",
-    category: "Phishing",
-    categoryColor: "text-yellow-600 bg-yellow-50 dark:text-yellow-400 dark:bg-yellow-900/30",
-    type: "Response",
-    description: "Analyze reported phishing email and take containment actions.",
-    lastUpdated: "May 16, 2025\n11:30 AM",
-    status: "Active",
-    usage: 18,
-    icon: Mail
-  },
-  {
-    id: 4,
-    name: "IOC Enrichment & Blocking",
-    category: "Threat Intel",
-    categoryColor: "text-purple-600 bg-purple-50 dark:text-purple-400 dark:bg-purple-900/30",
-    type: "Response",
-    description: "Enrich IOC and block related indicators across security controls.",
-    lastUpdated: "May 15, 2025\n04:20 PM",
-    status: "Active",
-    usage: 34,
-    icon: Database
-  },
-  {
-    id: 5,
-    name: "Data Exfiltration - Investigation",
-    category: "Data Loss",
-    categoryColor: "text-orange-600 bg-orange-50 dark:text-orange-400 dark:bg-orange-900/30",
-    type: "Investigation",
-    description: "Investigate possible data exfiltration activities and collect evidence.",
-    lastUpdated: "May 14, 2025\n10:10 AM",
-    status: "Active",
-    usage: 12,
-    icon: Server
-  },
-  {
-    id: 6,
-    name: "Privilege Escalation - Windows",
-    category: "Privilege",
-    categoryColor: "text-emerald-600 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-900/30",
-    type: "Response",
-    description: "Detect and respond to privilege escalation attempts on Windows systems.",
-    lastUpdated: "May 13, 2025\n03:05 PM",
-    status: "Active",
-    usage: 16,
-    icon: Key
-  },
-  {
-    id: 7,
-    name: "Ransomware - Containment",
-    category: "Ransomware",
-    categoryColor: "text-rose-600 bg-rose-50 dark:text-rose-400 dark:bg-rose-900/30",
-    type: "Response",
-    description: "Isolate affected hosts and contain ransomware spread.",
-    lastUpdated: "May 12, 2025\n09:40 AM",
-    status: "Active",
-    usage: 9,
-    icon: Bug
-  },
-  {
-    id: 8,
-    name: "Cloud - Suspicious Activity",
-    category: "Cloud",
-    categoryColor: "text-cyan-600 bg-cyan-50 dark:text-cyan-400 dark:bg-cyan-900/30",
-    type: "Investigation",
-    description: "Investigate suspicious activities in cloud environments.",
-    lastUpdated: "May 11, 2025\n01:25 PM",
-    status: "Active",
-    usage: 15,
-    icon: Cloud
-  }
-];
+const playbooksData: any[] = [];
 
 export function PlaybooksLibrary() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -158,7 +61,9 @@ export function PlaybooksLibrary() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-            {playbooksData.map((pb) => {
+            {playbooksData.length === 0 ? (
+              <tr><td colSpan={8} className="py-8 text-center text-slate-500">No playbooks found.</td></tr>
+            ) : playbooksData.map((pb) => {
               const Icon = pb.icon;
               return (
                 <tr key={pb.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">

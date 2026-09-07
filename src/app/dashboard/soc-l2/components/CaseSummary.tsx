@@ -56,12 +56,12 @@ export function CaseSummary({ investigationCase, user }: CaseSummaryProps) {
 
         <div className="grid grid-cols-[100px_1fr] gap-4">
           <span className="text-slate-500">Created</span>
-          <span className="font-medium text-slate-900 dark:text-white">May 19, 2025 10:31:45 AM</span>
+          <span className="font-medium text-slate-900 dark:text-white">{new Date(alert.firstSeen).toLocaleString('id-ID')}</span>
         </div>
 
         <div className="grid grid-cols-[100px_1fr] gap-4">
           <span className="text-slate-500">Last Update</span>
-          <span className="font-medium text-slate-900 dark:text-white">May 19, 2025 10:55:12 AM</span>
+          <span className="font-medium text-slate-900 dark:text-white">{new Date(alert.lastSeen).toLocaleString('id-ID')}</span>
         </div>
 
         <div className="grid grid-cols-[100px_1fr] gap-4 items-center">
@@ -75,15 +75,12 @@ export function CaseSummary({ investigationCase, user }: CaseSummaryProps) {
         
         <div className="grid grid-cols-[100px_1fr] gap-4">
           <span className="text-slate-500">MITRE ATT&CK</span>
-          <a href="#" className="font-medium text-slate-900 dark:text-white hover:text-brand-blue hover:underline">T1110 - Brute Force</a>
+          <span className="font-medium text-slate-400">N/A</span>
         </div>
         
         <div className="grid grid-cols-[100px_1fr] gap-4">
           <span className="text-slate-500 mt-1">Tags</span>
           <div className="flex flex-wrap gap-1.5">
-            <span className="text-[10px] font-medium text-blue-600 bg-blue-50 dark:bg-blue-500/10 px-2 py-1 rounded">Authentication</span>
-            <span className="text-[10px] font-medium text-blue-600 bg-blue-50 dark:bg-blue-500/10 px-2 py-1 rounded">Brute Force</span>
-            <span className="text-[10px] font-medium text-blue-600 bg-blue-50 dark:bg-blue-500/10 px-2 py-1 rounded">VPN</span>
             <button className="text-[10px] font-medium text-slate-500 hover:text-slate-700 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 px-2 py-1 rounded border border-slate-200 dark:border-slate-700 border-dashed inline-flex items-center">
               <Plus className="w-3 h-3" />
             </button>

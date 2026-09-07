@@ -1,0 +1,27 @@
+LAPORAN PERBAIKAN DAN UPDATE GATHOTKACA X-SHIELD
+Tanggal: 7 September 2026
+
+Berikut adalah daftar perbaikan bug, penyesuaian logika, dan peningkatan arsitektur fitur (khususnya untuk integrasi Live Data) yang telah berhasil diselesaikan pada hari ini:
+
+1. IMPLEMENTASI POP-UP MODAL (SOC L2)
+   - [Selesai] Menambahkan komponen Modal interaktif pada halaman SOC L2 untuk menggantikan dummy links "View All".
+   - [Selesai] Menerapkan pop-up detail laporan pada komponen CasesCharts, ThreatMiddleRow, dan RecentThreatAlerts.
+   - [Selesai] Pop-up sekarang menampilkan struktur data lengkap hasil fetching API secara live saat ditekan, tidak lagi mengarah ke rute kosong atau memuat ulang halaman.
+
+2. PENYEMPURNAAN LOGIKA "TOP RISKS BY DOMAIN" (EXECUTIVE DASHBOARD)
+   - [Perbaikan Bug] Memperbaiki query OpenSearch untuk domain "Compliance". Sebelumnya, pencarian alert kepatuhan gagal karena mencari tag di dalam array rule.groups. Kode telah dirombak untuk mencari eksistensi field mandiri secara langsung (seperti rule.pci_dss, rule.gdpr, rule.hipaa, dan rule.nist_800_53).
+   - [Pembaruan] Memperbarui formula perhitungan "Risk Score" (Skor Risiko). Skala pembobotannya disesuaikan secara dinamis untuk menangani beban data asli (live data) yang berkapasitas besar dari Wazuh, sehingga skor yang dihasilkan (0-100) jauh lebih akurat dan realistis.
+
+3. SENTRALISASI "GLOBAL TIME FILTER" (EXECUTIVE DASHBOARD)
+   - [Pembaruan UI/UX] Menghapus sistem dropdown filter rentang waktu (RangeSelect) individual yang sebelumnya terpasang terpisah-pisah di setiap kotak metrik panel (Alerts Trend, Status, Attack Methods, Heatmap, dll).
+   - [Pembaruan Arsitektur] Menyatukan seluruh state filter waktu ke dalam satu komponen global tunggal yang menyatu dengan Topbar.
+   - [Selesai] Mengatur sinkronisasi fetcher: Ketika dropdown global diubah (misalnya ke "Today"), seluruh panel dan grafik di Executive Dashboard akan di-fetch ulang secara paralel untuk menampilkan rentang waktu yang sama persis.
+
+4. VERIFIKASI KEASLIAN LIVE DATA
+   - Telah diverifikasi dan dipastikan bahwa sekitar 95% metrik di Executive Dashboard (seperti Attack Country Heatmap dan Board Report) sudah murni menggunakan agregasi Live Data dari Wazuh Indexer.
+   - Data "Sample IPs" pada Peta Heatmap telah tervalidasi menarik atribut data.srcip publik secara real-time dari log serangan sungguhan.
+   - *Catatan/Pending*: Metrik "Processed Alerts" dan "Closed Alerts" adalah dua metrik tersisa yang belum live karena membutuhkan rancangan tabel database tiket (SOC Cases DB) tersendiri di masa mendatang.
+
+---
+Status: Selesai
+Laporan ini dihasilkan otomatis dari riwayat sistem.

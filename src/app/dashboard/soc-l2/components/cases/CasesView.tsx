@@ -4,8 +4,9 @@ import { CasesTable } from "./CasesTable";
 import { CasesCharts } from "./CasesCharts";
 import { CaseDetailSidebar } from "./CaseDetailSidebar";
 import { Filter, MoreVertical } from "lucide-react";
+import { L2Alert } from "@/types/soc";
 
-export function CasesView() {
+export function CasesView({ alerts = [] }: { alerts?: L2Alert[] }) {
   const [selectedCaseId, setSelectedCaseId] = useState<string | undefined>();
 
   return (
@@ -29,9 +30,9 @@ export function CasesView() {
           </div>
         </div>
 
-        <CasesKPIs />
-        <CasesTable onSelectCase={setSelectedCaseId} selectedCaseId={selectedCaseId} />
-        <CasesCharts />
+        <CasesKPIs alerts={alerts} />
+        <CasesTable alerts={alerts} onSelectCase={setSelectedCaseId} selectedCaseId={selectedCaseId} />
+        <CasesCharts alerts={alerts} />
       </div>
 
       {/* Sidebar Overlay/Flex Item */}

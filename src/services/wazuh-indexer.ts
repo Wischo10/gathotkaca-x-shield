@@ -394,22 +394,42 @@ export interface DomainRisk {
   highCount: number;
 }
 
-/**
- * Derives security domain risk scores from Wazuh alert data.
- * Maps rule.groups → security domains and calculates a risk score (0-100)
- * based on weighted critical/high alert counts.
- */
 export async function getTopRisksByDomain(range: string = "30d"): Promise<DomainRisk[]> {
   const gte = RANGE_TO_GTE[range] || "now-30d";
   const index = env.wazuhIndexer.alertsIndex();
 
   // --- Domain group mappings ---
-  const domainConfig: Array<{ domain: string; groups: string[] }> = [
-    { domain: "Network",     groups: ["network", "firewall", "ids", "idsalert", "ddos", "web", "cisco", "pfsense"] },
-    { domain: "Endpoint",   groups: ["windows", "linux", "sysmon", "osquery", "malware", "rootcheck", "fim"] },
-    { domain: "Identity",   groups: ["authentication_success", "authentication_failed", "authentication_failures", "brute_force", "sudo"] },
-    { domain: "Application",groups: ["web", "sql_injection", "xss", "application", "apache", "nginx"] },
-    { domain: "Compliance", groups: ["pci_dss", "gdpr", "hipaa", "nist_800_53", "tsc"] },
+  const domainConfig: Array<{ domain: string; filter: any }> = [
+    { 
+      domain: "Network",     
+      filter: { terms: { "rule.groups": ["network", "firewall", "ids", "idsalert", "ddos", "web", "cisco", "pfsense"] } } 
+    },
+    { 
+      domain: "Endpoint",   
+      filter: { terms: { "rule.groups": ["windows", "linux", "sysmon", "osquery", "malware", "rootcheck", "fim"] } } 
+    },
+    { 
+      domain: "Identity",   
+      filter: { terms: { "rule.groups": ["authentication_success", "authentication_failed", "authentication_failures", "brute_force", "sudo"] } } 
+    },
+    { 
+      domain: "Application",
+      filter: { terms: { "rule.groups": ["web", "sql_injection", "xss", "application", "apache", "nginx"] } } 
+    },
+    { 
+      domain: "Compliance", 
+      filter: { 
+        bool: { 
+          should: [
+            { exists: { field: "rule.pci_dss" } },
+            { exists: { field: "rule.gdpr" } },
+            { exists: { field: "rule.hipaa" } },
+            { exists: { field: "rule.nist_800_53" } },
+            { exists: { field: "rule.tsc" } }
+          ] 
+        } 
+      } 
+    },
   ];
 
   // For each domain we run a filtered aggregation split by severity
@@ -417,12 +437,10 @@ export async function getTopRisksByDomain(range: string = "30d"): Promise<Domain
     size: 0,
     query: { range: { timestamp: { gte } } },
     aggs: Object.fromEntries(
-      domainConfig.map(({ domain, groups }) => [
+      domainConfig.map(({ domain, filter }) => [
         domain,
         {
-          filter: {
-            terms: { "rule.groups": groups },
-          },
+          filter,
           aggs: {
             severities: {
               range: {
@@ -462,8 +480,9 @@ export async function getTopRisksByDomain(range: string = "30d"): Promise<Domain
     // Weighted risk score: critical=4, high=2, medium=1, low=0.25
     const rawScore = critical * 4 + high * 2 + medium * 1 + low * 0.25;
 
-    // Normalize to 0-100 using soft logarithmic scale
-    const score = Math.min(100, Math.round((rawScore / (rawScore + 200)) * 200));
+    // Normalize to 0-100 using a more realistic scale for live environments.
+    // If rawScore reaches ~2000, it becomes 50. If 10000, it becomes ~83.
+    const score = Math.min(100, Math.round((rawScore / (rawScore + 2000)) * 100));
 
     const level: DomainRisk["level"] =
       score >= 75 ? "critical" :

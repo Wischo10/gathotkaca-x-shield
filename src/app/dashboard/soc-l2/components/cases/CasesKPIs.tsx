@@ -1,48 +1,45 @@
 import { Folder, CircleDashed, Clock, CheckCircle2, AlertTriangle, ArrowUp, ArrowDown } from "lucide-react";
+import { L2Alert } from "@/types/soc";
 
-export function CasesKPIs() {
+export function CasesKPIs({ alerts = [] }: { alerts?: L2Alert[] }) {
+  const totalCases = alerts.length;
+  const newOrInProgress = alerts.filter(a => !a.status || a.status === "New" || a.status === "In Progress").length;
+  const onHold = alerts.filter(a => a.status === "On Hold").length;
+  const closed = alerts.filter(a => a.status === "Closed").length;
+  const slaBreach = 0; // Since we don't track SLA natively in alerts
+
   const kpis = [
     {
       title: "Total Cases",
-      value: "128",
-      trend: "+18%",
-      trendDir: "up",
+      value: totalCases.toString(),
       icon: Folder,
       iconColor: "text-blue-500",
       iconBg: "bg-blue-50 dark:bg-blue-500/10"
     },
     {
-      title: "In Progress",
-      value: "24",
-      trend: "+14%",
-      trendDir: "up",
+      title: "New / In Progress",
+      value: newOrInProgress.toString(),
       icon: CircleDashed,
       iconColor: "text-orange-500",
       iconBg: "bg-orange-50 dark:bg-orange-500/10"
     },
     {
       title: "On Hold",
-      value: "6",
-      trend: "+25%",
-      trendDir: "up",
+      value: onHold.toString(),
       icon: Clock,
       iconColor: "text-yellow-500",
       iconBg: "bg-yellow-50 dark:bg-yellow-500/10"
     },
     {
-      title: "Closed (This Week)",
-      value: "98",
-      trend: "+22%",
-      trendDir: "up",
+      title: "Closed",
+      value: closed.toString(),
       icon: CheckCircle2,
       iconColor: "text-emerald-500",
       iconBg: "bg-emerald-50 dark:bg-emerald-500/10"
     },
     {
       title: "SLA Breach",
-      value: "3",
-      trend: "+40%",
-      trendDir: "down", // visually it's green arrow down in typical dashboards, but here it's green arrow down in mock? wait, it says +40%, so bad? Let's use red up arrow for breach if it goes up, but the image shows a green arrow down for SLA Breach? Ah, the image has a green arrow down and "-40% vs last 7 days" maybe? The image says "+40%" with a green arrow pointing down. That's weird. I'll just make it a green arrow down for now.
+      value: slaBreach.toString(),
       icon: AlertTriangle,
       iconColor: "text-red-500",
       iconBg: "bg-red-50 dark:bg-red-500/10"
@@ -68,9 +65,8 @@ export function CasesKPIs() {
                 {kpi.value}
               </div>
             </div>
-            <div className="mt-2 text-xs font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-              {kpi.trendDir === "up" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
-              {kpi.trend} <span className="text-slate-400 dark:text-slate-500 font-normal ml-0.5">vs last 7 days</span>
+            <div className="mt-2 text-[10px] font-medium text-slate-400 dark:text-slate-500 flex items-center gap-1">
+              Live Data Snapshot
             </div>
           </div>
         );

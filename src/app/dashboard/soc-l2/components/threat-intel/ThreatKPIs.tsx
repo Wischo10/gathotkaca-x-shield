@@ -15,13 +15,13 @@ export function ThreatKPIs() {
     });
   }, []);
 
-  const generateSparkline = () => Array.from({ length: 10 }, () => ({ value: Math.floor(Math.random() * 100) }));
+  const generateSparkline = () => Array.from({ length: 10 }, () => ({ value: 0 }));
 
   const kpis = [
     {
       title: "Overall Threat Level",
-      value: "High",
-      trend: "+ 25%",
+      value: "N/A",
+      trend: "-",
       icon: ShieldAlert,
       color: "text-red-500",
       bg: "bg-red-50 dark:bg-red-500/10",
@@ -33,7 +33,7 @@ export function ThreatKPIs() {
     {
       title: "New IOCs (Today)",
       value: iocCount.toLocaleString() || "0",
-      trend: "+ 18%",
+      trend: "-",
       icon: Bug, // The image has a biohazard icon, Bug is close enough
       color: "text-blue-500",
       bg: "bg-blue-50 dark:bg-blue-500/10",
@@ -43,8 +43,8 @@ export function ThreatKPIs() {
     },
     {
       title: "Tracked IOCs",
-      value: "28,671",
-      trend: "+ 12%",
+      value: "0",
+      trend: "-",
       icon: Target,
       color: "text-emerald-500",
       bg: "bg-emerald-50 dark:bg-emerald-500/10",
@@ -54,8 +54,8 @@ export function ThreatKPIs() {
     },
     {
       title: "Threat Actors Tracked",
-      value: "156",
-      trend: "+ 8%",
+      value: "0",
+      trend: "-",
       icon: UserX, // Hacker icon in image
       color: "text-purple-500",
       bg: "bg-purple-50 dark:bg-purple-500/10",
@@ -66,7 +66,7 @@ export function ThreatKPIs() {
     {
       title: "Malware Families (Today)",
       value: malwareFamilies.toLocaleString() || "0",
-      trend: "+ 11%",
+      trend: "-",
       icon: Ghost, // Virus/bug in image
       color: "text-orange-500",
       bg: "bg-orange-50 dark:bg-orange-500/10",
@@ -76,8 +76,8 @@ export function ThreatKPIs() {
     },
     {
       title: "High Risk Countries",
-      value: "23",
-      trend: "+ 9%",
+      value: "0",
+      trend: "-",
       icon: Globe,
       color: "text-cyan-500",
       bg: "bg-cyan-50 dark:bg-cyan-500/10",

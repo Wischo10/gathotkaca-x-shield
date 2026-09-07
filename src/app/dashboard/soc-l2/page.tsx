@@ -22,7 +22,7 @@ export default function SOCL2DashboardPage() {
   const [investigationCase, setInvestigationCase] = useState<InvestigationCase | null>(null);
   const [user, setUser] = useState<SessionUser | null>(null);
   const [allNotes, setAllNotes] = useState<Record<string, Note[]>>({});
-  const [activeTab, setActiveTab] = useState<string>("Threat Intelligence");
+  const [activeTab, setActiveTab] = useState<string>("Alert Queue");
 
   const tabItems = [
     { name: "Alert Queue", icon: Bell },
@@ -56,6 +56,21 @@ export default function SOCL2DashboardPage() {
 
   useEffect(() => {
     if (selectedAlertId) {
+      // Instantly set a basic case from memory so the UI changes immediately
+      const alertInMem = alerts.find(a => a.id === selectedAlertId);
+      if (alertInMem) {
+        setInvestigationCase({
+          alert: alertInMem,
+          timeline: [
+            { id: "t1", time: alertInMem.firstSeen, description: "Initial detection of malicious activity." }
+          ],
+          entities: [
+            { id: "e1", type: "Asset", value: alertInMem.asset }
+          ],
+          iocs: []
+        });
+      }
+
       fetch(`/api/soc/l2-cases?id=${selectedAlertId}`)
         .then(res => res.json())
         .then(data => {
@@ -67,7 +82,7 @@ export default function SOCL2DashboardPage() {
     } else {
       setInvestigationCase(null);
     }
-  }, [selectedAlertId]);
+  }, [selectedAlertId, alerts]);
 
   const handleAddNote = (alertId: string, note: Note) => {
     setAllNotes(prev => ({
@@ -119,7 +134,7 @@ export default function SOCL2DashboardPage() {
         <div className="flex flex-col gap-4 h-[calc(100vh-180px)]">
           
           {activeTab === "Cases" ? (
-            <CasesView />
+            <CasesView alerts={alerts} />
           ) : activeTab === "Threat Intelligence" ? (
             <div className="h-full -mx-4 sm:-mx-6 -my-4 sm:-my-6 px-4 sm:px-6 py-4 sm:py-6 overflow-y-auto bg-slate-50 dark:bg-slate-950">
               <ThreatIntelligenceView />

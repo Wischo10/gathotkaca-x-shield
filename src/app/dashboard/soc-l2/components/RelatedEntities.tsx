@@ -1,37 +1,21 @@
 import { useState } from "react";
 import { Panel } from "@/components/ui/Panel";
 import { Server, ShieldAlert, User, Network } from "lucide-react";
+import { RelatedEntity } from "@/types/soc";
 
-interface Entity {
-  id: string;
-  name: string;
-  type: string;
-  criticality: "Critical" | "High" | "Medium" | "Low";
-  icon: any;
-}
-
-const MOCK_ENTITIES: Record<string, Entity[]> = {
-  Assets: [
-    { id: "1", name: "FIN-SRV-01", type: "Server", criticality: "Critical", icon: Server },
-    { id: "2", name: "VPN-GW-01", type: "Network Device", criticality: "High", icon: Network },
-    { id: "3", name: "WAF-01", type: "Web Application Firewall", criticality: "High", icon: ShieldAlert }
-  ],
-  Users: [
-    { id: "4", name: "jdoe", type: "Domain Admin", criticality: "High", icon: User },
-    { id: "5", name: "admin", type: "Local Admin", criticality: "Critical", icon: User }
-  ],
-  IPs: [
-    { id: "6", name: "185.220.101.2", type: "External IP", criticality: "High", icon: Network },
-    { id: "7", name: "10.0.5.1", type: "Internal IP", criticality: "Low", icon: Network }
-  ]
-};
-
-export function RelatedEntities() {
+export function RelatedEntities({ entities }: { entities?: RelatedEntity[] }) {
   const [activeTab, setActiveTab] = useState<string>("Assets");
+
+  const safeEntities = entities || [];
+  
+  const assets = safeEntities.filter(e => e.type === "Asset" || e.type === "Server" || e.type === "Network Device" || e.type === "Web Application Firewall");
+  const users = safeEntities.filter(e => e.type === "User" || e.type === "Domain Admin" || e.type === "Local Admin");
+  const ips = safeEntities.filter(e => e.type === "IP" || e.type === "External IP" || e.type === "Internal IP");
+
   const tabs = [
-    { name: "Assets", count: 3 }, 
-    { name: "Users", count: 2 }, 
-    { name: "IPs", count: 2 }
+    { name: "Assets", count: assets.length }, 
+    { name: "Users", count: users.length }, 
+    { name: "IPs", count: ips.length }
   ];
 
   const getCriticalityBadge = (criticality: string) => {
@@ -44,11 +28,18 @@ export function RelatedEntities() {
     }
   };
 
-  const entities = MOCK_ENTITIES[activeTab] || [];
+  const getIcon = (type: string) => {
+     if (type === "User" || type === "Domain Admin" || type === "Local Admin") return User;
+     if (type === "IP" || type === "External IP" || type === "Internal IP" || type === "Network Device") return Network;
+     if (type === "Web Application Firewall") return ShieldAlert;
+     return Server;
+  }
+
+  const activeList = activeTab === "Assets" ? assets : activeTab === "Users" ? users : ips;
 
   return (
     <Panel 
-      title="Related Entities (7)" 
+      title={`Related Entities (${safeEntities.length})`} 
       action={<a href="#" className="text-brand-blue font-medium text-xs hover:underline">View All</a>}
       className="h-full flex flex-col"
     >
@@ -69,8 +60,8 @@ export function RelatedEntities() {
       </div>
 
       <div className="flex-1 overflow-y-auto space-y-3 pb-2 pr-2">
-        {entities.map(entity => {
-          const Icon = entity.icon;
+        {activeList.map(entity => {
+          const Icon = getIcon(entity.type);
           return (
             <div key={entity.id} className="flex items-center justify-between group p-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg transition-colors">
               <div className="flex items-center gap-3">
@@ -78,17 +69,17 @@ export function RelatedEntities() {
                   <Icon className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-slate-900 dark:text-white leading-tight">{entity.name}</p>
+                  <p className="text-xs font-semibold text-slate-900 dark:text-white leading-tight">{entity.value}</p>
                   <p className="text-[10px] text-slate-500">{entity.type}</p>
                 </div>
               </div>
-              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${getCriticalityBadge(entity.criticality)}`}>
-                {entity.criticality}
+              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${getCriticalityBadge("High")}`}>
+                High
               </span>
             </div>
           );
         })}
-        {entities.length === 0 && (
+        {activeList.length === 0 && (
           <div className="text-center text-slate-400 dark:text-slate-500 text-xs py-4">
             No {activeTab.toLowerCase()} found.
           </div>

@@ -1,23 +1,23 @@
 import { Panel } from "@/components/ui/Panel";
 import { useState } from "react";
+import { IoC } from "@/types/soc";
 
-export function IOCs() {
+export function IOCs({ iocs }: { iocs?: IoC[] }) {
   const [activeTab, setActiveTab] = useState("All");
 
-  const tabs = [
-    { name: "All", count: 12 },
-    { name: "IP", count: 4 },
-    { name: "Domain", count: 3 },
-    { name: "Hash", count: 3 },
-    { name: "URL", count: 2 },
-  ];
+  const safeIocs = iocs || [];
 
-  const iocs = [
-    { value: "185.220.101.2", type: "IP", reputation: "Malicious", source: "AbuseIPDB" },
-    { value: "hxxp://malicious-site[.]com", type: "URL", reputation: "Malicious", source: "Threat Intel" },
-    { value: "3f2a6c9e7b4d9a1c0e2f", type: "Hash", reputation: "Malicious", source: "VirusTotal" },
-    { value: "203.0.113.55", type: "IP", reputation: "Suspicious", source: "Threat Intel" },
-    { value: "login.brute[.]ru", type: "Domain", reputation: "Malicious", source: "AlienVault" },
+  const ips = safeIocs.filter(i => i.type === "IP");
+  const domains = safeIocs.filter(i => i.type === "Domain");
+  const hashes = safeIocs.filter(i => i.type === "Hash");
+  const urls = safeIocs.filter(i => i.type === "URL");
+
+  const tabs = [
+    { name: "All", count: safeIocs.length },
+    { name: "IP", count: ips.length },
+    { name: "Domain", count: domains.length },
+    { name: "Hash", count: hashes.length },
+    { name: "URL", count: urls.length },
   ];
 
   const getReputationBadge = (rep: string) => {
@@ -29,14 +29,22 @@ export function IOCs() {
     }
     return "text-slate-600 bg-slate-50 border-slate-200";
   };
+  
+  const getReputationFromConfidence = (conf: number) => {
+    if (conf >= 80) return "Malicious";
+    if (conf >= 50) return "Suspicious";
+    return "Unknown";
+  }
+
+  const activeList = activeTab === "All" ? safeIocs : activeTab === "IP" ? ips : activeTab === "Domain" ? domains : activeTab === "Hash" ? hashes : urls;
 
   return (
     <Panel 
-      title="IOCs (12)" 
+      title={`IOCs (${safeIocs.length})`} 
       action={<a href="#" className="text-brand-blue font-medium text-xs hover:underline">View All</a>}
       className="h-full flex flex-col"
     >
-      <div className="flex border-b border-slate-200 dark:border-slate-800 mt-2 mb-3">
+      <div className="flex border-b border-slate-200 dark:border-slate-800 mt-2 mb-3 overflow-x-auto">
         {tabs.map((tab) => (
           <button
             key={tab.name}
@@ -62,20 +70,29 @@ export function IOCs() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
-            {iocs.map((ioc, i) => (
-              <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+            {activeList.map((ioc, i) => {
+              const rep = getReputationFromConfidence(ioc.confidence);
+              return (
+              <tr key={ioc.id || i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                 <td className="py-2 px-1 font-medium text-slate-900 dark:text-white truncate max-w-[120px]" title={ioc.value}>
                   {ioc.value}
                 </td>
                 <td className="py-2 px-1 text-slate-500">{ioc.type}</td>
                 <td className="py-2 px-1">
-                  <span className={`inline-flex px-1.5 py-0.5 rounded-[4px] text-[10px] font-medium border ${getReputationBadge(ioc.reputation)}`}>
-                    {ioc.reputation}
+                  <span className={`inline-flex px-1.5 py-0.5 rounded-[4px] text-[10px] font-medium border ${getReputationBadge(rep)}`}>
+                    {rep}
                   </span>
                 </td>
-                <td className="py-2 px-1 text-slate-500">{ioc.source}</td>
+                <td className="py-2 px-1 text-slate-500">Wazuh</td>
               </tr>
-            ))}
+            )})}
+            {activeList.length === 0 && (
+              <tr>
+                <td colSpan={4} className="text-center text-slate-400 dark:text-slate-500 text-xs py-4">
+                  No {activeTab.toLowerCase()} IOCs found.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
