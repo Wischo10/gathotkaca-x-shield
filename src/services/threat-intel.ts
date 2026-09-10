@@ -56,16 +56,15 @@ interface CacheEntry {
 }
 
 let cachedData: CacheEntry | null = null;
-const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+export const THREAT_INTEL_CACHE_TTL_MS = 5 * 60 * 1000;
 
 export async function getThreatIntelligenceOverview(): Promise<ThreatIntelligenceOverviewData> {
   const now = Date.now();
   if (
     cachedData &&
-    cachedData.data.kpis.totalIocs > 0 &&
-    now - cachedData.timestamp < CACHE_TTL_MS
+    now - cachedData.timestamp <= THREAT_INTEL_CACHE_TTL_MS
   ) {
-    return cachedData.data;
+    return { ...cachedData.data, availability: "cached" };
   }
 
   const threatFoxKey = env.threatIntel.threatFoxApiKey();
@@ -79,6 +78,7 @@ export async function getThreatIntelligenceOverview(): Promise<ThreatIntelligenc
   };
 
   let iocs: ThreatFoxIOC[] = [];
+  let threatFoxAvailable = false;
 
   // 1. Fetch ThreatFox (Primary Feed)
   try {
@@ -96,6 +96,7 @@ export async function getThreatIntelligenceOverview(): Promise<ThreatIntelligenc
 
     if (response.query_status === "ok" && Array.isArray(response.data)) {
       iocs = response.data;
+      threatFoxAvailable = true;
       providerHealth.threatFox = {
         name: "ThreatFox",
         status: "ok",
@@ -108,11 +109,7 @@ export async function getThreatIntelligenceOverview(): Promise<ThreatIntelligenc
         detail: response.query_status || "No data returned",
       };
     }
-  } catch (err) {
-    // If we have previously cached data, return that instead of failing completely
-    if (cachedData && cachedData.data.kpis.totalIocs > 0) {
-      return cachedData.data;
-    }
+  } catch {
     providerHealth.threatFox = {
       name: "ThreatFox",
       status: "error",
@@ -318,10 +315,13 @@ export async function getThreatIntelligenceOverview(): Promise<ThreatIntelligenc
     };
   }
 
+  const observedAt = threatFoxAvailable ? new Date().toISOString() : null;
   const result: ThreatIntelligenceOverviewData = {
     period: "7d",
-    updatedAt: new Date().toISOString(),
-    kpis: {
+    availability: threatFoxAvailable ? "available" : "unavailable",
+    observedAt,
+    updatedAt: observedAt ?? new Date().toISOString(),
+    kpis: threatFoxAvailable ? {
       totalIocs,
       totalIocsTrendPct,
       c2BotnetCount,
@@ -331,10 +331,10 @@ export async function getThreatIntelligenceOverview(): Promise<ThreatIntelligenc
       maliciousIpsCount,
       maliciousHashesCount,
       maliciousDomainsCount,
-    },
-    topMalware,
-    topThreatTypes,
-    iocTypeDistribution,
+    } : null,
+    topMalware: threatFoxAvailable ? topMalware : [],
+    topThreatTypes: threatFoxAvailable ? topThreatTypes : [],
+    iocTypeDistribution: threatFoxAvailable ? iocTypeDistribution : [],
     providers: {
       threatFox: providerHealth.threatFox,
       abuseIpDb: providerHealth.abuseIpDb,
@@ -342,7 +342,9 @@ export async function getThreatIntelligenceOverview(): Promise<ThreatIntelligenc
     },
   };
 
-  if (result.kpis.totalIocs > 0 || !cachedData) {
+  // Cache successful collections, including genuine empty responses. Failures
+  // never replace the last successful entry and expired entries are never read.
+  if (threatFoxAvailable) {
     cachedData = {
       data: result,
       timestamp: now,

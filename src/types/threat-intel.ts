@@ -24,8 +24,10 @@ export interface ProviderHealth {
 
 export interface ThreatIntelligenceOverviewData {
   period: "7d";
+  availability: "available" | "cached" | "unavailable";
+  observedAt: string | null;
   updatedAt: string;
-  kpis: ThreatIntelKpi;
+  kpis: ThreatIntelKpi | null;
   topMalware: ThreatCategoryItem[];
   topThreatTypes: ThreatCategoryItem[];
   iocTypeDistribution: ThreatCategoryItem[];

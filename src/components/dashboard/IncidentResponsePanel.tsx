@@ -14,7 +14,7 @@ interface IncidentActionState {
 }
 
 export function IncidentResponsePanel({ onActionCompleted }: { onActionCompleted?: () => void }) {
-  const state = useApiResult<IncidentListResponse>("/api/ciso/incidents?perPage=5");
+  const state = useApiResult<IncidentListResponse>("/api/ciso/incidents?perPage=10");
   const [actionState, setActionState] = useState<IncidentActionState | null>(null);
 
   const handleAction = async (
@@ -122,7 +122,7 @@ export function IncidentResponsePanel({ onActionCompleted }: { onActionCompleted
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                {state.data.items.map((inc) => (
+                {state.data.items.slice(0, 5).map((inc) => (
                   <IncidentRow
                     key={inc.id}
                     incident={inc}
@@ -137,7 +137,7 @@ export function IncidentResponsePanel({ onActionCompleted }: { onActionCompleted
 
           <div className="flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-2">
             <span>
-              Showing {state.data.items.length} of {state.data.total} real Bitdefender incidents
+              Showing {Math.min(5, state.data.items.length)} of {state.data.total} real Bitdefender incidents
             </span>
             <span className="text-slate-500">
               Actions record real audit timestamps to calculate MTTA, MTTR, and MTTC
@@ -163,18 +163,20 @@ function IncidentRow({
   const isAcked = !!incident.acknowledgedAt;
   const isResponded = !!incident.respondedAt;
   const isContained = !!incident.containedAt;
+  const canRespond = isAcked && !isResponded;
+  const canContain = isResponded && !isContained;
 
   return (
     <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors">
       {/* Detected Time */}
       <td className="py-3 text-[11px] whitespace-nowrap text-slate-500">
-        {new Date(incident.detectedAt).toLocaleString(undefined, {
+        {incident.detectedAt ? new Date(incident.detectedAt).toLocaleString(undefined, {
           month: "short",
           day: "numeric",
           hour: "2-digit",
           minute: "2-digit",
           second: "2-digit",
-        })}
+        }) : "N/A"}
       </td>
 
       {/* Incident Name & ID */}
@@ -234,16 +236,16 @@ function IncidentRow({
             {actionLoading && currentAction === "acknowledge" ? "..." : isAcked ? "Ack'd ✓" : "Acknowledge"}
           </button>
 
-          {/* 2. Respond button */}
+          {/* 2. Start Response button */}
           <button
             onClick={() => onAction(incident.id, "respond")}
-            disabled={isResponded || actionLoading}
+            disabled={!canRespond || actionLoading}
             className={`px-2 py-1 rounded text-[11px] font-medium transition-colors ${
-              isResponded
+              !canRespond
                 ? "bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed border border-slate-200 dark:border-slate-700"
                 : "bg-amber-600 hover:bg-amber-700 text-white shadow-sm"
             }`}
-            title={isResponded ? `Response started at ${incident.respondedAt}` : "Record response action started"}
+            title={isResponded ? `Response started at ${incident.respondedAt}` : !isAcked ? "Acknowledge the incident first" : "Record response action started"}
           >
             {actionLoading && currentAction === "respond" ? "..." : isResponded ? "Responded ✓" : "Respond"}
           </button>
@@ -251,13 +253,13 @@ function IncidentRow({
           {/* 3. Contain button */}
           <button
             onClick={() => onAction(incident.id, "contain")}
-            disabled={isContained || actionLoading}
+            disabled={!canContain || actionLoading}
             className={`px-2 py-1 rounded text-[11px] font-medium transition-colors ${
-              isContained
+              !canContain
                 ? "bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed border border-slate-200 dark:border-slate-700"
                 : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
             }`}
-            title={isContained ? `Contained at ${incident.containedAt}` : "Record incident containment"}
+            title={isContained ? `Contained at ${incident.containedAt}` : !isResponded ? "Start response first" : "Record analyst-declared containment"}
           >
             {actionLoading && currentAction === "contain" ? "..." : isContained ? "Contained ✓" : "Contain"}
           </button>

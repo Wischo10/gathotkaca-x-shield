@@ -2,6 +2,7 @@
 import { Topbar } from "@/components/layout/Topbar";
 import { useSidebarToggle } from "@/context/sidebar-context";
 import { Panel } from "@/components/ui/Panel";
+import { IncidentResponsePanel } from "@/components/dashboard/IncidentResponsePanel";
 
 export default function SOCL2DashboardPage() {
   const openSidebar = useSidebarToggle();
@@ -10,6 +11,9 @@ export default function SOCL2DashboardPage() {
     <>
       <Topbar title="SOC L2 Console" subtitle="Investigate alerts, manage cases, and respond to incidents" onMenuClick={openSidebar} />
       <main className="flex-1 flex flex-col p-4 sm:p-6 bg-slate-50 dark:bg-slate-950">
+        <div className="mb-4">
+          <IncidentResponsePanel />
+        </div>
         
         {/* Tabs */}
         <div className="flex border-b border-slate-200 dark:border-slate-800 mb-4 overflow-x-auto">

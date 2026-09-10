@@ -2,6 +2,7 @@ import "server-only";
 import { NextRequest, NextResponse } from "next/server";
 import { getBitdefenderIncidentsWithLifecycle } from "@/services/incident-lifecycle-service";
 import { toErrorResult } from "@/lib/api-result";
+import { HttpError } from "@/lib/http";
 import type { ApiResult } from "@/types/soc";
 import type { IncidentListResponse } from "@/types/ciso";
 
@@ -11,7 +12,7 @@ export async function GET(
   try {
     const searchParams = request.nextUrl.searchParams;
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
-    const perPage = Math.min(50, Math.max(1, parseInt(searchParams.get("perPage") || "10", 10)));
+    const perPage = Math.min(50, Math.max(10, parseInt(searchParams.get("perPage") || "10", 10)));
 
     const data = await getBitdefenderIncidentsWithLifecycle(page, perPage);
 
@@ -27,7 +28,7 @@ export async function GET(
   } catch (err) {
     return NextResponse.json(
       toErrorResult(err, "Failed to load Bitdefender incidents with lifecycle."),
-      { status: 500 }
+      { status: err instanceof HttpError ? (err.kind === "timeout" ? 504 : 502) : 500 }
     );
   }
 }

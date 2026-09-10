@@ -13,8 +13,8 @@ export function ThreatIntelPanel() {
     <Panel
       title="Threat Intelligence Overview"
       action={
-        <span className="inline-flex items-center rounded bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-          Last 7 Days
+        <span className="inline-flex items-center rounded bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700" title={state.phase === "ready" && state.data.observedAt ? `Collected ${new Date(state.data.observedAt).toLocaleString()}` : undefined}>
+          {state.phase === "ready" && state.data.availability === "cached" ? "Fresh cache · Last 7 Days" : "Last 7 Days"}
         </span>
       }
       className="flex flex-col justify-between"
@@ -26,7 +26,8 @@ export function ThreatIntelPanel() {
       {state.phase === "error" && (
         <PanelError message={state.message} onRetry={state.reload} />
       )}
-      {state.phase === "ready" && <ThreatIntelContent data={state.data} />}
+      {state.phase === "ready" && state.data.availability === "unavailable" && <PanelEmpty message="Threat intelligence source unavailable." />}
+      {state.phase === "ready" && state.data.availability !== "unavailable" && state.data.kpis && <ThreatIntelContent data={state.data} />}
 
       {/* FOOTER: Provider Health Status & Navigation */}
       <div className="mt-2.5 flex flex-wrap items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-2 text-[10px]">
@@ -62,12 +63,6 @@ export function ThreatIntelPanel() {
             VirusTotal
           </span>
         </div>
-        <a
-          href="/dashboard/soc-l2"
-          className="text-brand-blue hover:underline cursor-pointer font-medium"
-        >
-          View threat intelligence →
-        </a>
       </div>
     </Panel>
   );
@@ -75,6 +70,7 @@ export function ThreatIntelPanel() {
 
 function ThreatIntelContent({ data }: { data: ThreatIntelligenceOverviewData }) {
   const { kpis, topMalware, iocTypeDistribution } = data;
+  if (!kpis) return null;
 
   return (
     <div className="flex flex-col space-y-2.5">
@@ -87,7 +83,7 @@ function ThreatIntelContent({ data }: { data: ThreatIntelligenceOverviewData }) 
             <div className="flex items-center gap-1.5">
               <span className="text-xs">🎯</span>
               <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">
-                IOCs Detected (7d)
+                IOCs Observed (7d)
               </span>
             </div>
             <div className="flex items-center gap-1.5">
@@ -181,7 +177,7 @@ function ThreatIntelContent({ data }: { data: ThreatIntelligenceOverviewData }) 
         {/* RIGHT COLUMN: Top Threat Sources / Malware Horizontal Bars */}
         <div className="flex flex-col justify-between sm:border-l border-slate-100 dark:border-slate-800/80 sm:pl-3 pt-1 sm:pt-0">
           <div className="flex items-center justify-between text-[11px] font-semibold text-slate-700 dark:text-slate-300 pb-1">
-            <span>Top Threat Sources</span>
+            <span>Top Malware Families</span>
             <span className="text-[10px] font-normal text-slate-400">Share</span>
           </div>
 

@@ -83,7 +83,7 @@ export interface AgentsSummary {
 }
 
 /** Agent connectivity summary — fetches live from Wazuh Manager API. */
-export async function getAgentsSummary(): Promise<AgentsSummary> {
+export async function getAgentsSummary(): Promise<AgentsSummary | null> {
   try {
     const token = await getToken();
     const res = await fetchWazuhApi<{
@@ -101,21 +101,19 @@ export async function getAgentsSummary(): Promise<AgentsSummary> {
     });
 
     const conn = res.data?.connection;
+    if (!conn || ![conn.total, conn.active, conn.disconnected, conn.never_connected, conn.pending]
+      .every(value => Number.isInteger(value) && value >= 0) || conn.active > conn.total) {
+      return null;
+    }
     return {
-      total: conn?.total ?? 0,
-      active: conn?.active ?? 0,
-      disconnected: conn?.disconnected ?? 0,
-      never_connected: conn?.never_connected ?? 0,
-      pending: conn?.pending ?? 0,
+      total: conn.total,
+      active: conn.active,
+      disconnected: conn.disconnected,
+      never_connected: conn.never_connected,
+      pending: conn.pending,
     };
   } catch (err) {
     console.warn("[Wazuh Manager] getAgentsSummary failed:", err instanceof Error ? err.message : err);
-    return {
-      total: 0,
-      active: 0,
-      disconnected: 0,
-      never_connected: 0,
-      pending: 0,
-    };
+    return null;
   }
 }

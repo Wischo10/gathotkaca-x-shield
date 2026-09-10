@@ -45,7 +45,7 @@ export function ComplianceOverviewPanel() {
           </select>
         </div>
       }
-      className="flex flex-col justify-between"
+      className="flex h-full min-h-[320px] flex-col justify-between xl:h-[340px]"
     >
       {state.phase === "loading" && <PanelLoading />}
       {state.phase === "empty" && (
@@ -88,10 +88,15 @@ export function ComplianceOverviewPanel() {
 
 function FrameworkRow({ item }: { item: ComplianceFrameworkItem }) {
   return (
-    <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors">
+    <tr title={item.context} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors">
       {/* Framework Name */}
       <td className="py-2.5 font-medium text-slate-700 dark:text-slate-200">
-        {item.name}
+        <div>{item.name}</div>
+        <div className="mt-0.5 text-[10px] font-normal text-slate-400">
+          {item.metricKind === "telemetry_observation" ? "Telemetry Observation" : "Formal Assessment"}
+          {item.assessedControls !== undefined && item.totalApplicableControls !== undefined
+            ? ` · ${item.assessedControls}/${item.totalApplicableControls} ${item.assessmentScopeLabel ?? "controls assessed"}` : ""}
+        </div>
       </td>
 
       {/* Score */}
@@ -112,7 +117,7 @@ function FrameworkRow({ item }: { item: ComplianceFrameworkItem }) {
             }`}
           >
             {item.trend30d > 0 ? "↑ " : item.trend30d < 0 ? "↓ " : ""}
-            {Math.abs(item.trend30d)}%
+            {Math.abs(item.trend30d)}{item.trendUnit === "percentage_points" ? " pp" : "%"}
           </span>
         ) : (
           <span className="text-slate-400 font-normal">—</span>
@@ -129,6 +134,12 @@ function FrameworkRow({ item }: { item: ComplianceFrameworkItem }) {
 
 function StatusBadge({ status }: { status: ComplianceStatus }) {
   switch (status) {
+    case "telemetry":
+      return (
+        <span className="inline-flex items-center rounded-full bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+          Telemetry Observation
+        </span>
+      );
     case "compliant":
       return (
         <span className="inline-flex items-center rounded-full bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">

@@ -1,50 +1,59 @@
 "use client";
+
+import Link from "next/link";
 import { Topbar } from "@/components/layout/Topbar";
 import { useSidebarToggle } from "@/context/sidebar-context";
-import { Panel } from "@/components/ui/Panel";
+import { Panel, PanelError, PanelLoading } from "@/components/ui/Panel";
+import { useApiResult } from "@/hooks/useApiResult";
+import type { ComplianceFrameworkItem, ComplianceOverviewData } from "@/types/compliance";
+
+function score(value: number | null) { return value === null ? "N/A" : `${value}%`; }
+function status(item: ComplianceFrameworkItem) {
+  if (item.metricKind === "telemetry_observation") return "Telemetry Observation";
+  return item.status === "not_assessed" ? "Not Assessed" : item.status.replaceAll("_", " ");
+}
+
+function FrameworkTable({ items }: { items: ComplianceFrameworkItem[] }) {
+  return <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm">
+    <thead className="text-xs text-slate-500"><tr className="border-b border-slate-200 dark:border-slate-800">
+      <th className="py-2 font-medium">Framework</th><th className="py-2 text-center font-medium">Score</th>
+      <th className="py-2 text-center font-medium">Assessment coverage</th><th className="py-2 font-medium">Status</th>
+      <th className="py-2 font-medium">Last assessed</th><th className="py-2 font-medium">Trend</th>
+    </tr></thead>
+    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{items.map(item => <tr key={item.id} title={item.context}>
+      <td className="py-3 font-medium text-slate-700 dark:text-slate-200">{item.name}</td>
+      <td className="py-3 text-center font-semibold">{score(item.score)}</td>
+      <td className="py-3 text-center text-slate-500">{item.assessedControls !== undefined && item.totalApplicableControls !== undefined
+        ? `${item.assessedControls} / ${item.totalApplicableControls} ${item.assessmentScopeLabel ?? "controls assessed"}` : "N/A"}</td>
+      <td className="py-3 capitalize text-slate-500">{status(item)}</td>
+      <td className="py-3 text-slate-500">{item.lastAssessedAt ? new Date(item.lastAssessedAt).toLocaleString() : "N/A"}</td>
+      <td className="py-3 text-slate-500">{item.trend30d === null ? "N/A" : `${item.trend30d > 0 ? "+" : ""}${item.trend30d} pp`}</td>
+    </tr>)}</tbody>
+  </table></div>;
+}
 
 export default function ComplianceDashboardPage() {
   const openSidebar = useSidebarToggle();
-  return (
-    <>
-      <Topbar title="Regulatory & Security Compliance Dashboard" subtitle="Monitor compliance status, track regulatory requirements, and ensure security governance" onMenuClick={openSidebar} />
-      <main className="flex-1 flex flex-col p-4 sm:p-6 bg-slate-50 dark:bg-slate-950">
-        
-        <div className="flex border-b border-slate-200 dark:border-slate-800 mb-4 overflow-x-auto gap-4">
-          {["Compliance Overview", "Regulatory Tracking", "Audit & Assessment", "Policy Management", "Risk & Gap Analysis", "Reports"].map((tab, i) => (
-            <button key={tab} className={`pb-2 text-sm font-medium whitespace-nowrap flex items-center gap-2 ${i === 0 ? "border-b-2 border-brand-blue text-brand-blue" : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"}`}>
-               {tab}
-            </button>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-4">
-           <Panel title="Compliance Score (Fokus UU PDP)" className="lg:col-span-1 h-32 flex flex-col justify-center">
-             <div className="flex items-center gap-4">
-               <div className="text-4xl font-bold text-purple-600">92%</div>
-               <div className="text-xs text-slate-500">Status: <span className="font-bold text-green-500">Compliant</span><br/>Temuan: 2</div>
-             </div>
-           </Panel>
-           <Panel title="Ringkasan Compliance Keseluruhan" className="lg:col-span-3 h-32 flex items-center justify-around">
-             <div className="text-center"><div className="text-xs text-slate-500">Overall Score</div><div className="text-xl font-bold text-blue-600">87.5%</div></div>
-             <div className="text-center"><div className="text-xs text-slate-500">Total Requirements</div><div className="text-xl font-bold">58</div></div>
-             <div className="text-center"><div className="text-xs text-slate-500">Compliant</div><div className="text-xl font-bold text-green-500">47</div></div>
-             <div className="text-center"><div className="text-xs text-slate-500">Non-Compliant</div><div className="text-xl font-bold text-red-500">6</div></div>
-           </Panel>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <Panel title="Kepatuhan UU PDP per Prinsip" className="h-64 flex flex-col justify-between">
-             <div className="flex-1 flex items-center justify-center text-slate-400">[Table Placeholder]</div>
-          </Panel>
-          <Panel title="Klasifikasi Temuan UU PDP" className="h-64 flex flex-col justify-between">
-             <div className="flex-1 flex items-center justify-center text-slate-400">[Donut Chart Placeholder]</div>
-          </Panel>
-          <Panel title="Kepatuhan per Regulasi / Framework" className="h-64 flex flex-col justify-between">
-             <div className="flex-1 flex items-center justify-center text-slate-400">[List Placeholder]</div>
-          </Panel>
-        </div>
-      </main>
-    </>
-  );
+  const state = useApiResult<ComplianceOverviewData>("/api/ciso/compliance");
+  const formal = state.phase === "ready" ? state.data.frameworks.filter(item => item.metricKind === "formal_assessment") : [];
+  const telemetry = state.phase === "ready" ? state.data.frameworks.filter(item => item.metricKind === "telemetry_observation") : [];
+  return <>
+    <Topbar title="Compliance Assessment" subtitle="Formal human assessments kept separate from security telemetry" onMenuClick={openSidebar} />
+    <main className="flex-1 space-y-4 bg-slate-50 p-4 sm:p-6 dark:bg-slate-950">
+      <Link href="/dashboard/ciso" className="text-sm text-brand-blue hover:underline">Back to CISO dashboard</Link>
+      {state.phase === "loading" && <Panel title="Compliance"><PanelLoading /></Panel>}
+      {state.phase === "error" && <Panel title="Compliance"><PanelError message={state.message} onRetry={state.reload} /></Panel>}
+      {state.phase === "ready" && <>
+        <Panel title="Formal Assessments" action={<span className="text-xs text-slate-400">Explicit human assessments only</span>}>
+          <FrameworkTable items={formal} />
+        </Panel>
+        <Panel title="Telemetry Observation" action={<span className="text-xs text-slate-400">Excluded from compliance scoring</span>}>
+          <FrameworkTable items={telemetry} />
+        </Panel>
+        <Panel title="New Compliance Assessment">
+          <p className="text-sm text-slate-500">Assessment entry is unavailable until legitimate control catalogs are loaded and authentication supplies an active database-backed admin or CISO assessor identity. Existing data remains readable.</p>
+        </Panel>
+      </>}
+    </main>
+  </>;
 }

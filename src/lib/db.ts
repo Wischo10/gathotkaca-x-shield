@@ -3,6 +3,7 @@ import { Pool, QueryResult } from "pg";
 import { env } from "@/lib/env";
 import fs from "fs";
 import path from "path";
+import { isOperationalLifecycleEvent } from "@/lib/incident-data-integrity";
 
 /**
  * Storage interface matching basic pg Query interface for seamless fallback.
@@ -112,7 +113,10 @@ class FileFallbackDb implements DbInterface {
     if (trimmed.startsWith("SELECT") && queryText.includes("COUNT(DISTINCT incident_id)")) {
       const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
       const all = this.readEvents();
-      const recent = all.filter(e => new Date(e.event_timestamp).getTime() >= thirtyDaysAgo);
+      const recent = all.filter(e => isOperationalLifecycleEvent(e)
+        && e.event_type === "detected"
+        && new Date(e.event_timestamp).getTime() >= thirtyDaysAgo
+        && new Date(e.event_timestamp).getTime() <= Date.now());
       const uniqueIds = new Set(recent.map(e => e.incident_id));
       return {
         rows: [{ total_count: uniqueIds.size }] as unknown as T[],
@@ -124,7 +128,8 @@ class FileFallbackDb implements DbInterface {
     if (trimmed.startsWith("WITH DETECTED_EVENTS AS") || (queryText.includes("avg_minutes") && queryText.includes("matched_pairs"))) {
       const targetEventType = values[0];
       const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-      const all = this.readEvents();
+      const all = this.readEvents().filter(e => isOperationalLifecycleEvent(e)
+        && new Date(e.event_timestamp).getTime() <= Date.now());
 
       const detected = all.filter(e => e.event_type === "detected" && new Date(e.event_timestamp).getTime() >= thirtyDaysAgo);
       const target = all.filter(e => e.event_type === targetEventType && new Date(e.event_timestamp).getTime() >= thirtyDaysAgo);
@@ -220,4 +225,11 @@ export function getDb(): DbInterface {
     global.__fallbackStorage = new FileFallbackDb();
   }
   return global.__fallbackStorage;
+}
+
+/** PostgreSQL pool for workflows that require an explicit transaction. */
+export function getPostgresPool(): Pool {
+  if (!env.database.url()) throw new Error("database_not_configured");
+  getDb();
+  return global.__pgPool!;
 }

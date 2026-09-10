@@ -3,6 +3,8 @@ import https from "https";
 import crypto from "crypto";
 import { getDb } from "@/lib/db";
 import { env } from "@/lib/env";
+import { HttpError } from "@/lib/http";
+import { OPERATIONAL_LIFECYCLE_SQL, isOperationalLifecycleEvent } from "@/lib/incident-data-integrity";
 import { SessionUser } from "@/lib/auth";
 import {
   IncidentLifecycleEvent,
@@ -24,7 +26,8 @@ function bitdefenderAuthHeader(): string {
 }
 
 interface BitdefenderIncidentDetail {
-  id: string;
+  id?: string;
+  incidentId?: string;
   status: string;
   created: string;
   lastUpdated: string;
@@ -104,12 +107,64 @@ export async function getBitdefenderIncident(
   });
 }
 
+/** Fetch authoritative incident details in one request to stay within API limits. */
+async function getBitdefenderIncidentsByIds(
+  incidentIds: string[]
+): Promise<BitdefenderIncidentDetail[]> {
+  if (incidentIds.length === 0) return [];
+  const postData = JSON.stringify({
+    jsonrpc: "2.0",
+    id: `incident_batch_${Date.now()}`,
+    method: "getIncidentsByIds",
+    params: { ids: incidentIds },
+  });
+  const parsedUrl = new URL(env.bitdefender.apiUrl());
+
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        hostname: parsedUrl.hostname,
+        port: parsedUrl.port || 443,
+        path: parsedUrl.pathname + parsedUrl.search,
+        method: "POST",
+        headers: {
+          Authorization: bitdefenderAuthHeader(),
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(postData),
+        },
+        timeout: 10000,
+      },
+      (res) => {
+        let raw = "";
+        res.on("data", (chunk) => (raw += chunk));
+        res.on("end", () => {
+          try {
+            const parsed = JSON.parse(raw);
+            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300
+              && !parsed.error && Array.isArray(parsed.result)) {
+              resolve(parsed.result as BitdefenderIncidentDetail[]);
+            } else {
+              reject(new HttpError("Bitdefender incident detail batch failed", "server", res.statusCode));
+            }
+          } catch (err) {
+            reject(err);
+          }
+        });
+      }
+    );
+    req.on("timeout", () => req.destroy(new HttpError("Bitdefender incident detail batch timed out", "timeout")));
+    req.on("error", reject);
+    req.write(postData);
+    req.end();
+  });
+}
+
 /**
  * Extract earliest alert detection date from Bitdefender incident details.
  * Strictly uses sensor detection timestamp from `details.alerts[].date`.
  * Returns null if alerts array is missing or contains no valid timestamp.
  */
-function extractDetectedTimestamp(incident: BitdefenderIncidentDetail): string | null {
+function extractDetectedTimestamp(incident: Pick<BitdefenderIncidentDetail, "details">): string | null {
   const alerts = incident.details?.alerts;
   if (alerts && Array.isArray(alerts) && alerts.length > 0) {
     const validDates = alerts
@@ -123,6 +178,34 @@ function extractDetectedTimestamp(incident: BitdefenderIncidentDetail): string |
   }
 
   return null;
+}
+
+async function persistDetectedEventFromIncident(
+  incidentId: string,
+  incident: Pick<BitdefenderIncidentDetail, "details">
+): Promise<void> {
+  const detectedTimeStr = extractDetectedTimestamp(incident);
+  if (!detectedTimeStr) return;
+
+  await getDb().query(
+    `INSERT INTO incident_lifecycle_events
+     (id, incident_id, event_type, event_timestamp, actor_id, actor_name, source, metadata, created_at)
+     VALUES ($1, $2, 'detected', $3, $4, $5, $6, $7, NOW())
+     ON CONFLICT (incident_id, event_type) DO NOTHING`,
+    [
+      `evt_${crypto.randomUUID()}`,
+      incidentId,
+      new Date(detectedTimeStr),
+      "system:bitdefender",
+      "Bitdefender Sensor",
+      "bitdefender_sensor",
+      JSON.stringify({
+        bitdefenderIncidentId: incidentId,
+        alertCount: incident.details?.alerts?.length ?? 0,
+        originalDetectionDate: detectedTimeStr,
+      }),
+    ]
+  );
 }
 
 // ============================================================================
@@ -251,7 +334,27 @@ export async function recordAnalystLifecycleEvent(
 ): Promise<IncidentLifecycleActionResult> {
   const db = getDb();
 
-  // 1. First ensure the detected event exists from Bitdefender telemetry
+  // Enforce the operational lifecycle before recording a new action. Run this
+  // before detection synchronization so an invalid transition writes nothing.
+  const prerequisiteByEvent: Partial<Record<IncidentLifecycleEventType, IncidentLifecycleEventType>> = {
+    response_started: "acknowledged",
+    contained: "response_started",
+  };
+  const prerequisite = prerequisiteByEvent[eventType];
+  if (prerequisite) {
+    const prerequisiteRes = await db.query(
+      `SELECT id, event_timestamp, actor_name FROM incident_lifecycle_events WHERE incident_id = $1 AND event_type = $2`,
+      [incidentId, prerequisite]
+    );
+    if (prerequisiteRes.rows.length === 0) {
+      return {
+        success: false,
+        error: `Event '${eventType}' requires '${prerequisite}' to be recorded first for incident '${incidentId}'.`,
+      };
+    }
+  }
+
+  // 1. Ensure the detected event exists from Bitdefender telemetry
   const detectedEvent = await ensureDetectedEvent(incidentId);
   if (!detectedEvent) {
     return {
@@ -353,12 +456,16 @@ async function queryKpiInterval(
       FROM incident_lifecycle_events
       WHERE event_type = 'detected'
         AND event_timestamp >= NOW() - INTERVAL '30 days'
+        AND event_timestamp <= NOW()
+        AND ${OPERATIONAL_LIFECYCLE_SQL}
     ),
     target_events AS (
       SELECT incident_id, event_timestamp AS target_at
       FROM incident_lifecycle_events
       WHERE event_type = $1
         AND event_timestamp >= NOW() - INTERVAL '30 days'
+        AND event_timestamp <= NOW()
+        AND ${OPERATIONAL_LIFECYCLE_SQL}
     ),
     matched_pairs AS (
       SELECT 
@@ -394,6 +501,9 @@ async function countTotalIncidentsInWindow(): Promise<number> {
     SELECT COUNT(DISTINCT incident_id) AS total_count
     FROM incident_lifecycle_events
     WHERE event_timestamp >= NOW() - INTERVAL '30 days'
+      AND event_timestamp <= NOW()
+      AND event_type = 'detected'
+      AND ${OPERATIONAL_LIFECYCLE_SQL}
   `);
   return Number(res.rows[0]?.total_count ?? 0);
 }
@@ -402,7 +512,7 @@ async function countTotalIncidentsInWindow(): Promise<number> {
  * Real Incident KPI calculation from recorded lifecycle events.
  * 
  * Rules:
- * - MTTD is permanently N/A (no occurred_at telemetry source exists)
+ * - MTTD is N/A (no defensible occurred_at mapping is established)
  * - MTTA = AVG(acknowledged_at - detected_at) in minutes for complete pairs
  * - MTTR = AVG(response_started_at - detected_at) in minutes for complete pairs
  * - MTTC = AVG(contained_at - detected_at) in minutes for complete pairs
@@ -433,9 +543,9 @@ export async function calculateRealIncidentKpis(
       eligibleIncidents: 0,
       excludedIncidents: totalTracked,
       source: "Bitdefender GravityZone Telemetry",
-      calculationMethod: "Requires occurred_at - not available in endpoint sensor telemetry",
+      calculationMethod: "Requires detected_at - occurred_at; no defensible occurred_at mapping is established",
       timestampFieldsUsed: "None (occurred_at is missing)",
-      explanation: "Sensor telemetry only records detection time, not pre-detection attacker dwell/occurrence time.",
+      explanation: "No verified occurrence timestamp is mapped; other Bitdefender dates are not substituted for occurred_at.",
     };
 
     // MTTA item
@@ -498,7 +608,7 @@ export async function calculateRealIncidentKpis(
       dataAvailable: hasAnyKpiData,
       explanation: hasAnyKpiData
         ? `Real KPI calculated from analyst lifecycle events. MTTA: ${mttaStat.sampleCount} sample(s), MTTR: ${mttrStat.sampleCount} sample(s), MTTC: ${mttcStat.sampleCount} sample(s). MTTD remains N/A due to absence of occurred_at.`
-        : "No analyst lifecycle actions (acknowledge, respond, contain) have been recorded yet for active incidents in the last 30 days. MTTD is unavailable (missing occurred_at).",
+        : "No valid operational lifecycle pairs in the last 30 days after excluding test/E2E events. MTTD is unavailable (missing occurred_at).",
     };
   } catch (err) {
     console.warn("[IncidentLifecycle] Failed to query KPI stats from DB:", err instanceof Error ? err.message : err);
@@ -512,8 +622,10 @@ export async function calculateRealIncidentKpis(
         sampleSize: 0,
         eligibleIncidents: 0,
         excludedIncidents: bitdefenderTotalIncidents ?? 0,
-        source: "Bitdefender / incident_lifecycle_events (Unavailable)",
-        explanation: "Database unavailable or no lifecycle events recorded.",
+        source: "Bitdefender GravityZone Telemetry",
+        calculationMethod: "Requires detected_at - occurred_at; no defensible occurred_at mapping is established",
+        timestampFieldsUsed: "None (occurred_at is missing)",
+        explanation: "Occurrence timestamp unavailable. Bitdefender creation and processing timestamps are not substituted.",
       },
       mtta: {
         value: null,
@@ -524,7 +636,7 @@ export async function calculateRealIncidentKpis(
         eligibleIncidents: 0,
         excludedIncidents: bitdefenderTotalIncidents ?? 0,
         source: "Bitdefender / incident_lifecycle_events (Unavailable)",
-        explanation: "Database unavailable or no lifecycle events recorded.",
+        explanation: "No operational acknowledgement samples are currently available from lifecycle storage.",
       },
       mttr: {
         value: null,
@@ -535,7 +647,7 @@ export async function calculateRealIncidentKpis(
         eligibleIncidents: 0,
         excludedIncidents: bitdefenderTotalIncidents ?? 0,
         source: "Bitdefender / incident_lifecycle_events (Unavailable)",
-        explanation: "Database unavailable or no lifecycle events recorded.",
+        explanation: "No operational response samples are currently available from lifecycle storage.",
       },
       mttc: {
         value: null,
@@ -546,7 +658,7 @@ export async function calculateRealIncidentKpis(
         eligibleIncidents: 0,
         excludedIncidents: bitdefenderTotalIncidents ?? 0,
         source: "Bitdefender / incident_lifecycle_events (Unavailable)",
-        explanation: "Database unavailable or no lifecycle events recorded.",
+        explanation: "No verified containment samples are currently available from lifecycle storage.",
       },
       dataAvailable: false,
       explanation: "Incident lifecycle events database table is not reachable or unconfigured.",
@@ -571,8 +683,8 @@ export async function getBitdefenderIncidentsWithLifecycle(
         filters: {
           status: ["open", "closed"],
         },
-        page,
-        perPage,
+        page: Number.isFinite(page) ? Math.max(1, Math.floor(page)) : 1,
+        perPage: Number.isFinite(perPage) ? Math.min(50, Math.max(10, Math.floor(perPage))) : 10,
       },
     });
 
@@ -600,26 +712,28 @@ export async function getBitdefenderIncidentsWithLifecycle(
               if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
                 try {
                   const parsed = JSON.parse(raw);
-                  if (parsed.result) {
+                  if (parsed.error) {
+                    reject(new HttpError("Bitdefender rejected the incident list request", "server"));
+                  } else if (typeof parsed.result?.total === "number"
+                    && parsed.result.total >= 0 && Array.isArray(parsed.result.items)) {
                     resolve(parsed.result);
                   } else {
-                    resolve({ total: 0, items: [] });
+                    reject(new HttpError("Invalid Bitdefender incident list response", "invalid_response"));
                   }
                 } catch (err) {
                   reject(err);
                 }
               } else {
-                resolve({ total: 0, items: [] });
+                reject(new HttpError("Bitdefender incident list HTTP error", "server", res.statusCode));
               }
             });
           }
         );
 
         req.on("timeout", () => {
-          req.destroy();
-          resolve({ total: 0, items: [] });
+          req.destroy(new HttpError("Bitdefender incident list timed out", "timeout"));
         });
-        req.on("error", () => resolve({ total: 0, items: [] }));
+        req.on("error", (err) => reject(err));
         req.write(postData);
         req.end();
       }
@@ -634,6 +748,23 @@ export async function getBitdefenderIncidentsWithLifecycle(
     // Extract incident IDs (Bitdefender uses `incidentId`)
     const incidentIds = rawItems.map((item) => String(item.incidentId || item.id));
 
+    // The list payload does not consistently include alert timestamps. Fetch
+    // authoritative details in one batch, then idempotently register only the
+    // genuine earliest sensor detection for each incident.
+    const detailedIncidents = await getBitdefenderIncidentsByIds(incidentIds);
+    const detailsById = new Map(
+      detailedIncidents.map((incident) => [String(incident.incidentId || incident.id), incident])
+    );
+    const incidents = rawItems.map((raw) => {
+      const detail = detailsById.get(String(raw.incidentId || raw.id));
+      return detail ? { ...raw, ...detail, details: detail.details ?? raw.details } : raw;
+    });
+    await Promise.all(incidents.map(async (incident) => {
+      const incidentId = String(incident.incidentId || incident.id);
+      const detail = detailsById.get(incidentId);
+      if (detail) await persistDetectedEventFromIncident(incidentId, detail);
+    }));
+
     // Fetch DB lifecycle events for these incidents
     let dbEventsMap = new Map<string, Record<string, IncidentLifecycleEvent>>();
     try {
@@ -647,6 +778,7 @@ export async function getBitdefenderIncidentsWithLifecycle(
       );
 
       for (const row of eventsRes.rows) {
+        if (!isOperationalLifecycleEvent(row)) continue;
         const incId = row.incident_id;
         if (!dbEventsMap.has(incId)) {
           dbEventsMap.set(incId, {});
@@ -667,7 +799,7 @@ export async function getBitdefenderIncidentsWithLifecycle(
       // If DB fails, proceed with empty DB events map
     }
 
-    const items: BitdefenderIncidentListItem[] = rawItems.map((raw) => {
+    const items: BitdefenderIncidentListItem[] = incidents.map((raw) => {
       const id = String(raw.incidentId || raw.id);
       const incEvents = dbEventsMap.get(id) || {};
 
@@ -698,14 +830,8 @@ export async function getBitdefenderIncidentsWithLifecycle(
         computerName?: string;
       } | undefined;
 
-      // Detection timestamp: use details.alerts[0].date if present, else incident.created
-      let detectedAt = String(raw.created || new Date().toISOString());
-      if (details?.alerts && Array.isArray(details.alerts) && details.alerts.length > 0) {
-        const firstAlertDate = details.alerts[0]?.date;
-        if (firstAlertDate && !isNaN(Date.parse(firstAlertDate))) {
-          detectedAt = firstAlertDate;
-        }
-      }
+      // Match KPI detection semantics: earliest valid sensor alert, otherwise unavailable.
+      const detectedAt = extractDetectedTimestamp({ details });
 
       // Severity mapping from severityScore or priority
       const score = Number(raw.severityScore ?? 0);
@@ -717,6 +843,9 @@ export async function getBitdefenderIncidentsWithLifecycle(
       return {
         id,
         name,
+        detectionName: detectionName ?? null,
+        endpoint: details?.computerName ?? null,
+        attackTypes: Array.isArray(raw.attackTypes) ? raw.attackTypes.map(String) : [],
         severity,
         status: String(raw.status || "open"),
         detectedAt,
@@ -733,7 +862,6 @@ export async function getBitdefenderIncidentsWithLifecycle(
     return { total, items };
   } catch (err) {
     console.warn("[IncidentLifecycle] Failed to fetch incidents with lifecycle:", err);
-    return { total: 0, items: [] };
+    throw err;
   }
 }
-

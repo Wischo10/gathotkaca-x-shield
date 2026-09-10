@@ -3,7 +3,10 @@ import https from "node:https";
 import { env } from "@/lib/env";
 import { getComplianceOverview } from "@/services/compliance-service";
 import { calculateRealIncidentKpis } from "@/services/incident-lifecycle-service";
-import type { CisoMetricsData, MetricCardValue, VulnerabilitySlaOverview, IncidentKpiOverview, IncidentKpiItem } from "@/types/ciso";
+import { getNistPostureAssessment } from "@/services/nist-posture-service";
+import { listRisks } from "@/services/risk-register-service";
+import { summarizeTotalRisk, summarizeTreatmentProgress } from "@/lib/risk-ranking";
+import { type CisoMetricsData, type MetricCardValue, type VulnerabilitySlaOverview, type IncidentKpiOverview, type IncidentKpiItem } from "@/types/ciso";
 
 const httpsAgent = new https.Agent({
   rejectUnauthorized: !env.wazuh.allowSelfSigned(),
@@ -21,7 +24,7 @@ function bitdefenderAuthHeader(): string {
   return `Basic ${token}`;
 }
 
-function fetchOpenSearch<T>(
+export function fetchOpenSearch<T>(
   url: string,
   body: object,
   timeoutMs = 15000
@@ -74,20 +77,60 @@ function fetchOpenSearch<T>(
   });
 }
 
-let cachedBitdefender: { total: number; timestamp: number } | null = null;
+type BitdefenderActiveIncidentState = {
+  cached: { total: number; timestamp: number } | null;
+  inFlight: Promise<{ total: number; timestamp: number }> | null;
+};
+
+// Route handlers can load this module through separate Next.js bundles. Keep the
+// short-lived authoritative result and its in-flight request process-wide so the
+// metrics and AI routes do not race duplicate calls into Bitdefender's rate limit.
+const bitdefenderStateHost = globalThis as typeof globalThis & {
+  __cisoBitdefenderActiveIncidentState?: BitdefenderActiveIncidentState;
+};
+const bitdefenderActiveIncidentState = bitdefenderStateHost.__cisoBitdefenderActiveIncidentState
+  ??= { cached: null, inFlight: null };
 const BITDEFENDER_CACHE_TTL_MS = 60 * 1000; // 1 minute cache to respect 3 req/60s limit
+
+// Used only by the two executive source counts. Never expose credentials or raw payloads.
+function unavailableCount(source: string, error: unknown): MetricCardValue {
+  const detail = error instanceof Error ? error.message : "";
+  const code = /timed out|timeout/i.test(detail) ? "timeout"
+    : /partial/i.test(detail) ? "partial_result"
+    : /Missing required environment variable/i.test(detail) ? "configuration"
+    : /Invalid|aggregation/i.test(detail) ? "invalid_response" : "upstream_error";
+  const message = code === "timeout" ? "Source request timed out."
+    : code === "partial_result" ? "Source returned incomplete search results."
+    : code === "configuration" ? "Required source configuration is missing."
+    : code === "invalid_response" ? "Source did not return a valid count."
+    : "Source request failed; check the server logs for details.";
+  console.warn(`[CISO Metrics] ${source}:`, detail);
+  return {
+    value: null, trend30d: null, trendAvailable: false,
+    source: `${source} (Unavailable)`,
+    availability: {
+      status: "unavailable", checkedAt: new Date().toISOString(), fetchedAt: null,
+      cached: false, error: { code, message },
+    },
+  };
+}
 
 /**
  * 1. Active Incidents from Bitdefender GravityZone API
  */
 async function getBitdefenderActiveIncidents(): Promise<MetricCardValue> {
   const now = Date.now();
+  const cachedBitdefender = bitdefenderActiveIncidentState.cached;
   if (cachedBitdefender && now - cachedBitdefender.timestamp < BITDEFENDER_CACHE_TTL_MS) {
     return {
       value: cachedBitdefender.total,
       trend30d: null,
       trendAvailable: false,
       source: "Bitdefender GravityZone Incidents API (Cached)",
+      availability: {
+        status: "available", checkedAt: new Date(now).toISOString(),
+        fetchedAt: new Date(cachedBitdefender.timestamp).toISOString(), cached: true,
+      },
       details: {
         current: cachedBitdefender.total,
         previous30d: null,
@@ -97,6 +140,7 @@ async function getBitdefenderActiveIncidents(): Promise<MetricCardValue> {
   }
 
   try {
+    const fetchCurrentCount = async () => {
     const postData = JSON.stringify({
       jsonrpc: "2.0",
       id: "1",
@@ -131,7 +175,8 @@ async function getBitdefenderActiveIncidents(): Promise<MetricCardValue> {
             if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
               try {
                 const parsed = JSON.parse(raw);
-                if (parsed.result && typeof parsed.result.total === "number") {
+                if (!parsed.error && typeof parsed.result?.total === "number"
+                  && Number.isInteger(parsed.result.total) && parsed.result.total >= 0) {
                   resolve({ total: parsed.result.total });
                 } else {
                   reject(new Error(parsed.error?.message || "Invalid Bitdefender response"));
@@ -154,16 +199,29 @@ async function getBitdefenderActiveIncidents(): Promise<MetricCardValue> {
       req.end();
     });
 
-    cachedBitdefender = {
-      total: result.total,
-      timestamp: now,
+      return { total: result.total, timestamp: Date.now() };
     };
+
+    const existingRequest = bitdefenderActiveIncidentState.inFlight;
+    const request = existingRequest ?? fetchCurrentCount();
+    if (!existingRequest) {
+      bitdefenderActiveIncidentState.inFlight = request;
+      void request.finally(() => {
+        if (bitdefenderActiveIncidentState.inFlight === request) bitdefenderActiveIncidentState.inFlight = null;
+      }).catch(() => undefined);
+    }
+    const result = await request;
+    bitdefenderActiveIncidentState.cached = result;
 
     return {
       value: result.total,
       trend30d: null,
       trendAvailable: false,
       source: "Bitdefender GravityZone Incidents API",
+      availability: {
+        status: "available", checkedAt: new Date().toISOString(),
+        fetchedAt: new Date(result.timestamp).toISOString(), cached: existingRequest !== null,
+      },
       details: {
         current: result.total,
         previous30d: null,
@@ -171,36 +229,14 @@ async function getBitdefenderActiveIncidents(): Promise<MetricCardValue> {
       },
     };
   } catch (err) {
-    if (cachedBitdefender) {
-      return {
-        value: cachedBitdefender.total,
-        trend30d: null,
-        trendAvailable: false,
-        source: "Bitdefender GravityZone Incidents API (Cached)",
-        details: {
-          current: cachedBitdefender.total,
-          previous30d: null,
-          explanation: "Historical snapshot not stored for Bitdefender incidents",
-        },
-      };
-    }
-    console.warn("[CISO Metrics] Bitdefender active incidents failed:", err instanceof Error ? err.message : err);
-    return {
-      value: null,
-      trend30d: null,
-      trendAvailable: false,
-      source: "Bitdefender GravityZone Incidents API (Unavailable)",
-    };
+    // Expired data is never a substitute for a failed current request.
+    return unavailableCount("Bitdefender GravityZone Incidents API", err);
   }
 }
 
 /**
  * 2. Critical Vulnerabilities from OpenSearch (wazuh-states-vulnerabilities-*)
- *
- * Audit detail:
- * - Total Raw Findings (Asset-CVE-Package pairs): ~53,074
- * - Unique CVEs (Distinct Critical CVE IDs): 708
- * - Affected Assets (Distinct endpoints with critical vulns): 159
+ * Definition is always unique critical CVEs; findings remain supporting metadata.
  */
 async function getCriticalVulnerabilities(totalRegisteredAssets?: number): Promise<MetricCardValue & { affectedAssetsCount?: number; totalFindingsCount?: number }> {
   try {
@@ -228,6 +264,8 @@ async function getCriticalVulnerabilities(totalRegisteredAssets?: number): Promi
     };
 
     const res = await fetchOpenSearch<{
+      timed_out?: boolean;
+      _shards?: { failed: number };
       hits: { total: { value: number } };
       aggregations?: {
         unique_cves?: { value: number };
@@ -235,84 +273,53 @@ async function getCriticalVulnerabilities(totalRegisteredAssets?: number): Promi
       };
     }>(`${env.wazuhIndexer.url().replace(/\/$/, "")}/${vulnIndex}/_search`, query, 15000);
 
-    const totalFindings = res?.hits?.total?.value ?? 0;
-    const uniqueCves = res?.aggregations?.unique_cves?.value ?? 0;
-    const affectedAssets = res?.aggregations?.affected_assets?.value ?? 0;
-
-    if (uniqueCves > 0) {
-      return {
-        value: uniqueCves,
-        trend30d: null,
-        trendAvailable: false,
-        source: `OpenSearch: ${uniqueCves} unique CVEs across ${affectedAssets} assets (${totalFindings.toLocaleString()} total findings)`,
-        affectedAssetsCount: affectedAssets,
-        totalFindingsCount: totalFindings,
-        details: {
-          current: uniqueCves,
-          previous30d: null,
-          explanation: "Wazuh vulnerability state index stores current active scan state without historical snapshots",
-          criticalAffectedAssets: affectedAssets,
-          totalAssets: totalRegisteredAssets ?? undefined,
-          criticalFindings: totalFindings,
-          uniqueCriticalCVEs: uniqueCves,
-        },
-      };
+    if (res.timed_out) throw new Error("OpenSearch query timed out");
+    if (res._shards?.failed !== 0) throw new Error("OpenSearch partial shard results");
+    const uniqueCves = res.aggregations?.unique_cves?.value;
+    if (typeof uniqueCves !== "number" || !Number.isInteger(uniqueCves) || uniqueCves < 0) {
+      throw new Error("Invalid unique-CVE aggregation");
     }
-
-    if (totalFindings > 0) {
-      return {
-        value: totalFindings,
-        trend30d: null,
-        trendAvailable: false,
-        source: "OpenSearch (wazuh-states-vulnerabilities)",
-        affectedAssetsCount: affectedAssets,
-        totalFindingsCount: totalFindings,
-        details: {
-          current: totalFindings,
-          criticalAffectedAssets: affectedAssets,
-          totalAssets: totalRegisteredAssets ?? undefined,
-          criticalFindings: totalFindings,
-          uniqueCriticalCVEs: uniqueCves,
-        },
-      };
-    }
-
+    const totalFindings = res.hits?.total?.value;
+    // Preserve the existing technical exposure binding; missing values stay unavailable.
+    const exposureCount = res.aggregations?.affected_assets?.value;
+    const affectedAssets = !res.timed_out && res._shards?.failed === 0
+      && typeof exposureCount === "number" && Number.isInteger(exposureCount) && exposureCount >= 0
+      ? exposureCount : undefined;
+    const fetchedAt = new Date().toISOString();
     return {
-      value: 0,
+      value: uniqueCves,
       trend30d: null,
       trendAvailable: false,
-      source: "OpenSearch (wazuh-states-vulnerabilities - 0 critical findings)",
-      affectedAssetsCount: 0,
-      totalFindingsCount: 0,
+      source: `OpenSearch: ${uniqueCves} unique critical CVEs (${vulnIndex})`,
+      availability: { status: "available", checkedAt: fetchedAt, fetchedAt, cached: false },
+      affectedAssetsCount: affectedAssets,
+      totalFindingsCount: totalFindings,
       details: {
-        current: 0,
-        criticalAffectedAssets: 0,
-        totalAssets: totalRegisteredAssets ?? undefined,
-        criticalFindings: 0,
-        uniqueCriticalCVEs: 0,
+        current: uniqueCves,
+        previous30d: null,
+        explanation: "Unique critical vulnerability.id cardinality from current vulnerability state; no historical snapshots. Raw findings never substitute for CVEs.",
+        criticalAffectedAssets: affectedAssets,
+        totalAssets: totalRegisteredAssets,
+        criticalFindings: totalFindings,
+        uniqueCriticalCVEs: uniqueCves,
       },
     };
   } catch (err) {
-    console.warn("[CISO Metrics] Critical vulnerabilities query failed:", err instanceof Error ? err.message : err);
-    return {
-      value: null,
-      trend30d: null,
-      trendAvailable: false,
-      source: "OpenSearch Vulnerabilities (Unavailable)",
-    };
+    return unavailableCount("OpenSearch Vulnerabilities", err);
   }
 }
 
 /**
  * 3. Compliance Score: Derived dynamically from compliance service
- * Calculates average of all assessed framework scores (e.g. MITRE 16%).
- * Also brings forward real trend30d and previous30d if historical telemetry exists.
+ * Calculates average of formal assessed framework scores only.
+ * Observation-only telemetry such as MITRE breadth is not compliance.
  */
 async function getOverallComplianceScore(): Promise<MetricCardValue> {
   try {
     const overview = await getComplianceOverview();
     const assessedFrameworks = overview.frameworks.filter(
-      (f) => typeof f.score === "number" && f.score !== null
+      (f) => f.metricKind !== "telemetry_observation"
+        && typeof f.score === "number" && f.score !== null
     );
 
     if (assessedFrameworks.length === 0) {
@@ -351,11 +358,11 @@ async function getOverallComplianceScore(): Promise<MetricCardValue> {
       trend30d,
       trendAvailable: trend30d !== null,
       unit: "%",
-      source: `Compliance Telemetry (${assessedFrameworks.map((f) => f.name).join(", ")})`,
+      source: `Formal Compliance Assessments (${assessedFrameworks.map((f) => f.name).join(", ")})`,
       details: {
         current: avgScore,
         previous30d: trend30d !== null ? previous30d : null,
-        explanation: "Derived strictly from active MITRE ATT&CK technique detection telemetry (31 active techniques vs 35 in prior 30d window out of 196 core matrix). Formal ISO 27001 / NIST / UU PDP assessments are currently Not Assessed.",
+        explanation: "Average of formal assessed framework scores only; observation-only telemetry is excluded.",
       },
     };
   } catch (err) {
@@ -386,8 +393,7 @@ export const POSTURE_SCORING_POLICY = {
     incidentContainment: 0.25,
     mitreDetectionCoverage: 0.25,
   },
-  incidentPenaltyPerCase: 1.5, // 1.5 score points deducted per active uncontained incident
-  mitreCoreMatrixTotal: 196,   // MITRE ATT&CK Enterprise Matrix base root techniques
+  incidentPenaltyPerCase: 1.5, // Existing application policy per active incident; not containment evidence
 };
 
 /**
@@ -404,307 +410,221 @@ export const VULNERABILITY_SLA_POLICY = {
     Medium: 90,    // 90 days
     Low: 180,      // 180 days
   } as Record<string, number>,
-  dueSoonThresholdPct: 0.80, // "Due Soon" = ≥80% of SLA elapsed
+  dueSoonThresholdDays: 11, // Critical due soon: 11 through 15 days
   policyNote: "Application-defined SLA thresholds. Not based on formal organizational policy or regulatory requirement.",
 };
 
 /**
- * 4. Security Posture Scoring Engine (0 - 100)
- *
- * Evaluates live telemetry across 4 verified dimensions:
- * 1. Endpoint Visibility (Weight: 25%)
- *    - Source: Wazuh Manager API (/agents/summary/status)
- *    - Formula: (active_agents / total_agents) * 100
- *
- * 2. Vulnerability Surface Health (Weight: 25%)
- *    - Source: OpenSearch (wazuh-states-vulnerabilities-*)
- *    - Formula: (1 - (critical_affected_assets / total_registered_assets)) * 100
- *
- * 3. Incident Containment Health (Weight: 25%)
- *    - Source: Bitdefender GravityZone API (getIncidentsList)
- *    - Formula: Math.max(0, 100 - (active_incidents * incidentPenaltyPerCase))
- *    - Policy note: 1.5 pts penalty per incident is an internal application policy model.
- *
- * 4. MITRE Threat Detection Coverage (Weight: 25%)
- *    - Source: OpenSearch Alerts Telemetry (unique rule.mitre.id / 196 core matrix)
- *    - Formula: (unique_detected_techniques / 196) * 100
- *
- * Composite Posture Score = Sum of weighted components.
+ * Existing application policy: four components at 25% each; no partial reweighting.
+ * Endpoint = active / total * 100; vulnerability = (1 - exposed / total) * 100;
+ * incident load = max(0, 100 - active incidents * 1.5).
+ * Missing/invalid inputs remain null, including zero asset denominators.
+ * Observed MITRE IDs do not establish coverage of a validated technique inventory:
+ * MITRE scoring remains unavailable, so the composite remains N/A.
  */
 export function calculateSecurityPostureScore(
-  agentsSummary: AgentsSummary,
-  criticalVulnAssets: number,
-  criticalVulnTotalAssets: number,
-  activeIncidentsCount: number,
-  mitrePassedTechniques: number,
-  mitreEvaluatedTechniques = POSTURE_SCORING_POLICY.mitreCoreMatrixTotal
+  agentsSummary: AgentsSummary | null,
+  criticalVulnAssets: number | null,
+  activeIncidentsCount: number | null
 ): MetricCardValue {
   const { weights, incidentPenaltyPerCase } = POSTURE_SCORING_POLICY;
-
-  // 1. Endpoint Visibility Score (0 - 100)
-  const endpointRaw = agentsSummary.total > 0
-    ? (agentsSummary.active / agentsSummary.total) * 100
-    : 0;
-  const endpointNormalized = Math.min(100, Math.round(endpointRaw));
-  const endpointContribution = Number((endpointNormalized * weights.endpointVisibility).toFixed(2));
-
-  // 2. Vulnerability Exposure Score (0 - 100)
-  const totalAssetsDenominator = Math.max(criticalVulnTotalAssets || agentsSummary.total, 1);
-  const cleanAssetRatio = Math.max(0, 1 - (criticalVulnAssets / totalAssetsDenominator));
-  const vulnRaw = cleanAssetRatio * 100;
-  const vulnNormalized = Math.min(100, Math.round(vulnRaw));
-  const vulnContribution = Number((vulnNormalized * weights.vulnerabilitySurface).toFixed(2));
-
-  // 3. Incident Containment Score (0 - 100)
-  const incidentDeduction = activeIncidentsCount * incidentPenaltyPerCase;
-  const incidentRaw = Math.max(0, 100 - incidentDeduction);
-  const incidentNormalized = Math.min(100, Math.round(incidentRaw));
-  const incidentContribution = Number((incidentNormalized * weights.incidentContainment).toFixed(2));
-
-  // 4. MITRE Threat Detection Coverage Score (0 - 100)
-  const mitreRaw = mitreEvaluatedTechniques > 0
-    ? (mitrePassedTechniques / mitreEvaluatedTechniques) * 100
-    : 0;
-  const mitreNormalized = Math.min(100, Math.round(mitreRaw));
-  const mitreContribution = Number((mitreNormalized * weights.mitreDetectionCoverage).toFixed(2));
-
-  // Composite Calculation
-  const compositeScore = Math.round(
-    endpointContribution + vulnContribution + incidentContribution + mitreContribution
-  );
+  const validCount = (value: number | null | undefined): value is number =>
+    typeof value === "number" && Number.isInteger(value) && value >= 0;
+  const total = agentsSummary?.total;
+  const endpointRaw = validCount(total) && total > 0
+    && validCount(agentsSummary?.active) && agentsSummary.active <= total
+    ? (agentsSummary.active / total) * 100 : null;
+  const vulnRaw = validCount(total) && total > 0
+    && validCount(criticalVulnAssets) && criticalVulnAssets <= total
+    ? (1 - criticalVulnAssets / total) * 100 : null;
+  const incidentCount = validCount(activeIncidentsCount) ? activeIncidentsCount : null;
+  const incidentRaw = incidentCount !== null
+    ? Math.max(0, 100 - incidentCount * incidentPenaltyPerCase) : null;
+  const normalize = (value: number | null) => value === null ? null : Math.round(value);
+  const contribution = (value: number | null, weight: number) =>
+    value === null ? null : Number((Math.round(value) * weight).toFixed(2));
 
   const components: PostureComponent[] = [
     {
       key: "endpoint_visibility",
       name: "Endpoint Visibility",
-      rawValue: Number(endpointRaw.toFixed(1)),
+      rawValue: endpointRaw === null ? null : Number(endpointRaw.toFixed(1)),
       rawUnit: "%",
-      normalizedScore: endpointNormalized,
+      normalizedScore: normalize(endpointRaw),
       weight: weights.endpointVisibility,
-      contribution: endpointContribution,
-      source: `Wazuh Manager (${agentsSummary.active}/${agentsSummary.total} active agents)`,
+      contribution: contribution(endpointRaw, weights.endpointVisibility),
+      source: endpointRaw !== null
+        ? `Wazuh Manager (${agentsSummary!.active}/${total} active agents)`
+        : "Wazuh Manager (valid active count and positive total unavailable)",
     },
     {
       key: "vulnerability_surface",
       name: "Vulnerability Surface Health",
-      rawValue: Number(vulnRaw.toFixed(1)),
+      rawValue: vulnRaw === null ? null : Number(vulnRaw.toFixed(1)),
       rawUnit: "%",
-      normalizedScore: vulnNormalized,
+      normalizedScore: normalize(vulnRaw),
       weight: weights.vulnerabilitySurface,
-      contribution: vulnContribution,
-      source: `OpenSearch Vulnerability State (${criticalVulnAssets}/${totalAssetsDenominator} critical-exposed assets)`,
+      contribution: contribution(vulnRaw, weights.vulnerabilitySurface),
+      source: vulnRaw !== null
+        ? `OpenSearch Vulnerability State (${criticalVulnAssets}/${total} critical-exposed assets)`
+        : "OpenSearch / Wazuh (valid exposed count and matching asset total unavailable)",
     },
     {
       key: "incident_containment",
-      name: "Incident Containment",
-      rawValue: activeIncidentsCount,
+      name: "Incident Load",
+      rawValue: incidentCount,
       rawUnit: "active incidents",
-      normalizedScore: incidentNormalized,
+      normalizedScore: normalize(incidentRaw),
       weight: weights.incidentContainment,
-      contribution: incidentContribution,
-      source: `Bitdefender GravityZone (${activeIncidentsCount} active incidents)`,
-      policyNote: `Scored as 100 - (${activeIncidentsCount} × ${incidentPenaltyPerCase} pts penalty). Note: Application policy baseline, not an ISO/NIST certification metric.`,
+      contribution: contribution(incidentRaw, weights.incidentContainment),
+      source: incidentCount !== null
+        ? `Bitdefender GravityZone (${incidentCount} active incidents)`
+        : "Bitdefender GravityZone (current incident count unavailable)",
+      policyNote: `Existing application policy: max(0, 100 - active incidents * ${incidentPenaltyPerCase}). This measures incident load, not verified containment.`,
     },
     {
       key: "mitre_detection_coverage",
       name: "MITRE Threat Coverage",
-      rawValue: Number(mitreRaw.toFixed(1)),
+      rawValue: null,
       rawUnit: "%",
-      normalizedScore: mitreNormalized,
+      normalizedScore: null,
       weight: weights.mitreDetectionCoverage,
-      contribution: mitreContribution,
-      source: `OpenSearch Alerts Telemetry (${mitrePassedTechniques}/${mitreEvaluatedTechniques} techniques)`,
+      contribution: null,
+      source: "Unavailable: no validated MITRE coverage input",
+      policyNote: "Observed alert technique IDs are not a coverage score. No compliance-derived count or fixed technique denominator is used.",
     },
   ];
 
-  const explanation = `Composite Posture Score: ${compositeScore}/100 based on 4 real telemetry dimensions (Weight 25% each). [1] Endpoint Visibility: ${endpointNormalized}%, [2] Vuln Surface Health: ${vulnNormalized}%, [3] Incident Containment: ${incidentNormalized}%, [4] MITRE Threat Coverage: ${mitreNormalized}%.`;
+  const included = components.filter(component => component.contribution !== null);
+  const unavailable = components.filter(component => component.contribution === null);
+  // All four policy dimensions are required. Never turn incomplete data into a /100 score.
+  const compositeScore = unavailable.length === 0
+    ? Math.round(included.reduce((sum, component) => sum + component.contribution!, 0)) : null;
+  const explanation = `Available components: ${included.map(c => c.name).join(", ") || "none"}. Unavailable: ${unavailable.map(c => c.name).join(", ") || "none"}. All four components are required at 25% each; partial scoring is not supported.`;
 
   return {
     value: compositeScore,
-    max: 100,
+    ...(compositeScore !== null ? { max: 100 } : {}),
     trend30d: null,
     trendAvailable: false,
-    source: "Integrated Security Posture Engine (Endpoint, Vuln, EDR, MITRE Coverage)",
+    source: "Security Posture Engine (existing application policy; complete inputs required)",
     components,
     details: {
       current: compositeScore,
       previous30d: null,
       explanation,
-      agentsActive: agentsSummary.active,
-      agentsDisconnected: agentsSummary.disconnected,
-      agentsNeverConnected: agentsSummary.never_connected,
-      agentsPending: agentsSummary.pending,
-      agentsTotal: agentsSummary.total,
-      criticalAffectedAssets: criticalVulnAssets,
-      totalAssets: totalAssetsDenominator,
+      agentsActive: agentsSummary?.active,
+      agentsDisconnected: agentsSummary?.disconnected,
+      agentsNeverConnected: agentsSummary?.never_connected,
+      agentsPending: agentsSummary?.pending,
+      agentsTotal: total,
+      criticalAffectedAssets: criticalVulnAssets ?? undefined,
+      totalAssets: total,
     },
   };
 }
 
 /**
  * 5. Vulnerability SLA Overview
- *
- * Classifies Critical vulnerabilities by age relative to the SLA policy.
- * Uses unique CVE count (not raw findings) for each age bucket.
- *
- * Categories:
- *   Overdue:    age > SLA threshold (Critical: 15 days)
- *   Due Soon:   age > SLA × 80%  AND  age ≤ SLA threshold
- *   Within SLA: age ≤ SLA × 80%
- *
- * "In Progress" is intentionally omitted because the vulnerability index
- * has no remediation workflow/status field (vulnerability.status = 0 docs).
+ * Group current critical findings by CVE BEFORE age classification.
+ * Oldest detection wins; proven overdue takes precedence over missing dates.
+ * Otherwise missing/future dates make worst-case age unknown, never compliant.
  */
 async function getVulnerabilitySlaOverview(): Promise<VulnerabilitySlaOverview> {
-  const slaThresholdDays = VULNERABILITY_SLA_POLICY.thresholds.Critical ?? 15;
-  const dueSoonDays = Math.floor(slaThresholdDays * VULNERABILITY_SLA_POLICY.dueSoonThresholdPct);
-
+  const slaThresholdDays = VULNERABILITY_SLA_POLICY.thresholds.Critical;
+  const dueSoonDays = VULNERABILITY_SLA_POLICY.dueSoonThresholdDays;
+  const asOf = Date.now();
   const unavailable: VulnerabilitySlaOverview = {
-    available: false,
-    dataAvailable: false,
-    total: null,
-    totalCritical: null,
-    overdue: null,
-    overduePct: null,
-    dueSoon: null,
-    dueSoonPct: null,
-    inProgress: null,
-    inProgressPct: null,
-    compliant: null,
-    compliantPct: null,
-    scope: "Critical",
+    available: false, dataAvailable: false, total: null, totalCritical: null,
+    overdue: null, overduePct: null, dueSoon: null, dueSoonPct: null,
+    compliant: null, compliantPct: null, unclassified: null, unclassifiedPct: null,
+    inProgress: null, inProgressPct: null, scope: "Critical",
     policy: {
-      criticalSlaDays: slaThresholdDays,
-      dueSoonThresholdDays: dueSoonDays,
+      criticalSlaDays: slaThresholdDays, dueSoonThresholdDays: dueSoonDays,
       thresholds: VULNERABILITY_SLA_POLICY.thresholds,
-      dueSoonThresholdPct: VULNERABILITY_SLA_POLICY.dueSoonThresholdPct,
       policyNote: VULNERABILITY_SLA_POLICY.policyNote,
     },
     source: "OpenSearch Vulnerability State (Unavailable)",
-    explanation: "Vulnerability SLA overview is unavailable because OpenSearch telemetry could not be reached.",
+    explanation: "Complete current CVE detection-age data could not be obtained.",
+    ageField: "vulnerability.detected_at", asOf: new Date(asOf).toISOString(),
   };
-
   try {
     const vulnIndex = env.wazuhIndexer.vulnerabilityIndex();
-
-    // Age-based ranges for Critical vulnerabilities:
-    //   Overdue:    detected_at < now - slaThresholdDays (older than SLA threshold)
-    //   Due Soon:   detected_at between now-slaThreshold and now-dueSoonDays (approaching SLA)
-    //   Compliant:  detected_at >= now - dueSoonDays (within safe SLA window)
     const query = {
       size: 0,
-      query: {
-        bool: {
-          must: [
-            { term: { "vulnerability.severity": "Critical" } },
-            { term: { "vulnerability.under_evaluation": false } },
-          ],
-        },
-      },
+      // Same critical population as the summary card; no historical alert index.
+      query: { term: { "vulnerability.severity": "Critical" } },
       aggs: {
-        total_cves: {
-          cardinality: { field: "vulnerability.id" },
-        },
-        overdue: {
-          filter: {
-            range: {
-              "vulnerability.detected_at": {
-                lt: `now-${slaThresholdDays}d`,
-              },
-            },
-          },
+        cves: {
+          // Reject truncation instead of publishing a partial population.
+          terms: { field: "vulnerability.id", size: 10000, shard_size: 10000 },
           aggs: {
-            unique_cves: { cardinality: { field: "vulnerability.id" } },
-          },
-        },
-        due_soon: {
-          filter: {
-            range: {
-              "vulnerability.detected_at": {
-                gte: `now-${slaThresholdDays}d`,
-                lt: `now-${dueSoonDays}d`,
-              },
-            },
-          },
-          aggs: {
-            unique_cves: { cardinality: { field: "vulnerability.id" } },
-          },
-        },
-        compliant: {
-          filter: {
-            range: {
-              "vulnerability.detected_at": {
-                gte: `now-${dueSoonDays}d`,
-              },
-            },
-          },
-          aggs: {
-            unique_cves: { cardinality: { field: "vulnerability.id" } },
+            oldest_detection: { min: { field: "vulnerability.detected_at" } },
+            missing_detection: { missing: { field: "vulnerability.detected_at" } },
+            future_detection: { filter: { range: { "vulnerability.detected_at": { gt: asOf } } } },
           },
         },
       },
     };
-
-    const res = await fetchOpenSearch<{
-      hits: { total: { value: number } };
-      aggregations?: {
-        total_cves?: { value: number };
-        overdue?: { doc_count: number; unique_cves?: { value: number } };
-        due_soon?: { doc_count: number; unique_cves?: { value: number } };
-        compliant?: { doc_count: number; unique_cves?: { value: number } };
-      };
-    }>(`${env.wazuhIndexer.url().replace(/\/$/, "")}/${vulnIndex}/_search`, query, 20000);
-
-    const totalCves = res?.aggregations?.total_cves?.value ?? 0;
-    const overdueCves = res?.aggregations?.overdue?.unique_cves?.value ?? 0;
-    const dueSoonCves = res?.aggregations?.due_soon?.unique_cves?.value ?? 0;
-    const compliantCves = res?.aggregations?.compliant?.unique_cves?.value ?? 0;
-
-    if (totalCves === 0) {
-      return {
-        ...unavailable,
-        available: true,
-        dataAvailable: true,
-        total: 0,
-        totalCritical: 0,
-        overdue: 0,
-        overduePct: 0,
-        dueSoon: 0,
-        dueSoonPct: 0,
-        inProgress: null,
-        inProgressPct: null,
-        compliant: 0,
-        compliantPct: 0,
-        source: "OpenSearch Vulnerability State (0 critical CVEs)",
-        explanation: "No active critical vulnerabilities found in OpenSearch index.",
-      };
+    interface CveBucket {
+      key: string; doc_count: number;
+      oldest_detection: { value: number | null };
+      missing_detection: { doc_count: number };
+      future_detection: { doc_count: number };
     }
-
-    const pct = (n: number) => totalCves > 0 ? Math.round((n / totalCves) * 100) : 0;
-
+    const res = await fetchOpenSearch<{
+      timed_out: boolean;
+      _shards: { total: number; failed: number };
+      aggregations?: { cves?: {
+        sum_other_doc_count: number; doc_count_error_upper_bound: number; buckets: CveBucket[];
+      } };
+    }>(`${env.wazuhIndexer.url().replace(/\/$/, "")}/${vulnIndex}/_search`, query, 20000);
+    const cves = res.aggregations?.cves;
+    if (res.timed_out !== false || !res._shards || res._shards.total <= 0 || res._shards.failed !== 0
+      || !cves || !Array.isArray(cves.buckets)
+      || cves.sum_other_doc_count !== 0 || cves.doc_count_error_upper_bound !== 0) {
+      throw new Error("Incomplete or truncated SLA aggregation");
+    }
+    const counts = { overdue: 0, dueSoon: 0, compliant: 0, unclassified: 0 };
+    const seen = new Set<string>();
+    const dayMs = 24 * 60 * 60 * 1000;
+    for (const cve of cves.buckets) {
+      if (typeof cve.key !== "string" || !cve.key || seen.has(cve.key)
+        || !Number.isInteger(cve.doc_count) || cve.doc_count <= 0
+        || !cve.oldest_detection || !("value" in cve.oldest_detection)
+        || !Number.isInteger(cve.missing_detection?.doc_count) || cve.missing_detection.doc_count < 0
+        || !Number.isInteger(cve.future_detection?.doc_count) || cve.future_detection.doc_count < 0) {
+        throw new Error("Missing or invalid per-CVE SLA aggregation");
+      }
+      seen.add(cve.key);
+      const oldest = cve.oldest_detection.value;
+      const age = typeof oldest === "number" && Number.isFinite(oldest) ? (asOf - oldest) / dayMs : null;
+      // Exclusive branches: precisely one increment per CVE.
+      if (age !== null && age > slaThresholdDays) counts.overdue++;
+      else if (age === null || age < 0 || cve.missing_detection.doc_count > 0 || cve.future_detection.doc_count > 0) counts.unclassified++;
+      else if (age >= dueSoonDays) counts.dueSoon++;
+      else counts.compliant++;
+    }
+    const total = seen.size;
+    if (Object.values(counts).reduce((sum, count) => sum + count, 0) !== total) {
+      throw new Error("SLA counts do not partition the CVE population");
+    }
+    // Largest-remainder rounding to two decimals keeps displayed percentages at 100%.
+    // This adjusts rounding only; all bucket counts remain exact.
+    const portions = Object.entries(counts).map(([key, count]) => {
+      const raw = total === 0 ? 0 : count / total * 10000;
+      return { key, units: Math.floor(raw), remainder: raw - Math.floor(raw) };
+    }).sort((a, b) => b.remainder - a.remainder);
+    const remaining = total === 0 ? 0 : 10000 - portions.reduce((sum, portion) => sum + portion.units, 0);
+    for (let i = 0; i < remaining; i++) portions[i].units++;
+    const percentages = Object.fromEntries(portions.map(portion => [portion.key, portion.units / 100]));
     return {
-      available: true,
-      dataAvailable: true,
-      total: totalCves,
-      totalCritical: totalCves,
-      overdue: overdueCves,
-      overduePct: pct(overdueCves),
-      dueSoon: dueSoonCves,
-      dueSoonPct: pct(dueSoonCves),
-      inProgress: null,
-      inProgressPct: null,
-      compliant: compliantCves,
-      compliantPct: pct(compliantCves),
-      scope: "Critical",
-      policy: {
-        criticalSlaDays: slaThresholdDays,
-        dueSoonThresholdDays: dueSoonDays,
-        thresholds: VULNERABILITY_SLA_POLICY.thresholds,
-        dueSoonThresholdPct: VULNERABILITY_SLA_POLICY.dueSoonThresholdPct,
-        policyNote: VULNERABILITY_SLA_POLICY.policyNote,
-      },
-      source: `OpenSearch Vulnerability State (${totalCves} unique critical CVEs, SLA policy: Critical ≤ ${slaThresholdDays}d, due-soon: ${dueSoonDays}d)`,
-      explanation: `Critical Vulnerability SLA breakdown based on detection age relative to application SLA policy (${slaThresholdDays} days). 'In Progress' is currently N/A because Wazuh vulnerability state index does not track remediation ticketing lifecycle.`,
+      ...unavailable,
+      available: true, dataAvailable: true, total, totalCritical: total, ...counts,
+      overduePct: percentages.overdue, dueSoonPct: percentages.dueSoon,
+      compliantPct: percentages.compliant, unclassifiedPct: percentages.unclassified,
+      source: `OpenSearch ${vulnIndex} (${total} unique critical CVEs; oldest detection per CVE)`,
+      explanation: `Each CVE appears once. Age uses vulnerability.detected_at across current affected findings: overdue > ${slaThresholdDays}d; due soon >= ${dueSoonDays}d and <= ${slaThresholdDays}d; compliant >= 0d and < ${dueSoonDays}d. A proven overdue finding takes precedence; otherwise any missing/invalid/future detection makes the CVE unclassified. In Progress is unavailable without remediation workflow data.`,
     };
   } catch (err) {
     console.warn("[CISO Metrics] Vulnerability SLA overview failed:", err instanceof Error ? err.message : err);
@@ -743,7 +663,7 @@ async function getVulnerabilitySlaOverview(): Promise<VulnerabilitySlaOverview> 
  */
 async function getIncidentKpiOverview(totalIncidentsBaseline?: number): Promise<IncidentKpiOverview> {
   try {
-    const bitdefenderTotal = totalIncidentsBaseline ?? cachedBitdefender?.total ?? 0;
+    const bitdefenderTotal = totalIncidentsBaseline ?? bitdefenderActiveIncidentState.cached?.total ?? 0;
     return await calculateRealIncidentKpis(bitdefenderTotal);
   } catch (err) {
     console.warn("[CISO Metrics] Incident KPI overview failed:", err instanceof Error ? err.message : err);
@@ -757,61 +677,79 @@ async function getIncidentKpiOverview(totalIncidentsBaseline?: number): Promise<
 export async function getCisoMetrics(): Promise<CisoMetricsData> {
   // First fetch agents summary to know total registered assets for vulnerability denominator
   const agentsSummary = await getAgentsSummary();
-  const totalAgents = agentsSummary.total > 0 ? agentsSummary.total : 169;
+  const totalAgents = agentsSummary?.total;
 
-  const [activeIncidents, criticalVulnerabilities, complianceScore, vulnerabilitySla, incidentKpi] = await Promise.all([
+  const [activeIncidents, criticalVulnerabilities, complianceScore, vulnerabilitySla, incidentKpi, nistPosture, risks] = await Promise.all([
     getBitdefenderActiveIncidents(),
     getCriticalVulnerabilities(totalAgents),
     getOverallComplianceScore(),
     getVulnerabilitySlaOverview(),
     getIncidentKpiOverview(),
+    getNistPostureAssessment(),
+    listRisks().catch(() => []),
   ]);
 
-  // Extract real telemetry inputs
-  const affectedVulnAssets = criticalVulnerabilities.affectedAssetsCount ?? 159;
-  const incidentsCount = activeIncidents.value ?? 0;
-  
-  // Extract MITRE passed techniques (default 31 out of 196)
-  const mitreTechniquesPassed = complianceScore.value !== null 
-    ? Math.round((complianceScore.value / 100) * POSTURE_SCORING_POLICY.mitreCoreMatrixTotal)
-    : 31;
+  // Missing inputs stay unavailable. An expired incident cache cannot score current posture.
+  const affectedVulnAssets = criticalVulnerabilities.affectedAssetsCount ?? null;
+  const currentBitdefenderCache = bitdefenderActiveIncidentState.cached;
+  const incidentsCount = currentBitdefenderCache
+    && Date.now() - currentBitdefenderCache.timestamp < BITDEFENDER_CACHE_TTL_MS
+    ? activeIncidents.value : null;
 
-  // 1. Calculate Auditable Security Posture Score
   const securityPostureScore = calculateSecurityPostureScore(
     agentsSummary,
     affectedVulnAssets,
-    totalAgents,
-    incidentsCount,
-    mitreTechniquesPassed,
-    POSTURE_SCORING_POLICY.mitreCoreMatrixTotal
+    incidentsCount
   );
+  // Retain technical components as evidence, but score only recorded NIST assessments.
+  securityPostureScore.value = nistPosture.overallScore;
+  securityPostureScore.max = nistPosture.overallScore === null ? undefined : 100;
+  securityPostureScore.source = "Recorded NIST CSF 2.0 function assessments";
+  securityPostureScore.details = {
+    ...securityPostureScore.details,
+    current: nistPosture.overallScore,
+    explanation: nistPosture.explanation,
+  };
 
-  // 2. Total Risk Score: Not integrated into risk engine / DB -> null
+  const totalRiskSummary = summarizeTotalRisk(risks);
+  // Project-defined ordinal portfolio summary of completed residual-risk assessments.
   const totalRiskScore: MetricCardValue = {
-    value: null,
-    max: 1000,
+    value: totalRiskSummary?.portfolioMean ?? null,
+    max: totalRiskSummary ? 4 : undefined,
+    category: totalRiskSummary?.category,
+    eligibleCount: totalRiskSummary?.eligibleCount,
     trend30d: null,
     trendAvailable: false,
-    source: "Risk Calculation Engine (Not Assessed / Not Integrated)",
+    source: "Project-defined assessed residual-risk portfolio summary",
     details: {
-      explanation: "Historical data unavailable for this metric.",
+      explanation: totalRiskSummary
+        ? "Portfolio summary of assessed residual risks using the project-defined Low–Critical ordinal scale. Preliminary and unrecognized residual risks are excluded."
+        : "No assessed risks with a recognized residual-risk category are available.",
     },
   };
 
-  // 3. Risk Treatment Progress: Not integrated into risk register DB -> null
+  const treatmentSummary = summarizeTreatmentProgress(risks);
+  // Completed actions divided by eligible assessed treatments; no partial weighting.
   const riskTreatmentProgress: MetricCardValue = {
-    value: null,
+    value: treatmentSummary?.percentage ?? null,
     trend30d: null,
     trendAvailable: false,
     unit: "%",
-    source: "Risk Register Treatments (Not Assessed / Not Integrated)",
+    eligibleCount: treatmentSummary?.eligibleCount,
+    completedCount: treatmentSummary?.completedCount,
+    plannedCount: treatmentSummary?.plannedCount,
+    inProgressCount: treatmentSummary?.inProgressCount,
+    source: "Project-defined assessed risk treatment completion",
     details: {
-      explanation: "Historical data unavailable for this metric.",
+      explanation: treatmentSummary
+        ? "Percentage of eligible assessed risk treatments marked Completed. Planned and In Progress treatments remain outstanding."
+        : "No assessed risks with a genuine strategy and recognized treatment status are available.",
     },
   };
 
   return {
     securityPostureScore,
+    nistPosture,
     totalRiskScore,
     activeIncidents,
     criticalVulnerabilities,

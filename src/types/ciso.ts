@@ -1,17 +1,49 @@
+export const NIST_FUNCTIONS = ["Govern", "Identify", "Protect", "Detect", "Respond", "Recover"] as const;
+export interface NistFunctionAssessment {
+  name: typeof NIST_FUNCTIONS[number];
+  score: number | null;
+  assessedAt: string | null;
+  assessedBy: string | null;
+  source: string | null;
+  evidence: string | null;
+  notes: string | null;
+  trend30d: number | null; // Percentage-point change, not relative percent change.
+  previousScore: number | null;
+  previousAssessedAt: string | null;
+}
+export interface NistPostureAssessment {
+  status: "available" | "unavailable";
+  domains: NistFunctionAssessment[];
+  overallScore: number | null;
+  explanation: string;
+}
+
 export interface PostureComponent {
   key: string;
   name: string;
-  rawValue: number;
+  rawValue: number | null;
   rawUnit?: string;
-  normalizedScore: number;
+  normalizedScore: number | null;
   weight: number;
-  contribution: number;
+  contribution: number | null;
   source: string;
   policyNote?: string;
 }
 
 export interface MetricCardValue {
+  availability?: {
+    status: "available" | "unavailable";
+    checkedAt: string;
+    fetchedAt: string | null;
+    cached: boolean;
+    error?: { code: string; message: string };
+  };
   value: number | null;
+  category?: string;
+  eligibleCount?: number;
+  completedCount?: number;
+  plannedCount?: number;
+  inProgressCount?: number;
   max?: number;
   trend30d: number | null;
   trendAvailable: boolean;
@@ -66,6 +98,11 @@ export interface VulnerabilitySlaOverview {
   /** Vulns compliant with SLA */
   compliant: number | null;
   compliantPct?: number | null;
+  /** Unique CVEs whose worst-case age cannot be established. */
+  unclassified: number | null;
+  unclassifiedPct: number | null;
+  ageField: "vulnerability.detected_at";
+  asOf: string;
   /** Scope of the SLA calculation (e.g. 'Critical') */
   scope: string;
   /** SLA policy thresholds used for this calculation */
@@ -126,6 +163,7 @@ export interface IncidentKpiOverview {
 }
 
 export interface CisoMetricsData {
+  nistPosture: NistPostureAssessment;
   securityPostureScore: MetricCardValue;
   totalRiskScore: MetricCardValue;
   activeIncidents: MetricCardValue;
@@ -141,9 +179,12 @@ export interface CisoMetricsData {
 export interface BitdefenderIncidentListItem {
   id: string;
   name: string;
+  detectionName?: string | null;
+  endpoint?: string | null;
+  attackTypes?: string[];
   severity: string;
   status: string;
-  detectedAt: string;
+  detectedAt: string | null;
   alertCount: number;
   mainAction?: string;
   acknowledgedAt?: string | null;
@@ -157,5 +198,3 @@ export interface IncidentListResponse {
   total: number;
   items: BitdefenderIncidentListItem[];
 }
-
-

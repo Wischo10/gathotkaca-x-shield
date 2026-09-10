@@ -5,6 +5,8 @@ import { toErrorResult } from "@/lib/api-result";
 import type { ApiResult } from "@/types/soc";
 import type { CisoMetricsData } from "@/types/ciso";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(): Promise<NextResponse<ApiResult<CisoMetricsData>>> {
   try {
     const data = await getCisoMetrics();
