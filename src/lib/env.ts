@@ -39,6 +39,7 @@ export const env = {
     password: () => required("WAZUH_INDEXER_PASSWORD"),
     alertsIndex: () => required("WAZUH_INDEXER_ALERTS_INDEX"),
     vulnerabilityIndex: () => required("WAZUH_INDEXER_VULNERABILITY_INDEX"),
+    allowSelfSigned: () => optional("WAZUH_ALLOW_SELF_SIGNED", "false") === "true",
   },
   bitdefender: {
     apiUrl: () => required("BITDEFENDER_API_URL"),

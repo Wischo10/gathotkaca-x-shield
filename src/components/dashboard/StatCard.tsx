@@ -1,34 +1,12 @@
-export function StatCard({
-  label,
-  value,
-  changePct,
-  loading,
-}: {
-  label: string;
-  value: string;
-  changePct?: number;
-  loading?: boolean;
-}) {
-  const positive = (changePct ?? 0) >= 0;
+import type { ReactNode } from "react";
+
+export function StatCard({ label, value, icon, helper = "Data unavailable" }: { label: string; value: string; icon: ReactNode; helper?: string }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-      <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
-      {loading ? (
-        <div className="mt-2 h-6 w-16 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-      ) : (
-        <p className="mt-1 text-2xl font-semibold text-slate-800 dark:text-white">
-          {value}
-        </p>
-      )}
-      {typeof changePct === "number" && !loading && (
-        <p
-          className={`mt-1 text-xs ${
-            positive ? "text-emerald-600" : "text-brand-red"
-          }`}
-        >
-          {positive ? "↑" : "↓"} {Math.abs(changePct)}% vs last 7 days
-        </p>
-      )}
-    </div>
+    <article className="flex h-36 min-w-0 flex-col rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm shadow-slate-200/30 dark:border-slate-800 dark:bg-slate-900 dark:shadow-none sm:h-40">
+      <div className="flex min-h-8 items-center gap-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-brand-blue dark:bg-blue-950/60">{icon}</span><p className="truncate text-xs font-medium text-slate-500 dark:text-slate-400">{label}</p></div>
+      <p className="mt-3 text-2xl font-semibold tracking-tight text-slate-800 dark:text-white sm:text-3xl">{value}</p>
+      <p className="mt-1 text-[11px] text-slate-400">{helper}</p>
+      <div className="mt-auto h-4 border-b border-dashed border-slate-200 dark:border-slate-800" aria-hidden="true" />
+    </article>
   );
 }
