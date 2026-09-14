@@ -1,17 +1,39 @@
+"use client";
 import { FileText, CalendarClock, CheckCircle2, Download, Clock, ArrowUp, ArrowDown } from "lucide-react";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
+import { useState, useEffect } from "react";
+
+interface ReportStats {
+  totalAlerts: number;
+  escalated: number;
+  closed: number;
+}
 
 export function ReportsKPIs() {
-  const generateSparkline = (trend: "up" | "down") => 
-    Array.from({ length: 10 }, (_, i) => ({ 
-      value: trend === "up" ? i * 10 + Math.random() * 20 : 100 - i * 10 + Math.random() * 20 
+  const [wazuhTotal, setWazuhTotal] = useState<number | null>(null);
+  const [caseStats, setCaseStats] = useState<{ total: number; closed: number } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/soc/playbook-stats?range=7d").then(r => r.json()),
+      fetch("/api/soc/cases/aggregate?range=7d").then(r => r.json()),
+    ]).then(([playbookData, casesData]) => {
+      if (playbookData.status === "ok") setWazuhTotal(playbookData.data.totalAlerts);
+      if (casesData.status === "ok") setCaseStats({ total: casesData.data.total, closed: casesData.data.closed });
+    }).catch(console.error).finally(() => setLoading(false));
+  }, []);
+
+  const generateSparkline = (trend: "up" | "down") =>
+    Array.from({ length: 10 }, (_, i) => ({
+      value: trend === "up" ? i * 10 + Math.random() * 20 : 100 - i * 10 + Math.random() * 20
     }));
 
   const kpis = [
     {
-      title: "Reports Generated (This Week)",
-      value: "36",
-      trend: "+ 20%",
+      title: "Total Alerts (7d)",
+      value: loading ? "..." : (wazuhTotal ?? 0).toLocaleString(),
+      trend: "Live from Wazuh",
       trendUp: true,
       icon: FileText,
       color: "text-purple-500",
@@ -21,9 +43,9 @@ export function ReportsKPIs() {
       data: generateSparkline("up"),
     },
     {
-      title: "Scheduled Reports",
-      value: "18",
-      trend: "+ 12%",
+      title: "Escalated Cases (7d)",
+      value: loading ? "..." : (caseStats?.total ?? 0).toLocaleString(),
+      trend: "From soc_cases DB",
       trendUp: true,
       icon: CalendarClock,
       color: "text-blue-500",
@@ -33,9 +55,9 @@ export function ReportsKPIs() {
       data: generateSparkline("up"),
     },
     {
-      title: "On-Demand Reports",
-      value: "18",
-      trend: "+ 33%",
+      title: "Cases Resolved (7d)",
+      value: loading ? "..." : (caseStats?.closed ?? 0).toLocaleString(),
+      trend: "Closed tickets",
       trendUp: true,
       icon: CheckCircle2,
       color: "text-emerald-500",
@@ -45,10 +67,10 @@ export function ReportsKPIs() {
       data: generateSparkline("up"),
     },
     {
-      title: "Exports (This Week)",
-      value: "42",
-      trend: "+ 16%",
-      trendUp: true,
+      title: "Active Investigations",
+      value: loading ? "..." : ((caseStats?.total ?? 0) - (caseStats?.closed ?? 0)).toLocaleString(),
+      trend: "In progress",
+      trendUp: false,
       icon: Download,
       color: "text-orange-500",
       bg: "bg-orange-50 dark:bg-orange-500/10",
@@ -57,16 +79,16 @@ export function ReportsKPIs() {
       data: generateSparkline("up"),
     },
     {
-      title: "Avg. Report Generation Time",
-      value: "1m 24s",
-      trend: "- 22%",
-      trendUp: true, // It's negative, but lower time is better, so we'll show it in green.
+      title: "Resolution Rate",
+      value: loading || !caseStats?.total ? "—" : `${Math.round(((caseStats?.closed ?? 0) / (caseStats?.total ?? 1)) * 100)}%`,
+      trend: "Efficiency metric",
+      trendUp: true,
       icon: Clock,
       color: "text-cyan-500",
       bg: "bg-cyan-50 dark:bg-cyan-500/10",
       border: "border-cyan-200 dark:border-cyan-900/50",
       stroke: "#06b6d4",
-      data: generateSparkline("down"),
+      data: generateSparkline("up"),
     },
   ];
 
@@ -91,20 +113,19 @@ export function ReportsKPIs() {
                 </div>
               </div>
             </div>
-            
-            <div className={`mt-1 flex items-center gap-1 text-[10px] font-medium ml-[52px] ${kpi.trendUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-              {kpi.trend.startsWith('-') && kpi.title === "Avg. Report Generation Time" ? <ArrowDown className="w-3 h-3" /> : (kpi.trendUp ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />)} 
-              {kpi.trend} <span className="text-slate-400 font-normal">vs last 7 days</span>
+
+            <div className={`mt-1 flex items-center gap-1 text-[10px] font-medium ml-[52px] ${kpi.trendUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-orange-600 dark:text-orange-400'}`}>
+              <span>{kpi.trend}</span>
             </div>
 
             <div className="h-10 mt-3 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={kpi.data}>
-                  <Line 
-                    type="monotone" 
-                    dataKey="value" 
-                    stroke={kpi.stroke} 
-                    strokeWidth={2} 
+                  <Line
+                    type="monotone"
+                    dataKey="value"
+                    stroke={kpi.stroke}
+                    strokeWidth={2}
                     dot={{ r: 2, fill: kpi.stroke }}
                     isAnimationActive={false}
                   />

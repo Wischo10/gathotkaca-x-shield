@@ -183,11 +183,12 @@ export async function getAttackMethods(limit = 5, range: string = "30d") {
   }));
 }
 
-export async function getMitreTactics(limit = 5) {
+export async function getMitreTactics(limit = 5, range: string = "30d") {
+  const gte = RANGE_TO_GTE[range] || "now-30d";
   const index = env.wazuhIndexer.alertsIndex();
   const query = {
     size: 0,
-    query: { range: { timestamp: { gte: "now-30d/d", lte: "now/d" } } },
+    query: { range: { timestamp: { gte } } },
     aggs: { tactics: { terms: { field: "rule.mitre.tactic", size: limit } } }
   };
   const res = await fetchIndexer<OpenSearchResponse<any>>(`/${index}/_search`, query);
@@ -355,16 +356,34 @@ export async function getAlertsTrend(
   });
 }
 
-export async function getLiveEvents(limit = 10): Promise<LiveEvent[]> {
+export async function getLiveEvents(limit = 10, severities?: string[]): Promise<LiveEvent[]> {
   const index = env.wazuhIndexer.alertsIndex();
+  
+  let queryObj: any = { match_all: {} };
+
+  if (severities && severities.length > 0) {
+    const shouldClauses = [];
+    if (severities.includes("critical")) shouldClauses.push({ range: { "rule.level": { gte: 12 } } });
+    if (severities.includes("high")) shouldClauses.push({ range: { "rule.level": { gte: 8, lt: 12 } } });
+    if (severities.includes("medium")) shouldClauses.push({ range: { "rule.level": { gte: 4, lt: 8 } } });
+    if (severities.includes("low")) shouldClauses.push({ range: { "rule.level": { lt: 4 } } });
+
+    if (shouldClauses.length > 0) {
+      queryObj = {
+        bool: {
+          should: shouldClauses,
+          minimum_should_match: 1
+        }
+      };
+    }
+  }
+
   const query = {
     size: limit,
     sort: [
       { timestamp: { order: "desc" } }
     ],
-    query: {
-      match_all: {}
-    }
+    query: queryObj
   };
 
   const res = await fetchIndexer<OpenSearchResponse<any>>(`/${index}/_search`, query);
@@ -530,4 +549,112 @@ export async function getTopAlertingRules(
     ruleName: b.key,
     count: b.doc_count
   }));
+}
+
+export async function getTopVulnerableAgents(limit = 10) {
+  const index = env.wazuhIndexer.vulnerabilityIndex();
+  const query = {
+    size: 0,
+    query: { match_all: {} },
+    aggs: {
+      agents: {
+        terms: { field: "agent.name", size: limit },
+        aggs: {
+          severity: {
+            terms: { field: "vulnerability.severity" }
+          }
+        }
+      }
+    }
+  };
+
+  try {
+    const res = await fetchIndexer<any>(`/${index}/_search`, query);
+    const buckets = res?.aggregations?.agents?.buckets || [];
+    
+    return buckets.map((b: any) => {
+      let critical = 0, high = 0, medium = 0, low = 0;
+      const severityBuckets = b.severity?.buckets || [];
+      severityBuckets.forEach((sb: any) => {
+        const key = sb.key.toLowerCase();
+        if (key === "critical") critical = sb.doc_count;
+        else if (key === "high") high = sb.doc_count;
+        else if (key === "medium") medium = sb.doc_count;
+        else low += sb.doc_count;
+      });
+      
+      return {
+        agentName: b.key,
+        total: b.doc_count,
+        critical,
+        high,
+        medium,
+        low
+      };
+    }).sort((a: any, b: any) => (b.critical * 10 + b.high) - (a.critical * 10 + a.high));
+  } catch (error) {
+    console.error("Failed to get top vulnerable agents", error);
+    return [];
+  }
+}
+
+export async function getMostCommonCVEs(limit = 10) {
+  const index = env.wazuhIndexer.vulnerabilityIndex();
+  const query = {
+    size: 0,
+    query: { match_all: {} },
+    aggs: {
+      cves: {
+        terms: { field: "vulnerability.id", size: limit },
+        aggs: {
+          severity: {
+            terms: { field: "vulnerability.severity", size: 1 }
+          }
+        }
+      }
+    }
+  };
+
+  try {
+    const res = await fetchIndexer<any>(`/${index}/_search`, query);
+    const buckets = res?.aggregations?.cves?.buckets || [];
+    
+    return buckets.map((b: any) => {
+      const severity = b.severity?.buckets?.[0]?.key || "Unknown";
+      return {
+        cve: b.key,
+        count: b.doc_count,
+        severity
+      };
+    });
+  } catch (error) {
+    console.error("Failed to get most common CVEs", error);
+    return [];
+  }
+}
+
+export async function getTopVulnerablePackages(limit = 10) {
+  const index = env.wazuhIndexer.vulnerabilityIndex();
+  const query = {
+    size: 0,
+    query: { match_all: {} },
+    aggs: {
+      packages: {
+        terms: { field: "package.name", size: limit }
+      }
+    }
+  };
+
+  try {
+    const res = await fetchIndexer<any>(`/${index}/_search`, query);
+    const buckets = res?.aggregations?.packages?.buckets || [];
+    
+    return buckets.map((b: any) => ({
+      packageName: b.key,
+      count: b.doc_count
+    }));
+  } catch (error) {
+    console.error("Failed to get top vulnerable packages", error);
+    return [];
+  }
 }

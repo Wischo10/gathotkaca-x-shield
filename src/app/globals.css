@@ -8,3 +8,45 @@ html {
 body {
   overflow-x: hidden;
 }
+
+@media print {
+  @page {
+    size: landscape;
+    margin: 10mm;
+  }
+
+  body {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    overflow: visible !important;
+  }
+
+  /* Hide navigation elements */
+  aside,
+  header {
+    display: none !important;
+  }
+
+  /* Prevent containers from cropping content */
+  .overflow-hidden,
+  .overflow-y-auto,
+  .overflow-x-auto,
+  main,
+  .h-screen {
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  /* Prevent page breaks inside panels */
+  section,
+  .rounded-xl {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Optional: slightly scale down to fit more on a page */
+  main {
+    padding: 0 !important;
+    zoom: 80%;
+  }
+}

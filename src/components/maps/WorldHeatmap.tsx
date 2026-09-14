@@ -13,8 +13,6 @@ const GEO_URL =
   "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
 
 // ISO numeric → alpha-2 mapping for the countries in the atlas
-// We ship a small inline lookup so we don't need an extra network request.
-// (Covers the most common attacker countries; falls back to circle markers for the rest.)
 const ISO_NUMERIC_TO_ALPHA2: Record<string, string> = {
   "004": "AF", "008": "AL", "012": "DZ", "024": "AO", "032": "AR",
   "036": "AU", "040": "AT", "050": "BD", "056": "BE", "076": "BR",
@@ -45,6 +43,7 @@ export interface CountryAttackData {
 
 interface WorldHeatmapProps {
   data: CountryAttackData[];
+  onCountryClick?: (country: CountryAttackData) => void;
 }
 
 function interpolateColor(t: number): string {
@@ -63,10 +62,16 @@ function interpolateColor(t: number): string {
   }
 }
 
-export default function WorldHeatmap({ data }: WorldHeatmapProps) {
+export default function WorldHeatmap({ data, onCountryClick }: WorldHeatmapProps) {
   const maxCount = useMemo(() => Math.max(...data.map((d) => d.count), 1), [data]);
 
-  // Build fast lookup: alpha2 → normalized count (0-1)
+  // Build fast lookup: alpha2 → full CountryAttackData
+  const countryMap = useMemo(() => {
+    const map = new Map<string, CountryAttackData>();
+    data.forEach((d) => map.set(d.countryCode, d));
+    return map;
+  }, [data]);
+
   const countryScore = useMemo(() => {
     const map = new Map<string, number>();
     data.forEach((d) => map.set(d.countryCode, d.count / maxCount));
@@ -99,6 +104,7 @@ export default function WorldHeatmap({ data }: WorldHeatmapProps) {
                 const alpha2 = ISO_NUMERIC_TO_ALPHA2[numericId];
                 const score = alpha2 ? (countryScore.get(alpha2) ?? 0) : 0;
                 const fill = score > 0 ? interpolateColor(score) : "#e2e8f0";
+                const countryData = alpha2 ? countryMap.get(alpha2) : undefined;
 
                 return (
                   <Geography
@@ -107,9 +113,17 @@ export default function WorldHeatmap({ data }: WorldHeatmapProps) {
                     fill={fill}
                     stroke="#cbd5e1"
                     strokeWidth={0.3}
+                    onClick={() => {
+                      if (countryData && onCountryClick) {
+                        onCountryClick(countryData);
+                      }
+                    }}
                     style={{
                       default: { outline: "none" },
-                      hover:   { outline: "none", fill: score > 0 ? interpolateColor(Math.min(score + 0.2, 1)) : "#cbd5e1", cursor: "pointer" },
+                      hover: {
+                        outline: "none",
+                        fill: score > 0 ? interpolateColor(Math.min(score + 0.2, 1)) : "#cbd5e1",
+                      },
                       pressed: { outline: "none" },
                     }}
                   />
@@ -120,7 +134,12 @@ export default function WorldHeatmap({ data }: WorldHeatmapProps) {
 
           {/* Pulsing markers for top 5 attack origins */}
           {top5.map((d) => (
-            <Marker key={d.countryCode} coordinates={[d.longitude, d.latitude]}>
+            <Marker
+              key={d.countryCode}
+              coordinates={[d.longitude, d.latitude]}
+              onClick={() => onCountryClick && onCountryClick(d)}
+              style={{ cursor: "pointer" }}
+            >
               <circle r={4} fill="#ef4444" fillOpacity={0.8} stroke="#fff" strokeWidth={1} />
               <circle r={7} fill="none" stroke="#ef4444" strokeWidth={1} strokeOpacity={0.5} />
             </Marker>
@@ -143,13 +162,17 @@ export default function WorldHeatmap({ data }: WorldHeatmapProps) {
       {/* Top country tooltip-style list */}
       <div className="absolute right-1 top-0 flex flex-col gap-0.5 text-[9px]">
         {top5.map((d, i) => (
-          <div key={d.countryCode} className="flex items-center gap-1">
+          <button
+            key={d.countryCode}
+            onClick={() => onCountryClick && onCountryClick(d)}
+            className="flex items-center gap-1 hover:underline text-left"
+          >
             <span className="font-bold text-red-500">{i + 1}.</span>
             <span className="text-slate-600 dark:text-slate-400">{d.country}</span>
             <span className="ml-auto font-semibold text-slate-700 dark:text-slate-300">
               {d.count.toLocaleString()}
             </span>
-          </div>
+          </button>
         ))}
       </div>
     </div>

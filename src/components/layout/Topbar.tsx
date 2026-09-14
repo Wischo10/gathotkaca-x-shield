@@ -41,9 +41,9 @@ export function Topbar({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 text-sm">
+      <div className="flex flex-wrap items-center gap-2">
         <select
-          className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+          className="rounded-md border border-slate-800 bg-white px-2.5 py-1.5 text-xs text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-400"
           defaultValue="all"
           aria-label="Business unit filter"
         >
@@ -54,7 +54,7 @@ export function Topbar({
 
         <button
           onClick={handleLogout}
-          className="rounded-md border border-slate-200 px-2 py-1.5 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+          className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 transition-colors"
         >
           Sign out
         </button>

@@ -23,6 +23,7 @@ export default function SOCL2DashboardPage() {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [allNotes, setAllNotes] = useState<Record<string, Note[]>>({});
   const [activeTab, setActiveTab] = useState<string>("Alert Queue");
+  const [severityFilter, setSeverityFilter] = useState<string[]>([]);
 
   const tabItems = [
     { name: "Alert Queue", icon: Bell },
@@ -34,8 +35,9 @@ export default function SOCL2DashboardPage() {
   ];
 
   useEffect(() => {
-    // Load alerts and user session on mount
-    fetch("/api/soc/l2-alerts")
+    // Load alerts based on severity filter
+    const query = severityFilter.length > 0 ? `?severities=${severityFilter.join(',')}` : '';
+    fetch(`/api/soc/l2-alerts${query}`)
       .then(res => res.json())
       .then(data => {
         if (data.status === "ok") {
@@ -43,7 +45,10 @@ export default function SOCL2DashboardPage() {
         }
       })
       .catch(console.error);
+  }, [severityFilter]);
 
+  useEffect(() => {
+    // Load user session on mount
     fetch("/api/auth/me")
       .then(res => res.json())
       .then(data => {
@@ -157,6 +162,8 @@ export default function SOCL2DashboardPage() {
                       alerts={alerts} 
                       selectedAlertId={selectedAlertId} 
                       onSelectAlert={setSelectedAlertId} 
+                      severityFilter={severityFilter}
+                      onSeverityFilterChange={setSeverityFilter}
                     />
                   ) : activeTab === "Investigation" ? (
                     <InvestigationList 

@@ -1,0 +1,23 @@
+Laporan Harian - 11 September 2026
+Proyek: Gathotkaca X-Shield (PT SISI)
+
+Pekerjaan yang Diselesaikan Hari Ini:
+1. Perbaikan Bug TypeScript pada AlertDetailWorkspace.tsx:
+   - Menghapus referensi `user?.name` yang menyebabkan error "Property 'name' does not exist on type 'SessionUser'".
+   - Menggantinya dengan fallback yang aman ke `user?.email || "Analyst"`.
+
+2. Perbaikan Kesalahan Tipe Data pada AlertQueue.tsx:
+   - Memperbaiki komparasi tipe "no overlap" pada filter status "Investigating" dan "Resolved".
+   - Menambahkan casting `(a.status as string)` untuk mencegah error TypeScript karena status tersebut tidak dikenali oleh default L2Alert.
+
+3. Perbaikan Error CSS Properties pada WorldHeatmap.tsx:
+   - Menghilangkan styling `cursor: "pointer"` pada property `hover` di elemen Geography dari library react-simple-maps.
+   - Hal ini dilakukan karena `cursor` tidak didukung dalam tipe hover CSSProperties komponen tersebut.
+
+4. Penyesuaian Konfigurasi IDE (VS Code):
+   - Membuat file `.vscode/settings.json` di root proyek.
+   - Menambahkan rule `"css.lint.unknownAtRules": "ignore"` untuk menghilangkan warning unknown at-rule `@tailwind` yang muncul di `globals.css`.
+
+Status Sistem:
+- Aplikasi (Dev Server) berjalan stabil.
+- Semua warning dan error yang di-highlight oleh IDE telah berhasil dibersihkan (Zero Errors).

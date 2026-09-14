@@ -3,9 +3,13 @@ import { getLiveEvents } from "@/services/wazuh-indexer";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const events = await getLiveEvents(10);
+    const { searchParams } = new URL(request.url);
+    const severitiesParam = searchParams.get('severities');
+    const severities = severitiesParam ? severitiesParam.split(',') : [];
+
+    const events = await getLiveEvents(50, severities);
     
     // Map LiveEvents to L2Alerts
     const alerts = events.map(e => ({

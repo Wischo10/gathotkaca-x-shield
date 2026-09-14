@@ -1,17 +1,45 @@
+"use client";
 import { BookOpen, Play, CheckCircle2, XCircle, Clock, ArrowUp, ArrowDown } from "lucide-react";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
+import { useState, useEffect } from "react";
+
+interface PlaybookStats {
+  totalAlerts: number;
+  executed: number;
+  successful: number;
+  failed: number;
+  critical: number;
+  high: number;
+}
 
 export function PlaybookKPIs() {
-  const generateSparkline = (trend: "up" | "down") => 
-    Array.from({ length: 10 }, (_, i) => ({ 
-      value: trend === "up" ? i * 10 + Math.random() * 20 : 100 - i * 10 + Math.random() * 20 
+  const [stats, setStats] = useState<PlaybookStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/soc/playbook-stats?range=7d")
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === "ok") setStats(data.data);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  const generateSparkline = (trend: "up" | "down") =>
+    Array.from({ length: 10 }, (_, i) => ({
+      value: trend === "up" ? i * 10 + Math.random() * 20 : 100 - i * 10 + Math.random() * 20
     }));
+
+  const successRate = stats && stats.executed > 0
+    ? Math.round((stats.successful / stats.executed) * 100)
+    : 0;
 
   const kpis = [
     {
-      title: "Total Playbooks",
-      value: "48",
-      trend: "+ 14%",
+      title: "Total Alerts (7d)",
+      value: loading ? "..." : (stats?.totalAlerts ?? 0).toLocaleString(),
+      trend: "Live from Wazuh",
       trendUp: true,
       icon: BookOpen,
       color: "text-purple-500",
@@ -21,9 +49,9 @@ export function PlaybookKPIs() {
       data: generateSparkline("up"),
     },
     {
-      title: "Executed (This Week)",
-      value: "126",
-      trend: "+ 18%",
+      title: "Triggered (High+Critical)",
+      value: loading ? "..." : (stats?.executed ?? 0).toLocaleString(),
+      trend: "Automated triggers",
       trendUp: true,
       icon: Play,
       color: "text-blue-500",
@@ -33,9 +61,9 @@ export function PlaybookKPIs() {
       data: generateSparkline("up"),
     },
     {
-      title: "Successful Executions",
-      value: "112",
-      trend: "88% Success Rate",
+      title: "Successful Responses",
+      value: loading ? "..." : (stats?.successful ?? 0).toLocaleString(),
+      trend: `${successRate}% Success Rate`,
       trendUp: true,
       icon: CheckCircle2,
       color: "text-emerald-500",
@@ -45,9 +73,9 @@ export function PlaybookKPIs() {
       data: generateSparkline("up"),
     },
     {
-      title: "Failed Executions",
-      value: "14",
-      trend: "- 12%",
+      title: "Failed / Unhandled",
+      value: loading ? "..." : (stats?.failed ?? 0).toLocaleString(),
+      trend: "Requires attention",
       trendUp: false,
       icon: XCircle,
       color: "text-red-500",
@@ -57,10 +85,10 @@ export function PlaybookKPIs() {
       data: generateSparkline("down"),
     },
     {
-      title: "Avg. Execution Time",
-      value: "3m 24s",
-      trend: "+ 15%",
-      trendUp: true,
+      title: "Critical Alerts (7d)",
+      value: loading ? "..." : (stats?.critical ?? 0).toLocaleString(),
+      trend: "Highest priority",
+      trendUp: stats ? stats.critical < stats.high : true,
       icon: Clock,
       color: "text-orange-500",
       bg: "bg-orange-50 dark:bg-orange-500/10",
@@ -93,11 +121,11 @@ export function PlaybookKPIs() {
             </div>
             
             <div className={`mt-1 flex items-center gap-1 text-[10px] font-medium ml-[52px] ${kpi.trendUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-              {kpi.trend.includes('Rate') ? (
+              {kpi.trend.includes('Rate') || kpi.trend.includes('Live') || kpi.trend.includes('trigger') || kpi.trend.includes('priority') || kpi.trend.includes('attention') ? (
                 <span>{kpi.trend}</span>
               ) : (
                 <>
-                  {kpi.trendUp ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />} 
+                  {kpi.trendUp ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
                   {kpi.trend} <span className="text-slate-400 font-normal">vs last 7 days</span>
                 </>
               )}
@@ -106,11 +134,11 @@ export function PlaybookKPIs() {
             <div className="h-10 mt-3 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={kpi.data}>
-                  <Line 
-                    type="monotone" 
-                    dataKey="value" 
-                    stroke={kpi.stroke} 
-                    strokeWidth={2} 
+                  <Line
+                    type="monotone"
+                    dataKey="value"
+                    stroke={kpi.stroke}
+                    strokeWidth={2}
                     dot={{ r: 2, fill: kpi.stroke }}
                     isAnimationActive={false}
                   />

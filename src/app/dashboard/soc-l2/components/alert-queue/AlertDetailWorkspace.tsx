@@ -1,7 +1,8 @@
 import { Panel } from "@/components/ui/Panel";
 import { InvestigationCase } from "@/types/soc";
 import { SessionUser } from "@/lib/auth";
-import { ShieldAlert, Terminal, FileText, Share2, Activity, Server, Clock, AlertTriangle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ShieldAlert, Terminal, FileText, Share2, Activity, Server, Clock, AlertTriangle, CheckCircle2 } from "lucide-react";
 
 interface AlertDetailWorkspaceProps {
   investigationCase: InvestigationCase | null;
@@ -9,6 +10,17 @@ interface AlertDetailWorkspaceProps {
 }
 
 export function AlertDetailWorkspace({ investigationCase, user }: AlertDetailWorkspaceProps) {
+  const [isEscalating, setIsEscalating] = useState(false);
+  const [isEscalated, setIsEscalated] = useState(false);
+
+  // BUG FIX: Reset escalation state whenever the user selects a different alert
+  // Without this, the "Escalated" green button stays even after switching to a new alert
+  const alertId = investigationCase?.alert?.id;
+  useEffect(() => {
+    setIsEscalated(false);
+    setIsEscalating(false);
+  }, [alertId]);
+
   if (!investigationCase) {
     return (
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col h-[800px]">
@@ -27,6 +39,34 @@ export function AlertDetailWorkspace({ investigationCase, user }: AlertDetailWor
       case 'high': return 'text-orange-600 bg-orange-50 dark:bg-orange-500/10 dark:text-orange-400 border-orange-200 dark:border-orange-900/50';
       case 'medium': return 'text-yellow-600 bg-yellow-50 dark:bg-yellow-500/10 dark:text-yellow-400 border-yellow-200 dark:border-yellow-900/50';
       default: return 'text-blue-600 bg-blue-50 dark:bg-blue-500/10 dark:text-blue-400 border-blue-200 dark:border-blue-900/50';
+    }
+  };
+
+  const handleEscalate = async () => {
+    setIsEscalating(true);
+    try {
+      const res = await fetch("/api/soc/cases", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          alert_id: alert.id,
+          title: alert.title,
+          severity: alert.severity.toLowerCase(),
+          assigned_to: user?.email || "Analyst"
+        })
+      });
+      if (res.ok) {
+        setIsEscalated(true);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        window.alert(`Gagal mengekskalasi tiket! Pesan error: ${errData.message || 'Internal Server Error'}\n\nApakah Anda sudah membuat tabel soc_cases di Supabase?`);
+        console.error("Failed to escalate", errData);
+      }
+    } catch (error) {
+      window.alert("Terjadi kesalahan jaringan saat mengekskalasi.");
+      console.error(error);
+    } finally {
+      setIsEscalating(false);
     }
   };
 
@@ -53,11 +93,25 @@ export function AlertDetailWorkspace({ investigationCase, user }: AlertDetailWor
           </div>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          <button className="text-xs font-medium border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors px-3 py-1.5 rounded-md">
+          <button onClick={() => window.alert("Alert telah diabaikan (Dismiss).")} className="text-xs font-medium border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors px-3 py-1.5 rounded-md">
             Dismiss Alert
           </button>
-          <button className="text-xs font-medium bg-brand-blue text-white px-3 py-1.5 rounded-md hover:bg-brand-blue/90 transition-colors flex items-center gap-1.5">
-            <Share2 className="w-3.5 h-3.5" /> Escalate to Investigation
+          <button 
+            onClick={handleEscalate}
+            disabled={isEscalating || isEscalated}
+            className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5 ${
+              isEscalated 
+                ? "bg-green-600 text-white cursor-default" 
+                : "bg-brand-blue text-white hover:bg-brand-blue/90"
+            }`}
+          >
+            {isEscalated ? (
+              <><CheckCircle2 className="w-3.5 h-3.5" /> Escalated to Ticket</>
+            ) : isEscalating ? (
+              <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> Escalating...</>
+            ) : (
+              <><Share2 className="w-3.5 h-3.5" /> Escalate to Investigation</>
+            )}
           </button>
         </div>
       </div>

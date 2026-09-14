@@ -10,8 +10,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const data = await getAlertsBySeverity(range);
-    const body: ApiResult<AlertsBySeverity> =
-      data.total === 0 ? { status: "empty" } : { status: "ok", data };
+    const body: ApiResult<AlertsBySeverity> = { status: "ok", data };
     return NextResponse.json(body);
   } catch (err) {
     return NextResponse.json(
