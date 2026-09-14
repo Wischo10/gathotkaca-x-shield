@@ -10,7 +10,7 @@ import { TopRulesPanel } from "@/components/dashboard/TopRulesPanel";
 import { AlertAgingPanel, AlertsByStatusPanel, AttackCountryPanel, DetectionSourcesPanel, IncidentsBySeverityPanel, MitreTacticsPanel, TopIocDetectionsPanel } from "@/components/dashboard/SocUnavailablePanels";
 import { Topbar } from "@/components/layout/Topbar";
 import { useApiResult } from "@/hooks/useApiResult";
-import type { IncidentsBySeverity, SocMetric, SocMetrics, SocTelemetry } from "@/types/soc";
+import type { AttackCountryDetection, IncidentsBySeverity, SocMetric, SocMetrics, SocTelemetry, TopIocDetection } from "@/types/soc";
 
 const kpis = [
   { label: "Total Events", icon: "pulse" },
@@ -26,6 +26,8 @@ export default function SocDashboardPage() {
   const metrics = useApiResult<SocMetrics>("/api/soc/metrics?wazuh=false");
   const telemetryState = useApiResult<SocTelemetry>("/api/soc/telemetry");
   const incidentSeverityState = useApiResult<IncidentsBySeverity>("/api/soc/incidents-by-severity");
+  const topIocState = useApiResult<TopIocDetection[]>("/api/soc/top-ioc-detections");
+  const attackCountryState = useApiResult<AttackCountryDetection[]>("/api/soc/attack-countries");
   const data = metrics.phase === "ready" ? metrics.data : null;
   const telemetry = telemetryState.phase === "ready" ? telemetryState.data : undefined;
   const incidentSeverity = incidentSeverityState.phase === "ready" ? incidentSeverityState.data : undefined;
@@ -53,13 +55,13 @@ export default function SocDashboardPage() {
         <div className="h-full xl:col-span-3"><IncidentsBySeverityPanel data={incidentSeverity} unavailable={incidentSeverityState.phase === "error"} /></div>
         <div className="h-full xl:col-span-3"><MitreTacticsPanel telemetry={telemetry} /></div>
         <div className="h-full xl:col-span-3"><TopRulesPanel telemetry={telemetry} /></div>
-        <div className="h-full xl:col-span-3"><TopIocDetectionsPanel /></div>
+        <div className="h-full xl:col-span-3"><TopIocDetectionsPanel data={topIocState.phase === "ready" ? topIocState.data : []} loading={topIocState.phase === "loading"} unavailable={topIocState.phase === "error"} /></div>
       </div>
 
       <div className="grid auto-rows-fr grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-12">
         <div className="h-full md:col-span-2 xl:col-span-6"><LiveEventsPanel telemetry={telemetry} /></div>
-        <div className="h-full xl:col-span-3"><AttackCountryPanel /></div>
-        <div className="h-full xl:col-span-3"><DetectionSourcesPanel /></div>
+        <div className="h-full xl:col-span-3"><AttackCountryPanel data={attackCountryState.phase === "ready" ? attackCountryState.data : []} loading={attackCountryState.phase === "loading"} unavailable={attackCountryState.phase === "error"} /></div>
+        <div className="h-full xl:col-span-3"><DetectionSourcesPanel telemetry={telemetry} loading={telemetryState.phase === "loading"} unavailable={telemetryState.phase === "error"} /></div>
       </div>
     </main>
   </>;

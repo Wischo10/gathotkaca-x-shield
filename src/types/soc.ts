@@ -49,6 +49,15 @@ export interface SocTelemetry {
   mitre: Array<{ tactic: string; count: number }>;
   topRules: Array<{ id: string; description: string; count: number }>;
   liveEvents: LiveEvent[];
+  detectionSources: DetectionSources;
+}
+
+export interface DetectionSources {
+  total: number;
+  classified: number;
+  unclassified: number;
+  coveragePercent: number;
+  sources: Array<{ source: string; count: number }>;
 }
 
 export interface IncidentsBySeverity {
@@ -83,6 +92,29 @@ export interface LiveEvent {
 export interface TopAlertingRule {
   ruleName: string;
   count: number;
+}
+
+export interface WazuhIpIocCandidate {
+  ip: string;
+  observationCount: number;
+  firstObserved: string;
+  lastObserved: string;
+  representativeRuleIds: string[];
+}
+
+export interface TopIocDetection {
+  iocValue: string;
+  type: "IP";
+  detectionCount: number;
+  provider: "abuseipdb";
+  enrichedAt: string;
+  lastObservedAt: string;
+}
+
+export interface AttackCountryDetection {
+  countryCode: string;
+  countryName: string | null;
+  detectionCount: number;
 }
 
 /**

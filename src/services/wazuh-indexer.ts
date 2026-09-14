@@ -10,6 +10,7 @@ import type {
   TimeSeriesPoint,
   TopAlertingRule,
   SocTelemetry,
+  WazuhIpIocCandidate,
 } from "@/types/soc";
 
 /**
@@ -223,6 +224,7 @@ interface SocTelemetryResponse {
     mitre?: { buckets?: Array<{ key: string; doc_count: number }> };
     top_rules?: { buckets?: Array<{ key: string; doc_count: number; descriptions?: { buckets?: Array<{ key: string; doc_count: number }> } }> };
     live_events?: unknown;
+    detection_sources?: { buckets?: Record<string, { doc_count: number }> };
   };
 }
 
@@ -260,6 +262,20 @@ export async function getSocTelemetry(range = "7d"): Promise<SocTelemetry> {
         mitre: { terms: { field: "rule.mitre.tactic", size: 20 } },
         top_rules: { terms: { field: "rule.id", size: 10 }, aggs: { descriptions: { terms: { field: "rule.description.keyword", size: 1 } } } },
         live_events: { top_hits: { size: 10, sort: [{ "@timestamp": { order: "desc" } }], _source: ["@timestamp", "rule.id", "rule.description", "rule.level", "agent.name", "agent.ip", "data.srcip", "data.dstuser", "data.dstuser", "user"] } },
+        detection_sources: { filters: { filters: {
+          nginx: { prefix: { location: "/var/log/nginx/" } },
+          suricata: { term: { location: "/var/log/suricata/eve.json" } },
+          linux_audit: { term: { location: "/var/log/audit/audit.log" } },
+          container_logs: { prefix: { location: "/var/log/containers/" } },
+          journald: { term: { location: "journald" } },
+          windows_event_channel: { exists: { field: "data.win.system.channel" } },
+          virustotal: { bool: { should: [{ term: { location: "virustotal" } }, { term: { "data.integration": "virustotal" } }], minimum_should_match: 1 } },
+          wazuh_fim: { term: { location: "syscheck" } },
+          wazuh_rootcheck: { term: { location: "rootcheck" } },
+          opnsense: { prefix: { location: "/var/ossec/logs/opnsense" } },
+          apache: { prefix: { location: "/var/log/apache2/" } },
+          system_syslog: { term: { location: "/var/log/syslog" } },
+        }, other_bucket: true, other_bucket_key: "unclassified" } },
       },
     }
   );
@@ -282,6 +298,22 @@ export async function getSocTelemetry(range = "7d"): Promise<SocTelemetry> {
   const agingCounts = ["0-15m", "15-60m", "1-4h", "4-24h", ">24h"].map((bucket) => ({ bucket: bucket as SocTelemetry["aging"][number]["bucket"], count: agingBuckets[bucket]?.doc_count ?? 0 }));
   const trend = (response.aggregations.trend?.buckets ?? []).map((bucket) => ({ timestamp: bucket.key_as_string ?? new Date(bucket.key).toISOString(), critical: bucket.critical?.doc_count ?? 0, high: bucket.high?.doc_count ?? 0, medium: bucket.medium?.doc_count ?? 0, low: bucket.low?.doc_count ?? 0 }));
   const liveEvents = (response.aggregations.live_events as unknown as { hits?: { hits?: Array<{ _source?: Record<string, unknown> }> } } | undefined)?.hits?.hits?.map((hit) => mapLiveEvent(hit._source ?? {})) ?? [];
+  const sourceBuckets = response.aggregations.detection_sources?.buckets;
+  if (!sourceBuckets) throw new Error("Missing Wazuh detection source buckets");
+  const sourceLabels: Record<string, string> = {
+    nginx: "Nginx", suricata: "Suricata IDS", linux_audit: "Linux Audit",
+    container_logs: "Container Logs", journald: "Journald",
+    windows_event_channel: "Windows Event Channel", virustotal: "VirusTotal Integration",
+    wazuh_fim: "Wazuh FIM", wazuh_rootcheck: "Wazuh Rootcheck",
+    opnsense: "OPNsense", apache: "Apache", system_syslog: "System Syslog",
+  };
+  const detectionSourceItems = Object.entries(sourceLabels)
+    .map(([key, source]) => ({ source, count: sourceBuckets[key]?.doc_count ?? 0 }))
+    .filter((item) => item.count > 0)
+    .sort((a, b) => b.count - a.count);
+  const sourceUnclassified = sourceBuckets.unclassified?.doc_count ?? 0;
+  const sourceClassified = detectionSourceItems.reduce((sum, item) => sum + item.count, 0);
+  const sourceTotal = sourceClassified + sourceUnclassified;
   return {
     range: "7d",
     observedAt,
@@ -294,6 +326,13 @@ export async function getSocTelemetry(range = "7d"): Promise<SocTelemetry> {
     mitre: (response.aggregations.mitre?.buckets ?? []).map((bucket) => ({ tactic: bucket.key, count: bucket.doc_count })),
     topRules: (response.aggregations.top_rules?.buckets ?? []).map((bucket) => ({ id: bucket.key, description: bucket.descriptions?.buckets?.[0]?.key ?? "-", count: bucket.doc_count })),
     liveEvents,
+    detectionSources: {
+      total: sourceTotal,
+      classified: sourceClassified,
+      unclassified: sourceUnclassified,
+      coveragePercent: sourceTotal === 0 ? 0 : sourceClassified / sourceTotal * 100,
+      sources: detectionSourceItems,
+    },
   };
 }
 
@@ -341,4 +380,62 @@ function levelToSeverity(level: number): Severity {
   if (level >= WAZUH_SEVERITY_LEVELS.highMin) return "high";
   if (level >= WAZUH_SEVERITY_LEVELS.mediumMin) return "medium";
   return "low";
+}
+
+interface IpCandidateAggregationResponse {
+  timed_out?: boolean;
+  _shards?: { failed: number };
+  aggregations?: {
+    candidate_ips?: {
+      buckets?: Array<{
+        key: string;
+        doc_count: number;
+        first_observed?: { value?: number; value_as_string?: string };
+        last_observed?: { value?: number; value_as_string?: string };
+        representative_rule_ids?: { buckets?: Array<{ key: string; doc_count: number }> };
+      }>;
+    };
+  };
+}
+
+/** Bounded aggregation only; this never retrieves raw Wazuh alert hits. */
+export async function getIpIocCandidates(
+  windowStart: string,
+  windowEnd: string,
+  limit = 100
+): Promise<WazuhIpIocCandidate[]> {
+  const boundedLimit = Math.min(Math.max(Math.trunc(limit), 1), 100);
+  const response = await fetchIndexerJson<IpCandidateAggregationResponse>(
+    `/${encodeURIComponent(env.wazuhIndexer.alertsIndex())}/_search`,
+    {
+      size: 0,
+      track_total_hits: false,
+      query: { bool: { filter: [
+        { range: { "@timestamp": { gte: windowStart, lte: windowEnd } } },
+        { exists: { field: "data.srcip" } },
+      ] } },
+      aggs: {
+        candidate_ips: {
+          terms: { field: "data.srcip", size: boundedLimit, shard_size: 500, order: { _count: "desc" } },
+          aggs: {
+            first_observed: { min: { field: "@timestamp" } },
+            last_observed: { max: { field: "@timestamp" } },
+            representative_rule_ids: { terms: { field: "rule.id", size: 5 } },
+          },
+        },
+      },
+    }
+  );
+  if (response.timed_out || (response._shards?.failed ?? 0) > 0) throw new Error("Wazuh IOC candidate aggregation was incomplete");
+  const buckets = response.aggregations?.candidate_ips?.buckets;
+  if (!Array.isArray(buckets)) throw new Error("data.srcip is not aggregatable or the IOC aggregation response was invalid");
+  return buckets.map((bucket) => {
+    const first = bucket.first_observed?.value_as_string
+      ?? (Number.isFinite(bucket.first_observed?.value) ? new Date(bucket.first_observed!.value!).toISOString() : "");
+    const last = bucket.last_observed?.value_as_string
+      ?? (Number.isFinite(bucket.last_observed?.value) ? new Date(bucket.last_observed!.value!).toISOString() : "");
+    if (!bucket.key || !Number.isFinite(bucket.doc_count) || !first || !last) throw new Error("Wazuh IOC candidate bucket was invalid");
+    return { ip: String(bucket.key), observationCount: bucket.doc_count, firstObserved: first, lastObserved: last,
+      representativeRuleIds: (bucket.representative_rule_ids?.buckets ?? []).map((rule) => String(rule.key)) };
+  });
 }
