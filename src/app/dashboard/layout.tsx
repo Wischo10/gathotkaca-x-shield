@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { SidebarToggleContext } from "./SidebarContext";
 
 export default function DashboardLayout({
   children,
@@ -24,5 +25,3 @@ export default function DashboardLayout({
     </div>
   );
 }
-
-import { SidebarToggleContext } from "./SidebarContext";
