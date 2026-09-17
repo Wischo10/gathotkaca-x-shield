@@ -116,6 +116,7 @@ export type IncidentLifecycleEventType =
   | "acknowledged"
   | "response_started"
   | "response_completed"
+  | "resolved"
   | "contained"
   | "closed";
 
@@ -190,8 +191,9 @@ export interface BitdefenderIncidentListItem {
   acknowledgedAt?: string | null;
   respondedAt?: string | null;
   containedAt?: string | null;
+  resolvedAt?: string | null;
   latestEvent?: IncidentLifecycleEventType | null;
-  lifecycleStatus: "detected" | "acknowledged" | "responding" | "contained" | "unhandled";
+  lifecycleStatus: "detected" | "acknowledged" | "responding" | "contained" | "resolved" | "unhandled";
 }
 
 export interface IncidentListResponse {

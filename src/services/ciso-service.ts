@@ -1,11 +1,13 @@
 import "server-only";
 import https from "node:https";
 import { env } from "@/lib/env";
+import { getDb } from "@/lib/db";
 import { getComplianceOverview } from "@/services/compliance-service";
 import { calculateRealIncidentKpis } from "@/services/incident-lifecycle-service";
 import { getNistPostureAssessment } from "@/services/nist-posture-service";
 import { listRisks } from "@/services/risk-register-service";
 import { summarizeTotalRisk, summarizeTreatmentProgress } from "@/lib/risk-ranking";
+import { applyTrend, genuineObservedAt, recordDailyKpiSnapshots, type SnapshotMetric } from "@/services/kpi-snapshot-service";
 import { type CisoMetricsData, type MetricCardValue, type VulnerabilitySlaOverview, type IncidentKpiOverview, type IncidentKpiItem } from "@/types/ciso";
 
 const httpsAgent = new https.Agent({
@@ -118,7 +120,7 @@ function unavailableCount(source: string, error: unknown): MetricCardValue {
 /**
  * 1. Active Incidents from Bitdefender GravityZone API
  */
-async function getBitdefenderActiveIncidents(): Promise<MetricCardValue> {
+export async function getBitdefenderActiveIncidents(): Promise<MetricCardValue> {
   const now = Date.now();
   const cachedBitdefender = bitdefenderActiveIncidentState.cached;
   if (cachedBitdefender && now - cachedBitdefender.timestamp < BITDEFENDER_CACHE_TTL_MS) {
@@ -319,6 +321,7 @@ async function getOverallComplianceScore(): Promise<MetricCardValue> {
     const overview = await getComplianceOverview();
     const assessedFrameworks = overview.frameworks.filter(
       (f) => f.metricKind !== "telemetry_observation"
+        && f.assessmentComplete === true
         && typeof f.score === "number" && f.score !== null
     );
 
@@ -362,7 +365,7 @@ async function getOverallComplianceScore(): Promise<MetricCardValue> {
       details: {
         current: avgScore,
         previous30d: trend30d !== null ? previous30d : null,
-        explanation: "Average of formal assessed framework scores only; observation-only telemetry is excluded.",
+        explanation: "Average of completed formal framework assessment scores only; incomplete assessments and observation-only telemetry are excluded.",
       },
     };
   } catch (err) {
@@ -618,13 +621,24 @@ async function getVulnerabilitySlaOverview(): Promise<VulnerabilitySlaOverview> 
     const remaining = total === 0 ? 0 : 10000 - portions.reduce((sum, portion) => sum + portion.units, 0);
     for (let i = 0; i < remaining; i++) portions[i].units++;
     const percentages = Object.fromEntries(portions.map(portion => [portion.key, portion.units / 100]));
+    let inProgress: number | null = null;
+    try {
+      if (env.database.url()) {
+        const remediation = await getDb().query<{ count: string }>("SELECT COUNT(*) AS count FROM vulnerability_remediations WHERE status = 'IN_PROGRESS'");
+        inProgress = Number(remediation.rows[0]?.count ?? 0);
+      }
+    } catch {
+      inProgress = null;
+    }
     return {
       ...unavailable,
       available: true, dataAvailable: true, total, totalCritical: total, ...counts,
       overduePct: percentages.overdue, dueSoonPct: percentages.dueSoon,
       compliantPct: percentages.compliant, unclassifiedPct: percentages.unclassified,
+      inProgress,
+      inProgressPct: inProgress === null || total === 0 ? null : Number((inProgress / total * 100).toFixed(2)),
       source: `OpenSearch ${vulnIndex} (${total} unique critical CVEs; oldest detection per CVE)`,
-      explanation: `Each CVE appears once. Age uses vulnerability.detected_at across current affected findings: overdue > ${slaThresholdDays}d; due soon >= ${dueSoonDays}d and <= ${slaThresholdDays}d; compliant >= 0d and < ${dueSoonDays}d. A proven overdue finding takes precedence; otherwise any missing/invalid/future detection makes the CVE unclassified. In Progress is unavailable without remediation workflow data.`,
+      explanation: `Each CVE appears once. Age uses vulnerability.detected_at across current affected findings: overdue > ${slaThresholdDays}d; due soon >= ${dueSoonDays}d and <= ${slaThresholdDays}d; compliant >= 0d and < ${dueSoonDays}d. A proven overdue finding takes precedence; otherwise any missing/invalid/future detection makes the CVE unclassified. In Progress independently counts persisted vulnerability instances with status IN_PROGRESS${inProgress === null ? "; remediation storage is unavailable" : ""}.`,
     };
   } catch (err) {
     console.warn("[CISO Metrics] Vulnerability SLA overview failed:", err instanceof Error ? err.message : err);
@@ -661,14 +675,32 @@ async function getVulnerabilitySlaOverview(): Promise<VulnerabilitySlaOverview> 
  * 2. Real analyst lifecycle events in `incident_lifecycle_events` table (acknowledge, respond, contain)
  * 3. MTTD remains N/A due to absence of pre-detection occurrence timestamp (`occurred_at`).
  */
-async function getIncidentKpiOverview(totalIncidentsBaseline?: number): Promise<IncidentKpiOverview> {
+async function getIncidentKpiOverview(totalIncidentsBaseline: number | null): Promise<IncidentKpiOverview> {
   try {
-    const bitdefenderTotal = totalIncidentsBaseline ?? bitdefenderActiveIncidentState.cached?.total ?? 0;
-    return await calculateRealIncidentKpis(bitdefenderTotal);
+    return await calculateRealIncidentKpis(totalIncidentsBaseline ?? undefined);
   } catch (err) {
     console.warn("[CISO Metrics] Incident KPI overview failed:", err instanceof Error ? err.message : err);
-    return calculateRealIncidentKpis(0);
+    return calculateRealIncidentKpis(totalIncidentsBaseline ?? undefined);
   }
+}
+
+function unavailableRiskMetric(name: string, error: unknown): MetricCardValue {
+  const detail = error instanceof Error ? error.message : "";
+  console.warn(`[CISO Metrics] ${name}:`, detail);
+  return {
+    value: null,
+    trend30d: null,
+    trendAvailable: false,
+    source: "Risk Register (Unavailable)",
+    availability: {
+      status: "unavailable",
+      checkedAt: new Date().toISOString(),
+      fetchedAt: null,
+      cached: false,
+      error: { code: "risk_storage_unavailable", message: "Risk Register source is unavailable." },
+    },
+    details: { explanation: "Risk Register source could not be read; this is not an empty register." },
+  };
 }
 
 /**
@@ -679,15 +711,21 @@ export async function getCisoMetrics(): Promise<CisoMetricsData> {
   const agentsSummary = await getAgentsSummary();
   const totalAgents = agentsSummary?.total;
 
-  const [activeIncidents, criticalVulnerabilities, complianceScore, vulnerabilitySla, incidentKpi, nistPosture, risks] = await Promise.all([
+  const [activeIncidents, criticalVulnerabilities, complianceScore, vulnerabilitySla, nistPosture, riskResult] = await Promise.all([
     getBitdefenderActiveIncidents(),
     getCriticalVulnerabilities(totalAgents),
     getOverallComplianceScore(),
     getVulnerabilitySlaOverview(),
-    getIncidentKpiOverview(),
     getNistPostureAssessment(),
-    listRisks().catch(() => []),
+    listRisks().then(risks => ({ status: "available" as const, risks }))
+      .catch(error => ({ status: "unavailable" as const, error })),
   ]);
+
+  // Use exactly the Active Incidents result from this metrics request. The KPI
+  // service must not independently infer a count from process cache.
+  const activeIncidentBaseline = activeIncidents.availability?.status === "available"
+    && typeof activeIncidents.value === "number" ? activeIncidents.value : null;
+  const incidentKpi = await getIncidentKpiOverview(activeIncidentBaseline);
 
   // Missing inputs stay unavailable. An expired incident cache cannot score current posture.
   const affectedVulnAssets = criticalVulnerabilities.affectedAssetsCount ?? null;
@@ -711,9 +749,13 @@ export async function getCisoMetrics(): Promise<CisoMetricsData> {
     explanation: nistPosture.explanation,
   };
 
-  const totalRiskSummary = summarizeTotalRisk(risks);
+  const risks = riskResult.status === "available" ? riskResult.risks : null;
+  const riskError = riskResult.status === "unavailable" ? riskResult.error : null;
+  const totalRiskSummary = risks ? summarizeTotalRisk(risks) : null;
   // Project-defined ordinal portfolio summary of completed residual-risk assessments.
-  const totalRiskScore: MetricCardValue = {
+  const totalRiskScore: MetricCardValue = risks === null
+    ? unavailableRiskMetric("Total Risk Score", riskError)
+    : {
     value: totalRiskSummary?.portfolioMean ?? null,
     max: totalRiskSummary ? 4 : undefined,
     category: totalRiskSummary?.category,
@@ -726,11 +768,13 @@ export async function getCisoMetrics(): Promise<CisoMetricsData> {
         ? "Portfolio summary of assessed residual risks using the project-defined Low–Critical ordinal scale. Preliminary and unrecognized residual risks are excluded."
         : "No assessed risks with a recognized residual-risk category are available.",
     },
-  };
+    };
 
-  const treatmentSummary = summarizeTreatmentProgress(risks);
+  const treatmentSummary = risks ? summarizeTreatmentProgress(risks) : null;
   // Completed actions divided by eligible assessed treatments; no partial weighting.
-  const riskTreatmentProgress: MetricCardValue = {
+  const riskTreatmentProgress: MetricCardValue = risks === null
+    ? { ...unavailableRiskMetric("Risk Treatment Progress", riskError), unit: "%" }
+    : {
     value: treatmentSummary?.percentage ?? null,
     trend30d: null,
     trendAvailable: false,
@@ -745,7 +789,31 @@ export async function getCisoMetrics(): Promise<CisoMetricsData> {
         ? "Percentage of eligible assessed risk treatments marked Completed. Planned and In Progress treatments remain outstanding."
         : "No assessed risks with a genuine strategy and recognized treatment status are available.",
     },
-  };
+    };
+
+  const observedNow = new Date().toISOString();
+  const snapshotCandidates: Array<{ key: string; metric: MetricCardValue; observedAt: string | null }> = [
+    { key: "security_posture_score", metric: securityPostureScore,
+      observedAt: securityPostureScore.value === null ? null : observedNow },
+    { key: "total_risk_score", metric: totalRiskScore, observedAt: genuineObservedAt(totalRiskScore, observedNow) },
+    { key: "active_incidents", metric: activeIncidents, observedAt: genuineObservedAt(activeIncidents, observedNow) },
+    { key: "critical_vulnerabilities", metric: criticalVulnerabilities, observedAt: genuineObservedAt(criticalVulnerabilities, observedNow) },
+    { key: "compliance_score", metric: complianceScore, observedAt: genuineObservedAt(complianceScore, observedNow) },
+    { key: "risk_treatment_progress", metric: riskTreatmentProgress, observedAt: genuineObservedAt(riskTreatmentProgress, observedNow) },
+  ];
+  const eligibleSnapshots: SnapshotMetric[] = snapshotCandidates.flatMap(({ key, metric, observedAt }) =>
+    metric.value !== null && observedAt !== null ? [{
+      metricKey: key, value: metric.value, unit: metric.unit ?? (metric.max ? `score_of_${metric.max}` : "count"),
+      source: metric.source, observedAt,
+    }] : []);
+  try {
+    const history = await recordDailyKpiSnapshots(eligibleSnapshots);
+    for (const candidate of snapshotCandidates) {
+      if (candidate.metric.value !== null && candidate.observedAt !== null) applyTrend(candidate.metric, history.get(candidate.key));
+    }
+  } catch (error) {
+    console.warn("[CISO Metrics] KPI snapshot storage unavailable:", error instanceof Error ? error.message : error);
+  }
 
   return {
     securityPostureScore,

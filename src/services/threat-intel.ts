@@ -91,6 +91,7 @@ export async function getThreatIntelligenceOverview(): Promise<ThreatIntelligenc
       method: "POST",
       headers,
       body: JSON.stringify({ query: "get_iocs", days: 7 }),
+      cache: "no-store",
       timeoutMs: 25000,
     });
 
@@ -244,9 +245,9 @@ export async function getThreatIntelligenceOverview(): Promise<ThreatIntelligenc
     }));
 
   // 3. AbuseIPDB Enrichment (Sample check to verify provider connectivity & health)
-  if (abuseIpDbKey) {
+  if (abuseIpDbKey && sampleIps.length > 0) {
     try {
-      const ipToCheck = sampleIps[0] || "118.25.6.39";
+      const ipToCheck = sampleIps[0];
       const abuseRes = await fetchJson<AbuseIpDbResponse>(
         `https://api.abuseipdb.com/api/v2/check?ipAddress=${encodeURIComponent(ipToCheck)}&maxAgeInDays=90`,
         {
@@ -271,18 +272,24 @@ export async function getThreatIntelligenceOverview(): Promise<ThreatIntelligenc
         detail: "Enrichment request timed out or throttled",
       };
     }
-  } else {
+  } else if (!abuseIpDbKey) {
     providerHealth.abuseIpDb = {
       name: "AbuseIPDB",
       status: "degraded",
       detail: "API key not configured",
     };
+  } else {
+    providerHealth.abuseIpDb = {
+      name: "AbuseIPDB",
+      status: "degraded",
+      detail: "Not validated — no eligible IP IOC",
+    };
   }
 
   // 4. VirusTotal Enrichment (Targeted single sample check to protect the 4 req/min limit)
-  if (virusTotalKey) {
+  if (virusTotalKey && sampleIps.length > 0) {
     try {
-      const ipToCheck = sampleIps[0] || "1.1.1.1";
+      const ipToCheck = sampleIps[0];
       const vtRes = await fetchJson<VirusTotalResponse>(
         `https://www.virustotal.com/api/v3/ip_addresses/${encodeURIComponent(ipToCheck)}`,
         {
@@ -307,11 +314,17 @@ export async function getThreatIntelligenceOverview(): Promise<ThreatIntelligenc
         detail: "Validation request timed out or rate-limited",
       };
     }
-  } else {
+  } else if (!virusTotalKey) {
     providerHealth.virusTotal = {
       name: "VirusTotal",
       status: "degraded",
       detail: "API key not configured",
+    };
+  } else {
+    providerHealth.virusTotal = {
+      name: "VirusTotal",
+      status: "degraded",
+      detail: "Not validated — no eligible IP IOC",
     };
   }
 
@@ -335,6 +348,12 @@ export async function getThreatIntelligenceOverview(): Promise<ThreatIntelligenc
     topMalware: threatFoxAvailable ? topMalware : [],
     topThreatTypes: threatFoxAvailable ? topThreatTypes : [],
     iocTypeDistribution: threatFoxAvailable ? iocTypeDistribution : [],
+    observedIocs: threatFoxAvailable ? iocs.slice(0, 100).map(item => ({
+      id: item.id, indicator: item.ioc, iocType: item.ioc_type,
+      provider: "ThreatFox" as const, confidence: item.confidence_level ?? null,
+      observedAt: item.first_seen ? new Date(item.first_seen.replace(" UTC", "Z").replace(" ", "T")).toISOString() : null,
+      malware: item.malware_printable?.trim() || null,
+    })) : [],
     providers: {
       threatFox: providerHealth.threatFox,
       abuseIpDb: providerHealth.abuseIpDb,

@@ -148,6 +148,9 @@ export default function RiskRegisterPage() {
   }
 
   const inputClass = "mt-1 w-full rounded border border-slate-300 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-900";
+  const assessedRisks = risks.filter(risk => risk.assessmentStatus === "assessed");
+  const eligibleTreatments = assessedRisks.filter(risk => risk.treatmentStatus);
+  const completedTreatments = eligibleTreatments.filter(risk => risk.treatmentStatus === "Completed");
   const coreInputFields = new Set(["title", "scenarioDescription", "threatNarrative", "vulnerabilityNarrative"]);
   const renderField = ([name, label]: readonly [string, string]) => (
     <label key={name} className={multiline.has(name) ? "block sm:col-span-2" : "block"}>
@@ -162,6 +165,7 @@ export default function RiskRegisterPage() {
     <Topbar title="Risk Register" subtitle="Human-governed business risk assessments" onMenuClick={openSidebar} />
     <main className="flex-1 space-y-4 bg-slate-50 p-4 sm:p-6 dark:bg-slate-950">
       <Link href="/dashboard/ciso" className="text-sm text-brand-blue hover:underline">Back to CISO dashboard</Link>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{[["Total Risks",risks.length],["Assessed",assessedRisks.length],["Needs Assessment",risks.filter(r=>r.assessmentStatus==="needs_assessment").length],["Treatment Progress",eligibleTreatments.length?`${Math.round(completedTreatments.length/eligibleTreatments.length*100)}%`:"N/A"]].map(([label,value])=><div key={label as string} className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900"><div className="text-xs text-slate-500">{label}</div><div className="mt-1 text-2xl font-bold">{storageAvailable===true?value:"N/A"}</div></div>)}</div>
 
       <Panel title="Risk Register" action={<span className="text-xs text-slate-400">{storageAvailable === true ? `${risks.length} Total Risks · ${risks.filter(risk => risk.assessmentStatus === "needs_assessment").length} Needs Assessment · ${risks.filter(risk => risk.assessmentStatus === "assessed").length} Assessed` : "Manual risk assessments only"}</span>}>
         {storageAvailable === null && <p className="py-8 text-center text-sm text-slate-400">Checking risk storage...</p>}

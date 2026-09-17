@@ -29,24 +29,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // 3. Parse optional metadata from request body (e.g. containment method, remarks)
-    let extraMetadata: Record<string, unknown> | undefined;
-    try {
-      const body = await request.json();
-      if (body && typeof body === "object") {
-        extraMetadata = body;
-      }
-    } catch {
-      // Body is optional
-    }
-
-    // 4. Record contained event
+    // Record only server-controlled lifecycle fields; client timestamps are ignored.
     const result = await recordAnalystLifecycleEvent(
       incidentId,
       "contained",
       user,
-      "ciso_dashboard_action",
-      extraMetadata
+      "ciso_dashboard_action"
     );
 
     if (!result.success) {

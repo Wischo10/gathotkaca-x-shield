@@ -21,6 +21,7 @@ export interface ProviderHealth {
   name: string;
   detail?: string;
 }
+export interface ObservedThreatIoc { id: string; indicator: string; iocType: string; provider: "ThreatFox"; confidence: number | null; observedAt: string | null; malware: string | null; }
 
 export interface ThreatIntelligenceOverviewData {
   period: "7d";
@@ -31,6 +32,7 @@ export interface ThreatIntelligenceOverviewData {
   topMalware: ThreatCategoryItem[];
   topThreatTypes: ThreatCategoryItem[];
   iocTypeDistribution: ThreatCategoryItem[];
+  observedIocs: ObservedThreatIoc[];
   providers: {
     threatFox: ProviderHealth;
     abuseIpDb: ProviderHealth;

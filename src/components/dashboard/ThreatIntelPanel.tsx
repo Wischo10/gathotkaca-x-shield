@@ -14,7 +14,9 @@ export function ThreatIntelPanel() {
       title="Threat Intelligence Overview"
       action={
         <span className="inline-flex items-center rounded bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700" title={state.phase === "ready" && state.data.observedAt ? `Collected ${new Date(state.data.observedAt).toLocaleString()}` : undefined}>
-          {state.phase === "ready" && state.data.availability === "cached" ? "Fresh cache · Last 7 Days" : "Last 7 Days"}
+          {state.phase === "ready" && state.data.observedAt
+            ? `${state.data.availability === "cached" ? "Cached" : "Observed"} ${new Date(state.data.observedAt).toLocaleString()} · 7d`
+            : "Last 7 Days"}
         </span>
       }
       className="flex flex-col justify-between"
@@ -40,7 +42,7 @@ export function ThreatIntelPanel() {
                   : "bg-amber-500"
               }`}
             />
-            ThreatFox
+            <span title={state.phase === "ready" ? state.data.providers.threatFox.detail : undefined}>ThreatFox</span>
           </span>
           <span className="flex items-center gap-1">
             <span
@@ -50,7 +52,7 @@ export function ThreatIntelPanel() {
                   : "bg-amber-500"
               }`}
             />
-            AbuseIPDB
+            <span title={state.phase === "ready" ? state.data.providers.abuseIpDb.detail : undefined}>AbuseIPDB</span>
           </span>
           <span className="flex items-center gap-1">
             <span
@@ -60,9 +62,10 @@ export function ThreatIntelPanel() {
                   : "bg-amber-500"
               }`}
             />
-            VirusTotal
+            <span title={state.phase === "ready" ? state.data.providers.virusTotal.detail : undefined}>VirusTotal</span>
           </span>
         </div>
+        <a href="/dashboard/ciso/threat-intelligence" className="font-medium text-brand-blue hover:underline">View threats →</a>
       </div>
     </Panel>
   );

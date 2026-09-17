@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import Link from "next/link";
 import { Panel, PanelEmpty, PanelError, PanelLoading } from "@/components/ui/Panel";
 import { useApiResult } from "@/hooks/useApiResult";
 import type {
   ComplianceFrameworkItem,
   ComplianceOverviewData,
-  ComplianceStatus,
 } from "@/types/compliance";
 
 export function ComplianceOverviewPanel() {
@@ -87,6 +87,10 @@ export function ComplianceOverviewPanel() {
 }
 
 function FrameworkRow({ item }: { item: ComplianceFrameworkItem }) {
+  const isPendingAssessment = item.metricKind !== "telemetry_observation"
+    && (item.assessmentProgressStatus === "not_assessed"
+      || (item.assessmentProgressStatus === undefined && item.status === "not_assessed"));
+
   return (
     <tr title={item.context} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors">
       {/* Framework Name */}
@@ -95,13 +99,28 @@ function FrameworkRow({ item }: { item: ComplianceFrameworkItem }) {
         <div className="mt-0.5 text-[10px] font-normal text-slate-400">
           {item.metricKind === "telemetry_observation" ? "Telemetry Observation" : "Formal Assessment"}
           {item.assessedControls !== undefined && item.totalApplicableControls !== undefined
-            ? ` · ${item.assessedControls}/${item.totalApplicableControls} ${item.assessmentScopeLabel ?? "controls assessed"}` : ""}
+            ? ` · ${item.assessedControls} / ${item.totalApplicableControls} ${item.assessmentScopeLabel ?? "controls assessed"}${item.assessmentCoveragePercent !== undefined ? ` (${item.assessmentCoveragePercent}% coverage)` : ""}` : ""}
         </div>
+        <div className="mt-0.5 text-[10px] font-normal text-slate-400">
+          {item.metricKind === "telemetry_observation"
+            ? "Telemetry; not a formal assessment"
+            : item.lastAssessedAt
+              ? `Last assessed ${new Date(item.lastAssessedAt).toLocaleString()}`
+              : item.id === "uu-pdp"
+                ? "Assessment workspace ready; business assessment pending"
+                : "Business assessment has not yet been performed"}
+        </div>
+        {item.id === "uu-pdp" && isPendingAssessment && (
+          <Link href="/dashboard/compliance/uu-pdp" className="mt-1 inline-block text-[10px] font-semibold text-brand-blue hover:underline">
+            Start Assessment
+          </Link>
+        )}
       </td>
 
       {/* Score */}
       <td className="py-2.5 text-center font-bold text-slate-800 dark:text-white">
-        {item.score !== null ? `${item.score}%` : "N/A"}
+        {item.score !== null ? <><div>{item.score}%</div>{item.scoreIsInterim&&<div className="mt-0.5 text-[9px] font-normal text-amber-600 dark:text-amber-400">Interim Assessment Score</div>}</>
+          : isPendingAssessment ? "Not Assessed" : "Unavailable"}
       </td>
 
       {/* Trend (30 Days) */}
@@ -120,19 +139,32 @@ function FrameworkRow({ item }: { item: ComplianceFrameworkItem }) {
             {Math.abs(item.trend30d)}{item.trendUnit === "percentage_points" ? " pp" : "%"}
           </span>
         ) : (
-          <span className="text-slate-400 font-normal">—</span>
+          <span className="text-slate-400 font-normal">
+            {item.trendStatus === "insufficient_history" ? "Insufficient History"
+              : item.trendStatus === "not_assessed" ? "No Assessment History" : "Unavailable"}
+          </span>
         )}
       </td>
 
       {/* Status Badge */}
       <td className="py-2.5 text-right">
-        <StatusBadge status={item.status} />
+        <StatusBadge item={item} />
       </td>
     </tr>
   );
 }
 
-function StatusBadge({ status }: { status: ComplianceStatus }) {
+function StatusBadge({ item }: { item: ComplianceFrameworkItem }) {
+  const { status } = item;
+  if (item.metricKind === "formal_assessment" && item.assessmentProgressStatus === "assessment_in_progress") {
+    return <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400">Assessment In Progress</span>;
+  }
+  if (item.metricKind === "formal_assessment" && item.assessmentProgressStatus === "not_assessed") {
+    return <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">Assessment Pending</span>;
+  }
+  if (item.metricKind === "formal_assessment" && item.assessmentProgressStatus === "assessment_complete" && item.score === null) {
+    return <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">Assessment Complete · No Score</span>;
+  }
   switch (status) {
     case "telemetry":
       return (
@@ -162,7 +194,7 @@ function StatusBadge({ status }: { status: ComplianceStatus }) {
     default:
       return (
         <span className="inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-          Not Assessed
+          Assessment Pending
         </span>
       );
   }

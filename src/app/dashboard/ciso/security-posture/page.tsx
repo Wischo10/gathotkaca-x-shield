@@ -87,7 +87,9 @@ export default function SecurityPostureAssessmentPage() {
                   <td className="py-3 text-center font-semibold">{assessed ? `${domain.score}%` : "N/A"}</td>
                   <td className="py-3 text-slate-500">{assessed ? "Assessed" : "Not Assessed"}</td>
                   <td className="py-3 text-slate-500">{domain?.assessedAt ? new Date(domain.assessedAt).toLocaleString() : "—"}</td>
-                  <td className="py-3 text-slate-500">{domain?.trend30d === null || domain?.trend30d === undefined ? "—" : `${domain.trend30d > 0 ? "+" : ""}${domain.trend30d} pp`}</td>
+                  <td className="py-3 text-slate-500">{domain?.trend30d === null || domain?.trend30d === undefined
+                    ? domain?.score === null || domain?.score === undefined ? "Not assessed" : "Insufficient history"
+                    : `${domain.trend30d > 0 ? "+" : ""}${domain.trend30d} pp`}</td>
                   <td className="max-w-xs whitespace-normal py-3 pr-3 text-slate-500">{summary}</td>
                   <td className="py-3 text-right"><button type="button" onClick={() => openForm(name)} className="text-brand-blue hover:underline">{assessed ? "Update" : "Assess"}</button></td>
                 </tr>;

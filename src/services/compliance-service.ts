@@ -2,6 +2,7 @@ import "server-only";
 import { getDb } from "@/lib/db";
 import { env } from "@/lib/env";
 import { getNistPostureAssessment } from "@/services/nist-posture-service";
+import { calculateAssessmentCompleteness } from "@/lib/assessment-completeness";
 import type {
   ComplianceFrameworkItem,
   ComplianceOverviewData,
@@ -108,7 +109,7 @@ function fetchOpenSearch<T>(
  * Aggregates unique 'rule.mitre.id' values in current 30 days (now-30d to now)
  * and compares against previous 30 days (now-60d to now-30d).
  */
-async function getMitreAttackCoverage(): Promise<{
+export async function getMitreAttackCoverage(): Promise<{
   score: number;
   evaluated: number;
   passed: number;
@@ -206,6 +207,7 @@ export async function getComplianceOverview(): Promise<ComplianceOverviewData> {
     {
       passed: number;
       failed: number;
+      partial: number;
       pending: number;
       notApplicable: number;
       evaluated: number;
@@ -224,6 +226,7 @@ export async function getComplianceOverview(): Promise<ComplianceOverviewData> {
       framework_id: string;
       passed_count: string;
       failed_count: string;
+      partial_count: string;
       pending_count: string;
       not_applicable_count: string;
       last_assessed: string | null;
@@ -233,7 +236,7 @@ export async function getComplianceOverview(): Promise<ComplianceOverviewData> {
            framework_id, control_id, status, assessed_at
          FROM compliance_assessments
          WHERE control_id IS NOT NULL
-           AND status IN ('passed', 'failed', 'not_applicable', 'pending')
+           AND status IN ('passed', 'partial', 'failed', 'not_applicable', 'pending')
            AND source IN ('manual', 'audit')
            AND assessed_at <= NOW()
          ORDER BY framework_id, control_id, assessed_at DESC, created_at DESC, id DESC
@@ -241,7 +244,8 @@ export async function getComplianceOverview(): Promise<ComplianceOverviewData> {
        SELECT
          framework_id,
          COUNT(*) FILTER (WHERE status = 'passed') as passed_count,
-         COUNT(*) FILTER (WHERE status = 'failed') as failed_count,
+          COUNT(*) FILTER (WHERE status = 'failed') as failed_count,
+          COUNT(*) FILTER (WHERE status = 'partial') as partial_count,
          COUNT(*) FILTER (WHERE status = 'pending') as pending_count,
          COUNT(*) FILTER (WHERE status = 'not_applicable') as not_applicable_count,
          MAX(assessed_at) as last_assessed
@@ -260,13 +264,20 @@ export async function getComplianceOverview(): Promise<ComplianceOverviewData> {
     for (const row of assessmentsRes.rows) {
       const passed = parseInt(row.passed_count, 10) || 0;
       const failed = parseInt(row.failed_count, 10) || 0;
+      const partial = parseInt(row.partial_count, 10) || 0;
       const pending = parseInt(row.pending_count, 10) || 0;
       const notApplicable = parseInt(row.not_applicable_count, 10) || 0;
       const evaluated = passed + failed;
       dbAssessments[row.framework_id] = {
-        passed, failed, pending, notApplicable, evaluated,
+        passed, failed, partial, pending, notApplicable, evaluated,
         totalControls: controlCounts[row.framework_id] ?? 0,
         lastAssessedAt: row.last_assessed,
+      };
+    }
+    for (const [frameworkId, totalControls] of Object.entries(controlCounts)) {
+      dbAssessments[frameworkId] ??= {
+        passed: 0, partial: 0, failed: 0, pending: 0, notApplicable: 0,
+        evaluated: 0, totalControls, lastAssessedAt: null,
       };
     }
 
@@ -308,6 +319,9 @@ export async function getComplianceOverview(): Promise<ComplianceOverviewData> {
       let score: number | null = null;
       let trend30d: number | null = null;
       let passedControls: number | undefined;
+      let partialControls: number | undefined;
+      let failedControls: number | undefined;
+      let notAssessedControls: number | undefined;
       let evaluatedControls: number | undefined;
       let assessedControls: number | undefined;
       let totalApplicableControls: number | undefined;
@@ -334,12 +348,15 @@ export async function getComplianceOverview(): Promise<ComplianceOverviewData> {
           domain.assessedAt && (!latest || domain.assessedAt > latest) ? domain.assessedAt : latest, null);
       }
       // Control-based scores use the existing passed / (passed + failed) rule.
-      else if (dbData && dbData.evaluated > 0) {
-        score = Math.round((dbData.passed / dbData.evaluated) * 100);
+      else if (dbData) {
+        if (dbData.evaluated > 0) score = Math.round((dbData.passed / dbData.evaluated) * 100);
         passedControls = dbData.passed;
+        partialControls = dbData.partial;
+        failedControls = dbData.failed;
         evaluatedControls = dbData.evaluated;
-        assessedControls = dbData.passed + dbData.failed + dbData.pending + dbData.notApplicable;
+        assessedControls = dbData.passed + dbData.partial + dbData.failed;
         totalApplicableControls = Math.max(0, dbData.totalControls - dbData.notApplicable);
+        notAssessedControls = Math.max(0, totalApplicableControls - dbData.passed - dbData.partial - dbData.failed);
         assessmentScopeLabel = "controls assessed";
         lastAssessedAt = dbData.lastAssessedAt;
       }
@@ -351,8 +368,11 @@ export async function getComplianceOverview(): Promise<ComplianceOverviewData> {
         trend30d = Number((score - oldScore).toFixed(2));
       }
 
+      const completeness = assessedControls !== undefined && totalApplicableControls !== undefined
+        ? calculateAssessmentCompleteness(assessedControls, totalApplicableControls) : null;
+      const scoreIsInterim = def.id !== "mitre" && score !== null && completeness?.assessmentComplete === false;
       const status: ComplianceStatus = def.id === "mitre" && score !== null
-        ? "telemetry" : deriveStatus(score);
+        ? "telemetry" : completeness?.assessmentComplete ? deriveStatus(score) : "not_assessed";
 
       return {
         id: def.id,
@@ -365,17 +385,78 @@ export async function getComplianceOverview(): Promise<ComplianceOverviewData> {
         status,
         metricKind: def.id === "mitre" ? "telemetry_observation" : "formal_assessment",
         passedControls,
+        partialControls,
+        failedControls,
+        notAssessedControls,
         evaluatedControls,
         assessedControls,
         totalApplicableControls,
+        assessmentCoveragePercent: completeness?.assessmentCoveragePercent,
+        assessmentComplete: completeness?.assessmentComplete,
+        assessmentProgressStatus: completeness?.assessmentProgressStatus,
+        scoreIsInterim,
         assessmentScopeLabel,
         lastAssessedAt,
         context: def.id === "mitre" && score !== null
           ? `${passedControls} / ${evaluatedControls} techniques observed; denominator is a static Enterprise base-technique reference scope, not formal compliance.`
-          : score !== null ? "Formal score from explicit human assessment records only." : "No genuine formal assessment is recorded.",
+          : scoreIsInterim ? "Interim score from score-eligible assessed controls; framework assessment is incomplete."
+            : score !== null ? "Formal score from explicit human assessment records only." : "No genuine formal assessment is recorded.",
       };
     }
   );
+
+  if (dbAvailable) {
+    try {
+      const db = getDb();
+      const observedNow = new Date().toISOString();
+      for (const framework of frameworks) {
+        if (framework.metricKind !== "formal_assessment" || framework.score === null
+          || !framework.lastAssessedAt || framework.assessmentComplete !== true) continue;
+        await db.query(
+          `INSERT INTO compliance_snapshots
+             (framework_id, score, passed_controls, failed_controls, evaluated_controls,
+              status, snapshot_at, source_status, observed_at, observation_date)
+           VALUES ($1, $2, $3, $4, $5, $6, $7::timestamptz, 'available', $7::timestamptz,
+                   ($7::timestamptz AT TIME ZONE 'UTC')::date)
+           ON CONFLICT (framework_id, observation_date) DO UPDATE SET
+             score = EXCLUDED.score, passed_controls = EXCLUDED.passed_controls,
+             failed_controls = EXCLUDED.failed_controls, evaluated_controls = EXCLUDED.evaluated_controls,
+             status = EXCLUDED.status, snapshot_at = EXCLUDED.snapshot_at,
+             source_status = EXCLUDED.source_status, observed_at = EXCLUDED.observed_at`,
+          [framework.id, framework.score, framework.passedControls ?? null,
+            framework.failedControls ?? null, framework.evaluatedControls ?? null,
+            framework.status, observedNow]
+        );
+      }
+      const { rows } = await db.query<{ framework_id: string; score: string }>(
+        `SELECT DISTINCT ON (framework_id) framework_id, score
+         FROM compliance_snapshots
+         WHERE observed_at BETWEEN NOW() - INTERVAL '35 days' AND NOW() - INTERVAL '25 days'
+         ORDER BY framework_id,
+           ABS(EXTRACT(EPOCH FROM (observed_at - (NOW() - INTERVAL '30 days'))))`
+      );
+      const realHistory = Object.fromEntries(rows.map(row => [row.framework_id, Number(row.score)]));
+      for (const framework of frameworks) {
+        const previous = realHistory[framework.id];
+        if (framework.metricKind === "formal_assessment" && framework.score !== null && Number.isFinite(previous)) {
+          framework.previousScore = previous;
+          framework.trend30d = Number((framework.score - previous).toFixed(2));
+          framework.trendUnit = "percentage_points";
+          framework.trendStatus = "available";
+        } else if (framework.metricKind === "formal_assessment") {
+          framework.trendStatus = framework.score === null ? "not_assessed" : "insufficient_history";
+        }
+      }
+    } catch {
+      for (const framework of frameworks) {
+        if (framework.metricKind === "formal_assessment") framework.trendStatus = framework.score === null ? "not_assessed" : "unavailable";
+      }
+    }
+  } else {
+    for (const framework of frameworks) {
+      if (framework.metricKind === "formal_assessment") framework.trendStatus = "unavailable";
+    }
+  }
 
   return {
     frameworks,

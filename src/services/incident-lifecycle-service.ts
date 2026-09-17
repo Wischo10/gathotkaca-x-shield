@@ -338,7 +338,8 @@ export async function recordAnalystLifecycleEvent(
   // before detection synchronization so an invalid transition writes nothing.
   const prerequisiteByEvent: Partial<Record<IncidentLifecycleEventType, IncidentLifecycleEventType>> = {
     response_started: "acknowledged",
-    contained: "response_started",
+    contained: "acknowledged",
+    resolved: "contained",
   };
   const prerequisite = prerequisiteByEvent[eventType];
   if (prerequisite) {
@@ -360,6 +361,13 @@ export async function recordAnalystLifecycleEvent(
     return {
       success: false,
       error: `Incident '${incidentId}' not found in Bitdefender or missing valid detection timestamp.`,
+    };
+  }
+
+  if (Date.parse(detectedEvent.eventTimestamp) > Date.now()) {
+    return {
+      success: false,
+      error: `Incident '${incidentId}' has a detection timestamp in the future; no analyst lifecycle action was recorded.`,
     };
   }
 
@@ -446,7 +454,7 @@ interface MetricIntervalStat {
  * Only incidents having BOTH events within the last 30 days are included.
  */
 async function queryKpiInterval(
-  targetEventType: "acknowledged" | "response_started" | "contained"
+  targetEventType: "acknowledged" | "contained" | "resolved"
 ): Promise<MetricIntervalStat> {
   const db = getDb();
 
@@ -514,7 +522,7 @@ async function countTotalIncidentsInWindow(): Promise<number> {
  * Rules:
  * - MTTD is N/A (no defensible occurred_at mapping is established)
  * - MTTA = AVG(acknowledged_at - detected_at) in minutes for complete pairs
- * - MTTR = AVG(response_started_at - detected_at) in minutes for complete pairs
+ * - MTTR = AVG(resolved_at - detected_at) in minutes for complete pairs
  * - MTTC = AVG(contained_at - detected_at) in minutes for complete pairs
  * - Trend 30d is null / trendAvailable = false until multi-period historical snapshots exist
  * - If no events recorded or DB unavailable, returns defensive N/A with clear explanation
@@ -525,7 +533,7 @@ export async function calculateRealIncidentKpis(
   try {
     const [mttaStat, mttrStat, mttcStat, dbTotalIncidents] = await Promise.all([
       queryKpiInterval("acknowledged"),
-      queryKpiInterval("response_started"),
+      queryKpiInterval("resolved"),
       queryKpiInterval("contained"),
       countTotalIncidentsInWindow(),
     ]);
@@ -574,12 +582,12 @@ export async function calculateRealIncidentKpis(
       sampleSize: mttrStat.sampleCount,
       eligibleIncidents: mttrStat.sampleCount,
       excludedIncidents: Math.max(0, totalTracked - mttrStat.sampleCount),
-      source: "incident_lifecycle_events (detected + response_started)",
-      calculationMethod: "AVG(response_started_at - detected_at) for incidents with both events in last 30d",
-      timestampFieldsUsed: "detected_at (Bitdefender alert sensor), response_started_at (analyst action)",
+      source: "incident_lifecycle_events (detected + resolved)",
+      calculationMethod: "AVG(resolved_at - detected_at) for incidents with both events in last 30d",
+      timestampFieldsUsed: "detected_at (Bitdefender alert sensor), resolved_at (analyst action)",
       explanation: mttrStat.sampleCount > 0
-        ? `Calculated from ${mttrStat.sampleCount} real incident response action(s).`
-        : "No response actions recorded in the last 30 days via analyst action.",
+        ? `Calculated from ${mttrStat.sampleCount} real incident resolution(s).`
+        : "No incidents resolved in the last 30 days via analyst action.",
     };
 
     // MTTC item
@@ -647,7 +655,7 @@ export async function calculateRealIncidentKpis(
         eligibleIncidents: 0,
         excludedIncidents: bitdefenderTotalIncidents ?? 0,
         source: "Bitdefender / incident_lifecycle_events (Unavailable)",
-        explanation: "No operational response samples are currently available from lifecycle storage.",
+        explanation: "No operational resolution samples are currently available from lifecycle storage.",
       },
       mttc: {
         value: null,
@@ -681,7 +689,7 @@ export async function getBitdefenderIncidentsWithLifecycle(
       method: "getIncidentsList",
       params: {
         filters: {
-          status: ["open", "closed"],
+          status: ["open", "in_progress"],
         },
         page: Number.isFinite(page) ? Math.max(1, Math.floor(page)) : 1,
         perPage: Number.isFinite(perPage) ? Math.min(50, Math.max(10, Math.floor(perPage))) : 10,
@@ -806,11 +814,15 @@ export async function getBitdefenderIncidentsWithLifecycle(
       const ackEvent = incEvents["acknowledged"];
       const respEvent = incEvents["response_started"];
       const contEvent = incEvents["contained"];
+      const resolvedEvent = incEvents["resolved"];
 
       let lifecycleStatus: BitdefenderIncidentListItem["lifecycleStatus"] = "unhandled";
       let latestEvent: IncidentLifecycleEventType | null = null;
 
-      if (contEvent) {
+      if (resolvedEvent) {
+        lifecycleStatus = "resolved";
+        latestEvent = "resolved";
+      } else if (contEvent) {
         lifecycleStatus = "contained";
         latestEvent = "contained";
       } else if (respEvent) {
@@ -854,6 +866,7 @@ export async function getBitdefenderIncidentsWithLifecycle(
         acknowledgedAt: ackEvent ? ackEvent.eventTimestamp : null,
         respondedAt: respEvent ? respEvent.eventTimestamp : null,
         containedAt: contEvent ? contEvent.eventTimestamp : null,
+        resolvedAt: resolvedEvent ? resolvedEvent.eventTimestamp : null,
         latestEvent,
         lifecycleStatus,
       };

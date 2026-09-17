@@ -62,6 +62,9 @@ interface MetricCardProps {
   tooltip?: string;
   context?: string;
   basis?: string;
+  loading?: boolean;
+  detailHref?: string;
+  detailLabel?: string;
 }
 
 const MetricCard = ({
@@ -76,6 +79,9 @@ const MetricCard = ({
   tooltip,
   context,
   basis,
+  loading = false,
+  detailHref,
+  detailLabel = "View details",
 }: MetricCardProps) => {
   const hasValue = value !== null && value !== undefined;
   const isTrendValid = trendAvailable && trend30d !== null && trend30d !== undefined;
@@ -104,21 +110,22 @@ const MetricCard = ({
       </div>
       <div className="mt-3 flex items-baseline gap-1.5">
         <span className={`text-3xl font-bold tracking-tight ${hasValue ? "text-slate-900 dark:text-white" : "text-slate-400 dark:text-slate-500"}`}>
-          {hasValue ? `${value?.toLocaleString()}${unit || ""}` : "N/A"}
+          {loading ? "…" : hasValue ? `${value?.toLocaleString()}${unit || ""}` : "N/A"}
         </span>
         {hasValue && max && <span className="text-sm font-medium text-slate-400">/{max}</span>}
       </div>
       <div className={`mt-1 min-h-5 text-xs font-medium leading-5 ${isTrendValid ? style.subText : "text-slate-500 dark:text-slate-400"}`}>
-        {!hasValue ? "Source unavailable" : context ? context : isTrendValid ? (
+        {loading ? "Loading…" : !hasValue ? "Source unavailable" : context ? context : isTrendValid ? (
           <>
             {trend30d > 0 ? "↑ " : trend30d < 0 ? "↓ " : "→ "}
             {Math.abs(trend30d)}% vs last 30 days
           </>
         ) : (
-          <span className="text-slate-400">Trend unavailable</span>
+          <span className="text-slate-400">Insufficient history</span>
         )}
       </div>
       {basis && <div className="mt-0.5 text-[11px] leading-4 text-slate-400 dark:text-slate-500">{basis}</div>}
+      {detailHref && <a href={detailHref} className="mt-1 text-[11px] font-medium text-brand-blue hover:underline">{detailLabel} →</a>}
       <div className="mt-auto pt-2.5" aria-hidden="true">
         <div className="h-6 rounded-md bg-gradient-to-b from-transparent to-slate-50/80 dark:to-slate-800/20">
           <div className="relative top-4 h-px w-full bg-slate-200/70 dark:bg-slate-700/60" />
@@ -168,6 +175,12 @@ export default function CISODashboardPage() {
   ] : [];
   const riskRegisterDonutDistribution = riskRegisterDistribution.filter(bucket => bucket.count > 0);
   const topRisks = risksState.phase === "ready" ? rankTopRisks(risksState.data.items) : [];
+  const latestRiskUpdate = risksState.phase === "ready"
+    ? risksState.data.items.reduce<string | null>((latest, item) => !latest || item.updatedAt > latest ? item.updatedAt : latest, null)
+    : null;
+  const latestThirdPartyUpdate = thirdPartiesState.phase === "ready"
+    ? thirdPartiesState.data.items.reduce<string | null>((latest, item) => !latest || item.updatedAt > latest ? item.updatedAt : latest, null)
+    : null;
   const nistPostureDomains = NIST_FUNCTIONS.map(name => {
     const assessment = metrics?.nistPosture?.domains.find(domain => domain.name === name);
     return {
@@ -183,6 +196,12 @@ export default function CISODashboardPage() {
     const radius = domain.score! / 100 * 80;
     return `${140 + Math.cos(angle) * radius},${130 + Math.sin(angle) * radius}`;
   }).join(" ") : undefined;
+  const latestNistAssessment = nistPostureDomains.reduce<string | null>((latest, domain) =>
+    domain.assessedAt && (!latest || domain.assessedAt > latest) ? domain.assessedAt : latest, null);
+
+  const formatTimestamp = (isoString?: string | null) => isoString
+    ? new Date(isoString).toLocaleString()
+    : "Not assessed";
 
   const formatRelativeTime = (isoString?: string) => {
     if (!isoString) return "Updating...";
@@ -200,29 +219,41 @@ export default function CISODashboardPage() {
     return m > 0 ? `${h}h ${m}m` : `${h}h`;
   };
 
-  const renderTrend = (trend30d: number | null | undefined, trendAvailable: boolean | undefined) => {
-    if (!trendAvailable || trend30d === null || trend30d === undefined) {
-      return <span className="text-[10px] text-slate-400 font-normal ml-1">—</span>;
-    }
-    const isImproved = trend30d < 0;
-    const color = isImproved ? "text-green-500" : "text-red-500";
-    const arrow = trend30d < 0 ? "↓ " : trend30d > 0 ? "↑ " : "→ ";
-    return (
-      <span className={`text-[10px] font-normal ml-1 ${color}`}>
-        {arrow}{Math.abs(trend30d)}%
-      </span>
-    );
+  const incidentKpiPresentation = (
+    item: CisoMetricsData["incidentKpi"]["mttd"] | undefined,
+    kind: "mttd" | "mtta" | "mttc" | "mttr"
+  ) => {
+    if (!item) return metricsState.phase === "loading"
+      ? { value: "Loading…", badge: "Checking source", detail: "Loading incident lifecycle readiness." }
+      : { value: "Unavailable", badge: "Source unavailable", detail: "Incident KPI source is unavailable." };
+    if (kind === "mttd") return {
+      value: "Not Measurable", badge: "Telemetry limitation",
+      detail: "Occurrence timestamp unavailable from current incident telemetry. Detection source: Bitdefender sensor alerts.",
+    };
+    if (item.value !== null && item.eligibleIncidents && item.eligibleIncidents > 0) return {
+      value: formatDuration(item.value), badge: "Data available",
+      detail: `${item.eligibleIncidents} eligible incident${item.eligibleIncidents === 1 ? "" : "s"} · Last 30 days`,
+    };
+    if (/Unavailable/i.test(item.source)) return {
+      value: "Unavailable", badge: "Source unavailable", detail: item.explanation || "Lifecycle storage is unavailable.",
+    };
+    const detail = kind === "mtta"
+      ? "Calculated automatically after analysts acknowledge detected incidents."
+      : kind === "mttc"
+        ? "Calculated automatically after acknowledged incidents are marked contained."
+        : "Calculated automatically after contained incidents are resolved.";
+    return { value: "Awaiting Lifecycle Data", badge: "Operational · awaiting analyst events", detail };
   };
 
-  const renderKpiMetadata = (item: CisoMetricsData["incidentKpi"]["mttd"]) => (
-    <div className="mt-1 space-y-0.5 text-[10px] leading-tight text-slate-400">
-      <div>{item?.explanation || "Incident KPI source unavailable"}</div>
-      {item?.value !== null && item?.value !== undefined && <>
-        <div>{item.sampleSize} verified sample{item.sampleSize === 1 ? "" : "s"} · Last 30 days</div>
-        <div className="truncate" title={item.source}>Source: {item.source}</div>
-      </>}
-    </div>
-  );
+  const renderIncidentKpi = (item: CisoMetricsData["incidentKpi"]["mttd"] | undefined, kind: "mttd" | "mtta" | "mttc" | "mttr") => {
+    const presentation = incidentKpiPresentation(item, kind);
+    return <>
+      <div className="text-lg font-bold leading-tight text-slate-800 dark:text-white">{presentation.value}</div>
+      <div className="text-[10px] font-medium text-brand-blue">{presentation.badge}</div>
+      {kind !== "mttd" && <div className="text-[10px] text-slate-500">{item?.eligibleIncidents ?? 0} eligible incidents</div>}
+      <div className="text-[10px] leading-tight text-slate-400">{presentation.detail}</div>
+    </>;
+  };
 
   return (
     <>
@@ -235,7 +266,7 @@ export default function CISODashboardPage() {
             Executive Security Overview
           </span>
           <span className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">
-            {metrics?.updatedAt ? formatRelativeTime(metrics.updatedAt) : "Refreshing dashboard..."}
+            {metrics?.updatedAt ? `${formatRelativeTime(metrics.updatedAt)} · individual sources may differ` : "Loading dashboard data..."}
           </span>
         </div>
 
@@ -243,6 +274,7 @@ export default function CISODashboardPage() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <MetricCard
             title="Security Posture Score"
+            loading={metricsState.phase === "loading"}
             value={metrics?.securityPostureScore.value}
             max={metrics?.securityPostureScore.max}
             trend30d={metrics?.securityPostureScore.trend30d}
@@ -250,42 +282,52 @@ export default function CISODashboardPage() {
             trendColor="blue"
             icon="shield"
             tooltip={metrics?.securityPostureScore.details?.explanation || metrics?.securityPostureScore.source}
-            basis="Manual NIST assessment"
+            basis={`Manual NIST · ${latestNistAssessment ? `last assessed ${formatTimestamp(latestNistAssessment)}` : "not assessed"}`}
+            detailHref="/dashboard/ciso/security-posture" detailLabel="View posture"
           />
           <MetricCard
             title="Total Risk Score"
+            loading={metricsState.phase === "loading"}
             value={totalRiskPresentationScore}
             max={100}
             trend30d={metrics?.totalRiskScore.trend30d}
             trendAvailable={metrics?.totalRiskScore.trendAvailable}
             trendColor="red"
             icon="risk"
-            tooltip={metrics ? `Numeric score is a project-defined executive presentation mapping derived from the assessed Total Risk category. Authoritative result: ${metrics.totalRiskScore.category ?? "N/A"} (${metrics.totalRiskScore.value ?? "N/A"}/${metrics.totalRiskScore.max ?? 4}). ${metrics.totalRiskScore.details?.explanation || metrics.totalRiskScore.source}` : "Loading assessed Total Risk."}
+            tooltip={metrics ? `${metrics.totalRiskScore.eligibleCount ?? 0} assessed risks. Portfolio category: ${metrics.totalRiskScore.category ?? "N/A"}. Presentation mapping: Low 25, Medium 50, High 75, Critical 100. ${metrics.totalRiskScore.details?.explanation || metrics.totalRiskScore.source}` : "Loading assessed Total Risk."}
             context={metrics?.totalRiskScore.value !== null && metrics?.totalRiskScore.value !== undefined
               ? `${metrics.totalRiskScore.category} · ${metrics.totalRiskScore.eligibleCount} assessed ${metrics.totalRiskScore.eligibleCount === 1 ? "risk" : "risks"}`
               : undefined}
-            basis="Assessed risks"
+            basis={metrics?.totalRiskScore.category ? `${metrics.totalRiskScore.category} maps to ${totalRiskPresentationScore}/100` : "Assessed risks"}
+            detailHref="/dashboard/ciso/risks" detailLabel="View risks"
           />
           <MetricCard
             title="Active Incidents"
+            loading={metricsState.phase === "loading"}
             value={metrics?.activeIncidents.value}
             trend30d={metrics?.activeIncidents.trend30d}
             trendAvailable={metrics?.activeIncidents.trendAvailable}
             trendColor="orange"
             icon="incident"
             tooltip={metrics?.activeIncidents.availability?.error?.message || metrics?.activeIncidents.source || (metricsState.phase === "error" ? metricsState.message : "Loading Bitdefender incident count...")}
+            basis={metrics?.activeIncidents.availability?.fetchedAt ? `${metrics.activeIncidents.availability.cached ? "Cached; fetched" : "Fetched"} ${formatTimestamp(metrics.activeIncidents.availability.fetchedAt)}` : undefined}
+            detailHref="/dashboard/ciso/incidents" detailLabel="View incidents"
           />
           <MetricCard
             title="Critical Vulnerabilities"
+            loading={metricsState.phase === "loading"}
             value={metrics?.criticalVulnerabilities.value}
             trend30d={metrics?.criticalVulnerabilities.trend30d}
             trendAvailable={metrics?.criticalVulnerabilities.trendAvailable}
             trendColor="purple"
             icon="vulnerability"
             tooltip={metrics?.criticalVulnerabilities.availability?.error?.message || metrics?.criticalVulnerabilities.source || (metricsState.phase === "error" ? metricsState.message : "Loading unique critical CVE count...")}
+            basis={metrics?.criticalVulnerabilities.availability?.fetchedAt ? `Observed ${formatTimestamp(metrics.criticalVulnerabilities.availability.fetchedAt)}` : undefined}
+            detailHref="/dashboard/vulnerability" detailLabel="View vulnerabilities"
           />
           <MetricCard
             title="Compliance Score"
+            loading={metricsState.phase === "loading"}
             value={metrics?.complianceScore.value}
             unit={metrics?.complianceScore.unit || "%"}
             trend30d={metrics?.complianceScore.trend30d}
@@ -294,9 +336,11 @@ export default function CISODashboardPage() {
             icon="compliance"
             tooltip={metrics?.complianceScore.details?.explanation || metrics?.complianceScore.source}
             basis="Formal assessments"
+            detailHref="/dashboard/compliance" detailLabel="View compliance"
           />
           <MetricCard
             title="Risk Treatment Progress"
+            loading={metricsState.phase === "loading"}
             value={metrics?.riskTreatmentProgress.value}
             unit={metrics?.riskTreatmentProgress.unit || "%"}
             trend30d={metrics?.riskTreatmentProgress.trend30d}
@@ -308,12 +352,13 @@ export default function CISODashboardPage() {
               ? `${metrics.riskTreatmentProgress.completedCount} of ${metrics.riskTreatmentProgress.eligibleCount} treatments completed${metrics.riskTreatmentProgress.plannedCount ? ` · ${metrics.riskTreatmentProgress.plannedCount} Planned` : ""}`
               : undefined}
             basis="Eligible assessed treatments"
+            detailHref="/dashboard/ciso/risks" detailLabel="View treatments"
           />
         </div>
 
         {/* ROW 2: Analytical Panels */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <Panel title="Security Posture Overview" action={<span className="text-xs text-slate-400">NIST CSF 2.0</span>}>
+          <Panel title="Security Posture Overview" action={<span className="text-xs text-slate-400" title={latestNistAssessment ? `Latest recorded assessment: ${formatTimestamp(latestNistAssessment)}` : "No complete recorded assessment"}>NIST CSF 2.0 · {latestNistAssessment ? `assessed ${new Date(latestNistAssessment).toLocaleDateString()}` : "not assessed"}</span>}>
             <div className="flex h-56 items-center gap-2 overflow-x-auto">
               {/* Neutral scaffold; the data polygon requires all six actual assessments. */}
               <svg viewBox="0 0 280 260" className="h-full min-w-[150px] flex-1" role="img" aria-label={radarAvailable ? "NIST CSF six-function assessment radar, scale 0 to 100" : "NIST CSF six-function radar. Insufficient assessment data; no score polygon rendered."}>
@@ -351,7 +396,9 @@ export default function CISODashboardPage() {
                     <tr key={domain.name} title={domain.score === null ? metrics?.nistPosture?.explanation || "No recorded function assessment available" : `Assessed ${domain.assessedAt} by ${domain.assessedBy}. Trend is percentage-point change against a recorded assessment 30–35 days ago.`}>
                       <td className="py-2 font-medium text-slate-600 dark:text-slate-300">{domain.name}</td>
                       <td className="py-2 text-center text-slate-400">{domain.score === null ? "N/A" : `${domain.score}%`}</td>
-                      <td className="py-2 text-right text-slate-400">{domain.trend30d === null ? "N/A" : `${domain.trend30d > 0 ? "+" : ""}${domain.trend30d} pp`}</td>
+                      <td className="py-2 text-right text-slate-400">{domain.trend30d === null
+                        ? domain.score === null ? "Not assessed" : "Insufficient history"
+                        : `${domain.trend30d > 0 ? "+" : ""}${domain.trend30d} pp`}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -361,51 +408,35 @@ export default function CISODashboardPage() {
               <a href="/dashboard/ciso/security-posture" className="text-brand-blue hover:underline">View full security posture →</a>
             </div>
           </Panel>
-          <Panel title="Incident Response KPI" action={<span className="text-xs text-slate-400">Last 30 Days</span>}>
+          <Panel title="Incident Response KPI" action={<a href="/dashboard/ciso/incidents" className="text-xs font-medium text-brand-blue hover:underline">View Incidents →</a>}>
             <div className="grid grid-cols-2 gap-4 h-56">
               <div 
                 className="flex flex-col justify-center gap-1 border-r border-b border-slate-100 dark:border-slate-800 p-2"
                 title={metrics?.incidentKpi?.mttd?.explanation}
               >
                 <span className="text-xs text-slate-500">MTTD (Mean Time to Detect)</span>
-                <div className="text-2xl font-bold text-slate-800 dark:text-white flex items-baseline">
-                  {formatDuration(metrics?.incidentKpi?.mttd?.value)}
-                  {renderTrend(metrics?.incidentKpi?.mttd?.trend30d, metrics?.incidentKpi?.mttd?.trendAvailable)}
-                </div>
-                {metrics?.incidentKpi?.mttd && renderKpiMetadata(metrics.incidentKpi.mttd)}
+                {renderIncidentKpi(metrics?.incidentKpi?.mttd, "mttd")}
               </div>
               <div 
                 className="flex flex-col justify-center gap-1 border-b border-slate-100 dark:border-slate-800 p-2"
                 title={metrics?.incidentKpi?.mtta?.explanation}
               >
                 <span className="text-xs text-slate-500">MTTA (Mean Time to Acknowledge)</span>
-                <div className="text-2xl font-bold text-slate-800 dark:text-white flex items-baseline">
-                  {formatDuration(metrics?.incidentKpi?.mtta?.value)}
-                  {renderTrend(metrics?.incidentKpi?.mtta?.trend30d, metrics?.incidentKpi?.mtta?.trendAvailable)}
-                </div>
-                {metrics?.incidentKpi?.mtta && renderKpiMetadata(metrics.incidentKpi.mtta)}
+                {renderIncidentKpi(metrics?.incidentKpi?.mtta, "mtta")}
               </div>
               <div 
                 className="flex flex-col justify-center gap-1 border-r border-slate-100 dark:border-slate-800 p-2"
                 title={metrics?.incidentKpi?.mttr?.explanation}
               >
-                <span className="text-xs text-slate-500">MTTR (Mean Time to Respond)</span>
-                <div className="text-2xl font-bold text-slate-800 dark:text-white flex items-baseline">
-                  {formatDuration(metrics?.incidentKpi?.mttr?.value)}
-                  {renderTrend(metrics?.incidentKpi?.mttr?.trend30d, metrics?.incidentKpi?.mttr?.trendAvailable)}
-                </div>
-                {metrics?.incidentKpi?.mttr && renderKpiMetadata(metrics.incidentKpi.mttr)}
+                <span className="text-xs text-slate-500">MTTR (Mean Time to Resolve)</span>
+                {renderIncidentKpi(metrics?.incidentKpi?.mttr, "mttr")}
               </div>
               <div 
                 className="flex flex-col justify-center gap-1 p-2"
                 title={metrics?.incidentKpi?.mttc?.explanation}
               >
                 <span className="text-xs text-slate-500">MTTC (Mean Time to Contain)</span>
-                <div className="text-2xl font-bold text-slate-800 dark:text-white flex items-baseline">
-                  {formatDuration(metrics?.incidentKpi?.mttc?.value)}
-                  {renderTrend(metrics?.incidentKpi?.mttc?.trend30d, metrics?.incidentKpi?.mttc?.trendAvailable)}
-                </div>
-                {metrics?.incidentKpi?.mttc && renderKpiMetadata(metrics.incidentKpi.mttc)}
+                {renderIncidentKpi(metrics?.incidentKpi?.mttc, "mttc")}
               </div>
             </div>
           </Panel>
@@ -488,13 +519,13 @@ export default function CISODashboardPage() {
                       </span>
                     </div>
 
-                    {/* 3. In Progress (remediation lifecycle source not integrated yet -> N/A) */}
-                    <div className="flex justify-between items-center pr-2" title="Remediation workflow/ticketing data is not currently available from Wazuh telemetry">
+                    {/* Remediation workflow is independent of the SLA age partition. */}
+                    <div className="flex justify-between items-center pr-2" title={sla.inProgress === null ? "Remediation storage unavailable" : "Persisted vulnerability instances currently in analyst remediation"}>
                       <span className="flex items-center gap-1">
                         <span className="w-2 h-2 rounded-full bg-yellow-500"></span> In Progress
                       </span>
-                      <span className="font-semibold text-slate-400 dark:text-slate-500">
-                        {sla.inProgress !== null ? `${sla.inProgress}` : "—"}
+                      <span className={sla.inProgress === null ? "font-semibold text-slate-400 dark:text-slate-500" : "font-semibold text-slate-700 dark:text-slate-300"}>
+                        {sla.inProgress !== null ? `${sla.inProgress}` : "Unavailable"}
                       </span>
                     </div>
 
@@ -519,7 +550,7 @@ export default function CISODashboardPage() {
             })()}
             <div className="mt-2 flex items-center justify-between text-[11px] text-slate-400">
               <span title={(metrics?.vulnerabilitySlaOverview || metrics?.vulnerabilitySla)?.source || "Wazuh/OpenSearch vulnerability telemetry"}>
-                Source: Wazuh/OpenSearch telemetry ⓘ
+                Source: Wazuh/OpenSearch · {metrics?.vulnerabilitySla?.asOf ? `as of ${formatTimestamp(metrics.vulnerabilitySla.asOf)}` : "unavailable"} ⓘ
               </span>
               <a href="/dashboard/vulnerability" className="text-brand-blue hover:underline">
                 View vulnerability dashboard →
@@ -565,10 +596,12 @@ export default function CISODashboardPage() {
                : risksState.phase === "loading"
                  ? <PanelEmpty message="Loading risk register..." />
                  : <PanelEmpty message="Risk Register unavailable" />}
-             <div className="mt-auto border-t border-slate-100 pt-2 text-right text-xs dark:border-slate-800"><a href="/dashboard/ciso/risks" className="font-medium text-brand-blue hover:underline">View risk register →</a></div>
+             <div className="mt-auto flex items-center justify-between border-t border-slate-100 pt-2 text-xs dark:border-slate-800"><span className="text-[10px] text-slate-400">{latestRiskUpdate ? `Updated ${formatTimestamp(latestRiskUpdate)}` : risksState.phase === "ready" ? "Empty register" : risksState.phase === "loading" ? "Loading…" : "Source unavailable"}</span><a href="/dashboard/ciso/risks" className="font-medium text-brand-blue hover:underline">View risk register →</a></div>
           </Panel>
           <Panel title="Top Risks" className="h-64 flex flex-col justify-between">
              {risksState.phase === "loading" ? <PanelEmpty message="Loading assessed risks..." />
+               : risksState.phase === "error" ? <PanelEmpty message="Risk Register unavailable" />
+               : risksState.phase === "empty" ? <PanelEmpty message="No risks have been registered." />
                : topRisks.length === 0 ? <PanelEmpty message="No assessed risks." />
                : <div className="min-h-0 flex-1 overflow-y-auto">
                    <p className="mb-2 text-[10px] text-slate-400" title="Project-defined dashboard methodology; not an external standard or enterprise policy.">Top Risks ranks assessed risks primarily by residual risk, followed by inherent risk, severity, and due date.</p>
@@ -633,7 +666,7 @@ export default function CISODashboardPage() {
                    </ul>
                  </div>
                : thirdPartiesState.phase === "loading" ? <PanelEmpty message="Loading third-party register..." /> : <PanelEmpty message="N/A — third-party register unavailable" />}
-             <div className="mt-auto border-t border-slate-100 pt-3 text-right text-xs dark:border-slate-800"><a href="/dashboard/ciso/third-parties" className="font-medium text-brand-blue hover:underline">View third-party risk →</a></div>
+             <div className="mt-auto flex items-center justify-between border-t border-slate-100 pt-3 text-xs dark:border-slate-800"><span className="text-[10px] text-slate-400">{latestThirdPartyUpdate ? `Updated ${formatTimestamp(latestThirdPartyUpdate)}` : thirdPartiesState.phase === "ready" ? "Empty register" : thirdPartiesState.phase === "loading" ? "Loading…" : "Source unavailable"}</span><a href="/dashboard/ciso/third-parties" className="font-medium text-brand-blue hover:underline">View third-party risk →</a></div>
           </Panel>
           <AiCisoBriefingPanel />
         </div>

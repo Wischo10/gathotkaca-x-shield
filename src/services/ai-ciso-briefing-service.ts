@@ -3,6 +3,7 @@ import { env } from "@/lib/env";
 import { getCisoMetrics } from "@/services/ciso-service";
 import { getComplianceOverview } from "@/services/compliance-service";
 import { getThreatIntelligenceOverview } from "@/services/threat-intel";
+import { deriveThirdPartySummary, listThirdParties } from "@/services/third-party-register-service";
 import type { AiCisoBriefing, AiCisoBriefingItem, AiCisoGenerationMode, AiCisoNormalizedFact } from "@/types/ai-briefing";
 
 export class AiBriefingError extends Error {
@@ -59,10 +60,16 @@ function executiveSummary(value: unknown, facts: NormalizedFact[]) {
 function add(facts: NormalizedFact[], id: FactId, key: string, value: unknown, unit: "count" | "percent", source: string, text: string) {
   if (finite(value)) facts.push({ id, key, value, unit, source, text });
 }
+function addState(facts: NormalizedFact[], id: FactId, key: string, value: string, source: string, text: string) {
+  facts.push({ id, key, value, unit: "status", source, text });
+}
 
 export async function generateAiCisoBriefing(): Promise<AiCisoBriefing> {
   const { url, model } = configured();
-  const [metrics, compliance, threatIntel] = await Promise.all([getCisoMetrics(), getComplianceOverview(), getThreatIntelligenceOverview()]);
+  const [metrics, compliance, threatIntel, thirdPartyResult] = await Promise.all([
+    getCisoMetrics(), getComplianceOverview(), getThreatIntelligenceOverview(),
+    listThirdParties().then(items => ({ available: true as const, items })).catch(() => ({ available: false as const, items: [] })),
+  ]);
   const facts: NormalizedFact[] = [];
   const sourceAvailability: Record<string, boolean> = {};
   const active = metrics.activeIncidents.value;
@@ -94,6 +101,24 @@ export async function generateAiCisoBriefing(): Promise<AiCisoBriefing> {
     add(facts, "F11", "high_confidence_iocs", threatIntel.kpis.highConfidenceCount, "count", "threatIntelligence", `External threat-intelligence high-confidence IOCs: ${threatIntel.kpis.highConfidenceCount}. These are external feed observations, not local detections.${freshness}`);
     add(facts, "F12", "malicious_ips", threatIntel.kpis.maliciousIpsCount, "count", "threatIntelligence", `External threat-intelligence malicious IPs: ${threatIntel.kpis.maliciousIpsCount}. These are external feed observations, not local detections.${freshness}`);
   }
+  sourceAvailability.securityPosture = finite(metrics.securityPostureScore.value);
+  if (sourceAvailability.securityPosture) add(facts,"F13","security_posture",metrics.securityPostureScore.value,"percent","securityPosture",`Security posture score: ${metrics.securityPostureScore.value}%.`);
+  sourceAvailability.totalRisk = finite(metrics.totalRiskScore.value);
+  if (sourceAvailability.totalRisk) facts.push({id:"F14",key:"total_risk",value:metrics.totalRiskScore.value!,unit:"score",source:"riskRegister",text:`Assessed residual-risk portfolio: ${metrics.totalRiskScore.value} of ${metrics.totalRiskScore.max}, category ${metrics.totalRiskScore.category}.`});
+  sourceAvailability.complianceScore = finite(metrics.complianceScore.value);
+  if(sourceAvailability.complianceScore)add(facts,"F15","compliance_score",metrics.complianceScore.value,"percent","compliance",`Formal compliance score: ${metrics.complianceScore.value}%.`);
+  sourceAvailability.riskTreatment = finite(metrics.riskTreatmentProgress.value);
+  if(sourceAvailability.riskTreatment)add(facts,"F16","risk_treatment_progress",metrics.riskTreatmentProgress.value,"percent","riskRegister",`Risk treatment progress: ${metrics.riskTreatmentProgress.value}%.`);
+  sourceAvailability.vulnerabilityRemediation = sla.inProgress !== null;
+  if(sourceAvailability.vulnerabilityRemediation)add(facts,"F17","vulnerability_remediation_in_progress",sla.inProgress,"count","vulnerabilityRemediation",`Vulnerability instances in remediation: ${sla.inProgress}.`);
+  addState(facts,"F18","mttd_readiness","not_measurable","incidentLifecycle","MTTD is not measurable because a trustworthy occurrence timestamp is unavailable.");
+  for(const [id,key,item,label] of [["F19","mtta_readiness",metrics.incidentKpi.mtta,"MTTA"],["F20","mttc_readiness",metrics.incidentKpi.mttc,"MTTC"],["F21","mttr_readiness",metrics.incidentKpi.mttr,"MTTR"]] as const){
+    if(item.value===null&&item.eligibleIncidents===0)addState(facts,id,key,"awaiting_lifecycle_data","incidentLifecycle",`${label} is operational and awaiting genuine analyst lifecycle events.`);
+    else if(finite(item.value))facts.push({id,key,value:item.value,unit:"score",source:"incidentLifecycle",text:`${label}: ${item.value} minutes from ${item.eligibleIncidents} eligible incidents.`});
+  }
+  for(const [id,code,label] of [["F22","NIST-CSF","NIST CSF 2.0"],["F23","UU-PDP","UU PDP No. 27/2022"],["F24","ISO-27001","ISO/IEC 27001:2022"]] as const){const framework=compliance.frameworks.find(item=>item.code===code);if(framework?.score!==null&&framework?.score!==undefined)add(facts,id,`${code.toLowerCase()}_score`,framework.score,"percent","compliance",framework.scoreIsInterim?`${label} interim assessment score: ${framework.score}% of score-eligible assessed controls; assessment coverage is ${framework.assessmentCoveragePercent}%.`:`${label} formal assessment score: ${framework.score}%.`);else addState(facts,id,`${code.toLowerCase()}_state`,"not_assessed","compliance",`${label}: Not Assessed.`);}
+  sourceAvailability.thirdPartyRisk=thirdPartyResult.available;
+  if(thirdPartyResult.available){const summary=deriveThirdPartySummary(thirdPartyResult.items);add(facts,"F25","third_parties_assessed",summary.assessed,"count","thirdPartyRisk",`Third parties with completed assessments: ${summary.assessed}.`);add(facts,"F26","third_parties_needing_assessment",summary.needsAssessment,"count","thirdPartyRisk",`Third parties awaiting assessment: ${summary.needsAssessment}.`);}
   if (facts.length === 0) throw new AiBriefingError("unavailable");
 
   const factMap = new Map(facts.map(fact => [fact.id, fact]));
@@ -113,13 +138,13 @@ export async function generateAiCisoBriefing(): Promise<AiCisoBriefing> {
     const response = await fetch(`${url.replace(/\/$/, "")}/api/chat`, {
       method: "POST", signal: controller.signal, headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model, stream: false, think: false, options: { temperature: 0, num_predict: 600 },
-        format: { type: "object", additionalProperties: false, required: ["executiveSummary", "keyObservations", "priorityActions"], properties: {
-          executiveSummary: { type: "string" },
-          keyObservations: { type: "array", maxItems: 4, items: { type: "object", additionalProperties: false, required: ["text", "factIds"], properties: { text: { type: "string" }, factIds: { type: "array", minItems: 1, items: { type: "string", enum: facts.map(f => f.id) } } } } },
-          priorityActions: { type: "array", maxItems: 4, items: { type: "object", additionalProperties: false, required: ["text", "factIds"], properties: { text: { type: "string" }, factIds: { type: "array", minItems: 1, items: { type: "string", enum: facts.map(f => f.id) } } } } },
+        format: { type: "object", additionalProperties: false, required: ["summaryFactIds", "observationFactIds", "actionIndexes"], properties: {
+          summaryFactIds: { type: "array", minItems: 1, maxItems: 3, items: { type: "string", enum: facts.map(f => f.id) } },
+          observationFactIds: { type: "array", minItems: 1, maxItems: 4, items: { type: "string", enum: facts.map(f => f.id) } },
+          actionIndexes: { type: "array", minItems: 1, maxItems: 4, items: { type: "integer", minimum: 0, maximum: Math.max(0, allowedActions.length - 1) } },
         } }, messages: [
-          { role: "system", content: "Produce a strictly grounded CISO briefing with at most 4 key observations and at most 4 priority actions. Use only supplied normalized facts. For executiveSummary, copy one or more fact text values exactly, separated by one space. For each key observation, copy exactly one fact text and cite only its single ID. For priority actions, select exact entries from allowedActions, preserving text and factIds. Do not infer, interpret, correlate, invent numbers, or add claims. Return only the required JSON." },
-          { role: "user", content: JSON.stringify({ normalizedFacts: facts, allowedActions }) },
+          { role: "system", content: "Select the most CISO-relevant supplied fact IDs and approved action indexes. Never create prose, values, IDs, or actions. Zero is distinct from unavailable. Not Assessed is not Non-Compliant. Not Measurable is not poor performance. Awaiting Lifecycle Data is not KPI failure. Return only the required JSON." },
+          { role: "user", content: JSON.stringify({ generatedAt:new Date().toISOString(),sourceAvailability,normalizedFacts: facts, allowedActions }) },
         ] }),
     });
     if (!response.ok) throw new AiBriefingError("unavailable");
@@ -128,13 +153,16 @@ export async function generateAiCisoBriefing(): Promise<AiCisoBriefing> {
     let parsed: Record<string, unknown>;
     try { parsed = JSON.parse(result.message.content) as Record<string, unknown>; } catch { throw new AiBriefingError("invalid_output"); }
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new AiBriefingError("invalid_output");
-    let generationMode: AiCisoGenerationMode = "ollama_grounded";
-    let summary = executiveSummary(parsed.executiveSummary, facts);
-    if (!summary) { summary = facts.slice(0, 3).map(f => f.text).join(" "); generationMode = "grounded_factual_summary"; }
-    const keyObservations = Array.isArray(parsed.keyObservations) ? parsed.keyObservations.map(v => observation(v, factMap)).filter((v): v is AiCisoBriefingItem => v !== null) : [];
-    const priorityActions = Array.isArray(parsed.priorityActions) ? parsed.priorityActions.map(v => action(v, allowedActions, factMap)).filter((v): v is AiCisoBriefingItem => v !== null) : [];
+    const ids=(value:unknown,max:number):FactId[]|null=>Array.isArray(value)&&value.length>0&&value.length<=max&&value.every(id=>typeof id==="string"&&factMap.has(id as FactId))&&new Set(value).size===value.length?value as FactId[]:null;
+    const summaryIds=ids(parsed.summaryFactIds,3),observationIds=ids(parsed.observationFactIds,4);
+    const actionIndexes=Array.isArray(parsed.actionIndexes)&&parsed.actionIndexes.length>0&&parsed.actionIndexes.length<=4&&parsed.actionIndexes.every(index=>Number.isInteger(index)&&Number(index)>=0&&Number(index)<allowedActions.length)&&new Set(parsed.actionIndexes).size===parsed.actionIndexes.length?parsed.actionIndexes as number[]:null;
+    if(!summaryIds||!observationIds||!actionIndexes)throw new AiBriefingError("invalid_output");
+    const generationMode: AiCisoGenerationMode = "ollama_grounded";
+    const summary=summaryIds.map(id=>factMap.get(id)!.text).join(" ");
+    const keyObservations=observationIds.map(id=>({text:factMap.get(id)!.text,factIds:[id]}));
+    const priorityActions=actionIndexes.map(index=>allowedActions[index]);
     if (!summary || !keyObservations.length || !priorityActions.length) throw new AiBriefingError("invalid_output");
-    return { executiveSummary: summary, keyObservations, priorityActions, generatedAt: new Date().toISOString(), model, generationMode, sourceAvailability, normalizedFacts: facts };
+    return { executiveSummary: summary, keyObservations, priorityActions, generatedAt: new Date().toISOString(), model, generationMode, sourceAvailability, normalizedFacts: facts, sourceFreshness:{cisoMetrics:metrics.updatedAt,compliance:compliance.updatedAt,threatIntelligence:threatIntel.observedAt??null} };
   } catch (error) {
     if (error instanceof AiBriefingError) throw error;
     throw new AiBriefingError("unavailable");
