@@ -3,15 +3,18 @@ import { useState } from "react";
 import Link from "next/link";
 import { Topbar } from "@/components/layout/Topbar";
 import { Panel, PanelEmpty, PanelError, PanelLoading } from "@/components/ui/Panel";
+import { DataProvenanceBadge } from "@/components/ui/DataProvenanceBadge";
 import { useApiResult } from "@/hooks/useApiResult";
 import { useSidebarToggle } from "@/context/sidebar-context";
 import type { IncidentListResponse } from "@/types/ciso";
+import type { IncidentTicketingOverview } from "@/types/incident-ticketing";
 
 type Action = "acknowledge" | "contain" | "resolve";
 
 export default function CisoIncidentsPage() {
   const openSidebar = useSidebarToggle();
   const state = useApiResult<IncidentListResponse>("/api/ciso/incidents?perPage=50");
+  const ticketingState = useApiResult<IncidentTicketingOverview>("/api/ciso/incident-ticketing");
   const [pending, setPending] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   async function perform(incidentId: string, action: Action) {
@@ -45,6 +48,29 @@ export default function CisoIncidentsPage() {
               : <span className="text-slate-400">{item.resolvedAt ? "Resolved" : item.detectedAt ? "No valid action" : "Detection unavailable"}</span>}
             </div></td></tr>;
         })}</tbody></table><div className="mt-3 text-xs text-slate-500">{state.data.total} active Bitdefender incidents. MTTD remains unavailable because no trustworthy pre-detection occurrence timestamp exists.</div></div>)}
+    </Panel>
+    <Panel title="Independent Ticketing Lifecycle" action={ticketingState.phase === "ready" ? <DataProvenanceBadge provenance={ticketingState.data.provenance}/> : undefined}>
+      {ticketingState.phase === "loading" && <PanelLoading/>}
+      {ticketingState.phase === "error" && <PanelError message="Incident/ticketing provider unavailable" onRetry={ticketingState.reload}/>}
+      {ticketingState.phase === "ready" && ticketingState.data.provenance.mode === "NOT_AVAILABLE" && <PanelEmpty message="Incident/ticketing provider is not configured or available."/>}
+      {ticketingState.phase === "ready" && ticketingState.data.records.length > 0 && <div className="overflow-x-auto">
+        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+          {ticketingState.data.provenance.mode === "DEMO"
+            ? "Demo Data only. These records are read-only, not persisted, and not correlated with live Bitdefender incidents."
+            : "This provider dataset remains separate from Bitdefender unless an explicit authoritative incident ID is supplied."}
+        </div>
+        <table className="w-full min-w-[950px] text-left text-xs">
+          <thead className="border-b border-slate-200 text-slate-500 dark:border-slate-800"><tr><th className="py-2">Incident / ticket</th><th>Scenario</th><th>Lifecycle timestamps</th><th>Owner / team</th><th>Status</th><th>Source</th></tr></thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{ticketingState.data.records.map(item => <tr key={item.incidentId}>
+            <td className="py-3 pr-3"><b>{item.incidentId}</b><div className="text-slate-500">{item.externalTicketId}</div></td>
+            <td className="pr-3"><b>{item.title}</b><div className="capitalize text-slate-500">{item.severity} severity</div></td>
+            <td className="pr-3"><div>Occurred: {item.occurredAt ? new Date(item.occurredAt).toLocaleString() : "Unavailable"}</div><div>Detected: {new Date(item.detectedAt).toLocaleString()}</div><div>Acknowledged: {item.acknowledgedAt ? new Date(item.acknowledgedAt).toLocaleString() : "Not recorded"}</div><div>Contained: {item.containedAt ? new Date(item.containedAt).toLocaleString() : "Not recorded"}</div><div>Resolved: {item.resolvedAt ? new Date(item.resolvedAt).toLocaleString() : "Not recorded"}</div></td>
+            <td className="pr-3">{item.owner ?? "Unassigned"}<div className="text-slate-500">{item.team ?? "No team"}</div></td>
+            <td className="capitalize">{item.status}</td>
+            <td><DataProvenanceBadge provenance={item.provenance}/><div className="mt-1 text-slate-500">{item.source}</div></td>
+          </tr>)}</tbody>
+        </table>
+      </div>}
     </Panel></main></>;
 }
 function ActionButton({ label, disabled, busy, onClick }: { label: string; disabled: boolean; busy: boolean; onClick: () => void }) {

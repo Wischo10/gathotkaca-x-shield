@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { label: "SOC L2 Console", href: "/dashboard/soc-l2", enabled: true },
   { label: "AI Cyber Security Copilot", href: "/dashboard/copilot", enabled: true },
   { label: "Vulnerability Dashboard", href: "/dashboard/vulnerability", enabled: true },
+  { label: "Identity Governance", href: "/dashboard/ciso/identity-governance", enabled: true },
   {
     label: "Regulatory & Security Compliance Dashboard",
     href: "/dashboard/compliance",

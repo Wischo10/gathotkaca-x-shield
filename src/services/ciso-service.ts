@@ -4,6 +4,8 @@ import { env } from "@/lib/env";
 import { getDb } from "@/lib/db";
 import { getComplianceOverview } from "@/services/compliance-service";
 import { calculateRealIncidentKpis } from "@/services/incident-lifecycle-service";
+import { getIncidentTicketingOverview } from "@/services/incident-ticketing-service";
+import { getAssetManagementOverview } from "@/services/asset-management-service";
 import { getNistPostureAssessment } from "@/services/nist-posture-service";
 import { listRisks } from "@/services/risk-register-service";
 import { summarizeTotalRisk, summarizeTreatmentProgress } from "@/lib/risk-ranking";
@@ -726,6 +728,24 @@ export async function getCisoMetrics(): Promise<CisoMetricsData> {
   const activeIncidentBaseline = activeIncidents.availability?.status === "available"
     && typeof activeIncidents.value === "number" ? activeIncidents.value : null;
   const incidentKpi = await getIncidentKpiOverview(activeIncidentBaseline);
+  const realLifecycleUnavailable = /not reachable|unconfigured/i.test(incidentKpi.explanation);
+  const realLifecycleProvenance = {
+    mode: realLifecycleUnavailable ? "NOT_AVAILABLE" as const : "REAL" as const,
+    sources: ["Bitdefender GravityZone", "incident_lifecycle_events"],
+    explanation: realLifecycleUnavailable
+      ? "The real incident lifecycle source is unavailable."
+      : "Real Bitdefender detection telemetry and persisted analyst lifecycle events; no demo records are included.",
+  };
+  incidentKpi.provenance = realLifecycleProvenance;
+  for (const item of [incidentKpi.mttd, incidentKpi.mtta, incidentKpi.mttc, incidentKpi.mttr]) {
+    item.provenance = realLifecycleProvenance;
+  }
+  // Provider data is read-only and remains separate from the real Bitdefender /
+  // persisted analyst lifecycle calculation above.
+  const [incidentTicketing, assetManagement] = await Promise.all([
+    getIncidentTicketingOverview(),
+    getAssetManagementOverview(),
+  ]);
 
   // Missing inputs stay unavailable. An expired incident cache cannot score current posture.
   const affectedVulnAssets = criticalVulnerabilities.affectedAssetsCount ?? null;
@@ -826,6 +846,8 @@ export async function getCisoMetrics(): Promise<CisoMetricsData> {
     vulnerabilitySla,
     vulnerabilitySlaOverview: vulnerabilitySla,
     incidentKpi,
+    incidentTicketing,
+    assetManagement,
     updatedAt: new Date().toISOString(),
   };
 }

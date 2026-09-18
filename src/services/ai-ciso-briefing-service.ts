@@ -58,10 +58,13 @@ function executiveSummary(value: unknown, facts: NormalizedFact[]) {
   return used.size > 0 && supportedNumbers(value, [...used], new Map(facts.map(f => [f.id, f]))) ? value.trim() : null;
 }
 function add(facts: NormalizedFact[], id: FactId, key: string, value: unknown, unit: "count" | "percent", source: string, text: string) {
-  if (finite(value)) facts.push({ id, key, value, unit, source, text });
+  if (finite(value)) facts.push({ id, key, value, unit, source, text, provenance: realFactProvenance(source) });
 }
 function addState(facts: NormalizedFact[], id: FactId, key: string, value: string, source: string, text: string) {
-  facts.push({ id, key, value, unit: "status", source, text });
+  facts.push({ id, key, value, unit: "status", source, text, provenance: realFactProvenance(source) });
+}
+function realFactProvenance(source: string) {
+  return { mode: "REAL" as const, sources: [source], explanation: "Operational or persisted application fact; no demo provider data is included." };
 }
 
 export async function generateAiCisoBriefing(): Promise<AiCisoBriefing> {
@@ -104,7 +107,7 @@ export async function generateAiCisoBriefing(): Promise<AiCisoBriefing> {
   sourceAvailability.securityPosture = finite(metrics.securityPostureScore.value);
   if (sourceAvailability.securityPosture) add(facts,"F13","security_posture",metrics.securityPostureScore.value,"percent","securityPosture",`Security posture score: ${metrics.securityPostureScore.value}%.`);
   sourceAvailability.totalRisk = finite(metrics.totalRiskScore.value);
-  if (sourceAvailability.totalRisk) facts.push({id:"F14",key:"total_risk",value:metrics.totalRiskScore.value!,unit:"score",source:"riskRegister",text:`Assessed residual-risk portfolio: ${metrics.totalRiskScore.value} of ${metrics.totalRiskScore.max}, category ${metrics.totalRiskScore.category}.`});
+  if (sourceAvailability.totalRisk) facts.push({id:"F14",key:"total_risk",value:metrics.totalRiskScore.value!,unit:"score",source:"riskRegister",text:`Assessed residual-risk portfolio: ${metrics.totalRiskScore.value} of ${metrics.totalRiskScore.max}, category ${metrics.totalRiskScore.category}.`,provenance:realFactProvenance("riskRegister")});
   sourceAvailability.complianceScore = finite(metrics.complianceScore.value);
   if(sourceAvailability.complianceScore)add(facts,"F15","compliance_score",metrics.complianceScore.value,"percent","compliance",`Formal compliance score: ${metrics.complianceScore.value}%.`);
   sourceAvailability.riskTreatment = finite(metrics.riskTreatmentProgress.value);
@@ -114,7 +117,7 @@ export async function generateAiCisoBriefing(): Promise<AiCisoBriefing> {
   addState(facts,"F18","mttd_readiness","not_measurable","incidentLifecycle","MTTD is not measurable because a trustworthy occurrence timestamp is unavailable.");
   for(const [id,key,item,label] of [["F19","mtta_readiness",metrics.incidentKpi.mtta,"MTTA"],["F20","mttc_readiness",metrics.incidentKpi.mttc,"MTTC"],["F21","mttr_readiness",metrics.incidentKpi.mttr,"MTTR"]] as const){
     if(item.value===null&&item.eligibleIncidents===0)addState(facts,id,key,"awaiting_lifecycle_data","incidentLifecycle",`${label} is operational and awaiting genuine analyst lifecycle events.`);
-    else if(finite(item.value))facts.push({id,key,value:item.value,unit:"score",source:"incidentLifecycle",text:`${label}: ${item.value} minutes from ${item.eligibleIncidents} eligible incidents.`});
+    else if(finite(item.value))facts.push({id,key,value:item.value,unit:"score",source:"incidentLifecycle",text:`${label}: ${item.value} minutes from ${item.eligibleIncidents} eligible incidents. Provenance: Real.`,provenance:item.provenance??realFactProvenance("incidentLifecycle")});
   }
   for(const [id,code,label] of [["F22","NIST-CSF","NIST CSF 2.0"],["F23","UU-PDP","UU PDP No. 27/2022"],["F24","ISO-27001","ISO/IEC 27001:2022"]] as const){const framework=compliance.frameworks.find(item=>item.code===code);if(framework?.score!==null&&framework?.score!==undefined)add(facts,id,`${code.toLowerCase()}_score`,framework.score,"percent","compliance",framework.scoreIsInterim?`${label} interim assessment score: ${framework.score}% of score-eligible assessed controls; assessment coverage is ${framework.assessmentCoveragePercent}%.`:`${label} formal assessment score: ${framework.score}%.`);else addState(facts,id,`${code.toLowerCase()}_state`,"not_assessed","compliance",`${label}: Not Assessed.`);}
   sourceAvailability.thirdPartyRisk=thirdPartyResult.available;

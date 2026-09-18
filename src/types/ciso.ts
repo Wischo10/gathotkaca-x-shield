@@ -151,6 +151,7 @@ export interface IncidentKpiItem {
   calculationMethod?: string;
   timestampFieldsUsed?: string;
   explanation?: string;
+  provenance?: import("@/types/provenance").DataProvenance;
 }
 
 export interface IncidentKpiOverview {
@@ -161,6 +162,7 @@ export interface IncidentKpiOverview {
   mttc: IncidentKpiItem;
   dataAvailable: boolean;
   explanation: string;
+  provenance?: import("@/types/provenance").DataProvenance;
 }
 
 export interface CisoMetricsData {
@@ -174,6 +176,8 @@ export interface CisoMetricsData {
   vulnerabilitySla: VulnerabilitySlaOverview;
   vulnerabilitySlaOverview?: VulnerabilitySlaOverview;
   incidentKpi: IncidentKpiOverview;
+  incidentTicketing: import("@/types/incident-ticketing").IncidentTicketingOverview;
+  assetManagement: import("@/types/asset-management").AssetManagementOverview;
   updatedAt: string;
 }
 
