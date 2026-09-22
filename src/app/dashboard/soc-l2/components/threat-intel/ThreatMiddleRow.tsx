@@ -4,6 +4,8 @@ import { ExternalLink, ArrowRight, Loader2 } from "lucide-react";
 import { getThreatFoxIOCs, ThreatFoxIOC } from "@/services/threat-intel-service";
 import { Modal } from "@/components/ui/Modal";
 
+import { IndonesiaThreats } from "./IndonesiaThreats";
+
 export function ThreatMiddleRow() {
   const [iocs, setIocs] = useState<ThreatFoxIOC[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,7 +68,7 @@ export function ThreatMiddleRow() {
 
   return (
     <>
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
         
         {/* Global Threat Landscape */}
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm flex flex-col h-[320px]">
@@ -74,8 +76,8 @@ export function ThreatMiddleRow() {
             Global Threat Landscape <span className="text-slate-400 font-normal text-xs">&#9432;</span>
           </h3>
           <div className="flex gap-4 border-b border-slate-200 dark:border-slate-800 mb-4">
-            <button className="text-xs font-semibold text-brand-blue border-b-2 border-brand-blue pb-2">Attack Origin (Last 7 Days)</button>
-            <button className="text-xs font-medium text-slate-500 hover:text-slate-700 pb-2">Targeted Attacks</button>
+            <button onClick={() => window.alert("Switching to Attack Origin view...")} className="text-xs font-semibold text-brand-blue border-b-2 border-brand-blue pb-2">Attack Origin (Last 7 Days)</button>
+            <button onClick={() => window.alert("Switching to Targeted Attacks view...")} className="text-xs font-medium text-slate-500 hover:text-slate-700 pb-2">Targeted Attacks</button>
           </div>
           <div className="flex-1 relative flex items-center justify-center bg-slate-50 dark:bg-slate-800/30 rounded-lg border border-slate-100 dark:border-slate-800 overflow-hidden">
             {/* Simple Map Placeholder */}
@@ -99,7 +101,7 @@ export function ThreatMiddleRow() {
             </svg>
           </div>
           <div className="mt-3">
-            <button className="text-xs font-medium text-brand-blue flex items-center gap-1 hover:underline">
+            <button onClick={() => window.alert("Opening full map view...")} className="text-xs font-medium text-brand-blue flex items-center gap-1 hover:underline">
               View full map <ExternalLink className="w-3 h-3" />
             </button>
           </div>
@@ -214,6 +216,8 @@ export function ThreatMiddleRow() {
             </button>
           </div>
         </div>
+
+        <IndonesiaThreats />
 
       </div>
 

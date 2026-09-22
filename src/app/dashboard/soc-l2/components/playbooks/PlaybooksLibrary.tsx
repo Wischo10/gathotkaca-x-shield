@@ -1,4 +1,5 @@
-import { Search, Filter, Play, Edit, MoreVertical, Shield, Bug, Mail, Database, Key, Server, Cloud } from "lucide-react";
+import { Search, Filter, Play, Edit, MoreVertical, Shield, Bug, Mail, Database, Key, Server, Cloud, ListFilter, LayoutGrid, Clock, Star, ArrowRight, BookOpen, AlertTriangle, PlayCircle, Edit2, Trash2 } from "lucide-react";
+import { Pagination } from "@/components/ui/Pagination";
 import { useState } from "react";
 
 export function PlaybooksLibrary({ playbooks = [] }: { playbooks?: any[] }) {
@@ -53,7 +54,7 @@ export function PlaybooksLibrary({ playbooks = [] }: { playbooks?: any[] }) {
               <option>Active</option>
               <option>Draft</option>
             </select>
-            <button className="flex items-center gap-1.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700">
+            <button onClick={() => window.alert("Opening Filter menu...")} className="flex items-center gap-1.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700">
               <Filter className="w-4 h-4" /> Filters
             </button>
           </div>
@@ -109,14 +110,14 @@ export function PlaybooksLibrary({ playbooks = [] }: { playbooks?: any[] }) {
                   </td>
                   <td className="py-3 px-4">
                     <div className="flex items-center justify-center gap-1">
-                      <button className="p-1 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-md transition-colors" title="Execute">
-                        <Play className="w-4 h-4" />
+                      <button onClick={() => window.alert("Executing playbook...")} className="p-1 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-md transition-colors" title="Execute">
+                        <PlayCircle className="w-4 h-4" />
                       </button>
-                      <button className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors" title="Edit">
-                        <Edit className="w-4 h-4" />
+                      <button onClick={() => window.alert("Opening playbook editor...")} className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors" title="Edit">
+                        <Edit2 className="w-4 h-4" />
                       </button>
-                      <button className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors">
-                        <MoreVertical className="w-4 h-4" />
+                      <button onClick={() => window.alert("Deleting playbook...")} className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors" title="Delete">
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </td>
@@ -131,40 +132,11 @@ export function PlaybooksLibrary({ playbooks = [] }: { playbooks?: any[] }) {
         <span>
           Showing {filteredPlaybooks.length > 0 ? (validPage - 1) * itemsPerPage + 1 : 0} to {Math.min(validPage * itemsPerPage, filteredPlaybooks.length)} of {filteredPlaybooks.length} playbooks
         </span>
-        <div className="flex items-center gap-1">
-          <button 
-            disabled={validPage === 1}
-            onClick={() => handlePageChange(validPage - 1)}
-            className="px-2 py-1 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            &lt;
-          </button>
-          
-          {Array.from({ length: totalPages }, (_, i) => i + 1)
-            .filter(p => p === 1 || p === totalPages || Math.abs(p - validPage) <= 1)
-            .map((p, i, arr) => {
-              return (
-                <div key={p} className="flex items-center gap-1">
-                  {i > 0 && arr[i - 1] !== p - 1 && <span>...</span>}
-                  <button 
-                    onClick={() => handlePageChange(p)}
-                    className={`px-2.5 py-1 rounded ${validPage === p ? 'bg-brand-blue text-white' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-                  >
-                    {p}
-                  </button>
-                </div>
-              )
-            })
-          }
-          
-          <button 
-            disabled={validPage === totalPages}
-            onClick={() => handlePageChange(validPage + 1)}
-            className="px-2 py-1 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            &gt;
-          </button>
-        </div>
+        <Pagination 
+          currentPage={validPage}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+        />
       </div>
     </div>
   );

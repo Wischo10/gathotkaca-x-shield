@@ -1,13 +1,43 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Topbar } from "@/components/layout/Topbar";
 import { useSidebarToggle } from "@/app/dashboard/SidebarContext";
 import { Panel } from "@/components/ui/Panel";
+import { Loader2 } from "lucide-react";
 
 export default function DataHubDashboardPage() {
   const openSidebar = useSidebarToggle();
   const tabs = ["Data Overview", "Data Sources", "Integrations", "Data Quality", "Use Cases & Analytics", "Data Explorer", "Settings"];
   const [activeTab, setActiveTab] = useState(tabs[0]);
+  
+  const [metrics, setMetrics] = useState<any>(null);
+  const [integrations, setIntegrations] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        setLoading(true);
+        const [metricsRes, integrationsRes] = await Promise.all([
+          fetch("/api/data-hub/metrics").then(r => r.json()),
+          fetch("/api/data-hub/integrations").then(r => r.json())
+        ]);
+        setMetrics(metricsRes.data);
+        setIntegrations(integrationsRes.data);
+      } catch (error) {
+        console.error("Failed to load data hub data", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
+  }, []);
+
+  const formatNumber = (num: number) => {
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + " M";
+    if (num >= 1000) return (num / 1000).toFixed(1) + " K";
+    return num.toString();
+  };
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -17,27 +47,39 @@ export default function DataHubDashboardPage() {
             <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 mb-4">
                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl flex flex-col gap-1">
                  <div className="text-xs text-slate-500 font-semibold flex items-center gap-1"><span className="text-blue-500 text-lg">🗄️</span> Total Data Sources</div>
-                 <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">28</div>
+                 <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">
+                   {loading ? <Loader2 className="w-5 h-5 animate-spin text-brand-blue" /> : metrics?.totalSources || 0}
+                 </div>
                </div>
                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl flex flex-col gap-1">
                  <div className="text-xs text-slate-500 font-semibold flex items-center gap-1"><span className="text-blue-500 text-lg">🔗</span> Active Integrations</div>
-                 <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">26</div>
+                 <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">
+                   {loading ? <Loader2 className="w-5 h-5 animate-spin text-brand-blue" /> : integrations.filter(i => i.status === "Connected").length}
+                 </div>
                </div>
                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl flex flex-col gap-1">
                  <div className="text-xs text-slate-500 font-semibold flex items-center gap-1"><span className="text-green-500 text-lg">📥</span> Events Ingested</div>
-                 <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">18.4 M</div>
+                 <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">
+                   {loading ? <Loader2 className="w-5 h-5 animate-spin text-brand-blue" /> : formatNumber(metrics?.eventsIngested || 0)}
+                 </div>
                </div>
                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl flex flex-col gap-1">
                  <div className="text-xs text-slate-500 font-semibold flex items-center gap-1"><span className="text-purple-500 text-lg">📊</span> Normalized Events</div>
-                 <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">16.2 M</div>
+                 <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">
+                   {loading ? <Loader2 className="w-5 h-5 animate-spin text-brand-blue" /> : formatNumber(metrics?.normalizedEvents || 0)}
+                 </div>
                </div>
                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl flex flex-col gap-1">
                  <div className="text-xs text-slate-500 font-semibold flex items-center gap-1"><span className="text-red-500 text-lg">⚡</span> Correlation Rules</div>
-                 <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">152</div>
+                 <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">
+                   {loading ? <Loader2 className="w-5 h-5 animate-spin text-brand-blue" /> : metrics?.correlationRules || 0}
+                 </div>
                </div>
                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl flex flex-col gap-1">
                  <div className="text-xs text-slate-500 font-semibold flex items-center gap-1"><span className="text-slate-500 text-lg">⏱️</span> Data Retention</div>
-                 <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">365 Days</div>
+                 <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">
+                   {loading ? <Loader2 className="w-5 h-5 animate-spin text-brand-blue" /> : `${metrics?.retentionDays || 0} Days`}
+                 </div>
                </div>
             </div>
 
@@ -81,20 +123,24 @@ export default function DataHubDashboardPage() {
              <div className="flex flex-col items-center justify-center min-h-[16rem] text-slate-400 gap-4 py-8">
                <span className="text-4xl">🔗</span>
                <p>View and manage 3rd party API integrations.</p>
-               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4 w-full max-w-2xl">
-                 <div className="p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg flex flex-col items-center gap-2">
-                   <span className="font-bold text-slate-800 dark:text-slate-200">Wazuh</span>
-                   <span className="text-xs px-2 py-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-full font-medium">Connected</span>
+               {loading ? (
+                 <Loader2 className="w-8 h-8 animate-spin text-brand-blue mt-4" />
+               ) : (
+                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4 w-full max-w-2xl">
+                   {integrations.map((integration, idx) => (
+                     <div key={idx} className="p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg flex flex-col items-center gap-2">
+                       <span className="font-bold text-slate-800 dark:text-slate-200">{integration.name}</span>
+                       <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                         integration.status === 'Connected' 
+                           ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' 
+                           : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                       }`}>
+                         {integration.status}
+                       </span>
+                     </div>
+                   ))}
                  </div>
-                 <div className="p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg flex flex-col items-center gap-2">
-                   <span className="font-bold text-slate-800 dark:text-slate-200">Bitdefender</span>
-                   <span className="text-xs px-2 py-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-full font-medium">Connected</span>
-                 </div>
-                 <div className="p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg flex flex-col items-center gap-2">
-                   <span className="font-bold text-slate-800 dark:text-slate-200">VirusTotal</span>
-                   <span className="text-xs px-2 py-1 bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 rounded-full font-medium">Disconnected</span>
-                 </div>
-               </div>
+               )}
              </div>
           </Panel>
         );

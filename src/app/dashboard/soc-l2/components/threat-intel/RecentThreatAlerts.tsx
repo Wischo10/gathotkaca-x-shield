@@ -80,10 +80,10 @@ export function RecentThreatAlerts() {
                     </td>
                     <td className="py-4">
                       <div className="flex items-center gap-2">
-                        <button className="text-[11px] font-medium text-brand-blue border border-brand-blue/30 bg-blue-50 dark:bg-brand-blue/10 px-3 py-1 rounded hover:bg-blue-100 dark:hover:bg-brand-blue/20 transition-colors">
+                        <button onClick={() => window.alert("Opening Investigation view...")} className="text-[11px] font-medium text-brand-blue border border-brand-blue/30 bg-blue-50 dark:bg-brand-blue/10 px-3 py-1 rounded hover:bg-blue-100 dark:hover:bg-brand-blue/20 transition-colors">
                           Investigate
                         </button>
-                        <button className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded">
+                        <button onClick={() => window.alert("Opening More menu...")} className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded">
                           <MoreVertical className="w-4 h-4" />
                         </button>
                       </div>

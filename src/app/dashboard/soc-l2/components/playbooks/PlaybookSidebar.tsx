@@ -7,7 +7,7 @@ export function PlaybookSidebar({ popular = [], recent = [] }: { popular?: any[]
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm flex-1">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Popular Playbooks (This Week)</h2>
-          <button className="text-xs text-brand-blue font-medium hover:underline">View All</button>
+          <button onClick={() => window.alert("Opening full list...")} className="text-xs text-brand-blue font-medium hover:underline">View All</button>
         </div>
         <div className="flex flex-col gap-3">
           {popular.length === 0 && <p className="text-xs text-slate-500 py-2">No active responses found.</p>}
@@ -45,7 +45,7 @@ export function PlaybookSidebar({ popular = [], recent = [] }: { popular?: any[]
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm flex-1">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Recent Executions</h2>
-          <button className="text-xs text-brand-blue font-medium hover:underline">View All</button>
+          <button onClick={() => window.alert("Opening full list...")} className="text-xs text-brand-blue font-medium hover:underline">View All</button>
         </div>
         <div className="overflow-auto">
           <table className="w-full text-left text-xs">

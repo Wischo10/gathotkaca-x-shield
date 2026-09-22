@@ -10,7 +10,11 @@ interface Evidence {
   addedBy: string;
 }
 
-const MOCK_EVIDENCE: Evidence[] = [];
+const MOCK_EVIDENCE: Evidence[] = [
+  { id: "ev-1", name: "wazuh-agent-log.json", type: "Log File", source: "Wazuh Indexer", addedAt: "10:45:12 AM", addedBy: "System" },
+  { id: "ev-2", name: "malicious_payload.bin", type: "Binary", source: "Suricata", addedAt: "10:48:30 AM", addedBy: "Fandi Junerry" },
+  { id: "ev-3", name: "process_dump.txt", type: "Text", source: "Sysmon", addedAt: "11:05:00 AM", addedBy: "Fandi Junerry" },
+];
 
 export function EvidenceList() {
   const getIcon = (type: string) => {
@@ -20,11 +24,11 @@ export function EvidenceList() {
 
   return (
     <Panel 
-      title="Evidence (5)" 
+      title={`Evidence (${MOCK_EVIDENCE.length})`} 
       action={<a href="#" className="text-brand-blue font-medium text-xs hover:underline">View All</a>}
-      className="h-full flex flex-col"
+      className="flex flex-col"
     >
-      <div className="flex-1 overflow-auto mt-2">
+      <div className="overflow-x-auto mt-2">
         <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300">
           <thead className="text-slate-500 dark:text-slate-400">
             <tr>

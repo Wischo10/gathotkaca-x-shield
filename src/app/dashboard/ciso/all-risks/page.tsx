@@ -10,8 +10,21 @@ import {
   Line,
   Tooltip,
 } from "recharts";
+import {
+  Search,
+  Filter,
+  ShieldAlert,
+  ArrowUpRight,
+  ArrowDownRight,
+  AlertTriangle,
+  Download,
+  SlidersHorizontal,
+  Lock,
+  CheckCircle2,
+} from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
 import { CisoDetailHeader } from "@/components/ciso/CisoDetailHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import {
   CISO_MOCK_RISK_DETAIL_KPIS,
   CISO_MOCK_RISK_DISTRIBUTION_DETAIL,
@@ -392,39 +405,11 @@ export default function AllRisksDetailPage() {
               <span className="font-bold text-slate-900 dark:text-white">{totalPages}</span> ({filteredAndSortedRisks.length} total filtered items)
             </div>
 
-            <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-1 min-w-0">
-              <button
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-              >
-                ← Previous
-              </button>
-
-              <div className="flex items-center gap-1">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                  <button
-                    key={page}
-                    onClick={() => handlePageChange(page)}
-                    className={`h-7 w-7 rounded-lg text-xs font-bold transition ${
-                      currentPage === page
-                        ? "bg-brand-blue text-white shadow-xs"
-                        : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-                    }`}
-                  >
-                    {page}
-                  </button>
-                ))}
-              </div>
-
-              <button
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === totalPages}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-              >
-                Next →
-              </button>
-            </div>
+            <Pagination 
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={handlePageChange}
+            />
           </div>
         </Panel>
 

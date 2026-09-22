@@ -3,6 +3,7 @@ import { InvestigationCase } from "@/types/soc";
 import { SessionUser } from "@/lib/auth";
 import { useState, useEffect } from "react";
 import { ShieldAlert, Terminal, FileText, Share2, Activity, Server, Clock, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Modal } from "@/components/ui/Modal";
 
 interface AlertDetailWorkspaceProps {
   investigationCase: InvestigationCase | null;
@@ -12,6 +13,7 @@ interface AlertDetailWorkspaceProps {
 export function AlertDetailWorkspace({ investigationCase, user }: AlertDetailWorkspaceProps) {
   const [isEscalating, setIsEscalating] = useState(false);
   const [isEscalated, setIsEscalated] = useState(false);
+  const [isRawLogOpen, setIsRawLogOpen] = useState(false);
 
   // BUG FIX: Reset escalation state whenever the user selects a different alert
   // Without this, the "Escalated" green button stays even after switching to a new alert
@@ -23,7 +25,7 @@ export function AlertDetailWorkspace({ investigationCase, user }: AlertDetailWor
 
   if (!investigationCase) {
     return (
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col h-[800px]">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col h-full min-h-[400px]">
         <div className="flex-1 flex items-center justify-center text-slate-400">
           Select an alert from the queue to view details.
         </div>
@@ -71,7 +73,7 @@ export function AlertDetailWorkspace({ investigationCase, user }: AlertDetailWor
   };
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col shadow-sm h-auto xl:min-h-[800px]">
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col shadow-sm h-full">
       {/* Header */}
       <div className="p-4 flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-start gap-3">
@@ -117,7 +119,7 @@ export function AlertDetailWorkspace({ investigationCase, user }: AlertDetailWor
       </div>
       
       {/* Content Area */}
-      <div className="p-4 bg-slate-50/50 dark:bg-slate-950/50 flex-1 grid grid-cols-1 xl:grid-cols-3 gap-4">
+      <div className="p-4 bg-slate-50/50 dark:bg-slate-950/50 flex-1 grid grid-cols-1 xl:grid-cols-3 gap-4 overflow-y-auto">
         
         {/* Left Column: Basic Details */}
         <div className="xl:col-span-1 flex flex-col gap-4">
@@ -151,15 +153,32 @@ export function AlertDetailWorkspace({ investigationCase, user }: AlertDetailWor
         {/* Right Column: Raw Logs / Payload */}
         <div className="xl:col-span-2">
           <Panel title="Raw Log Data (Wazuh Document)" className="h-full">
-            <div className="bg-slate-900 rounded-lg p-4 mt-2 overflow-x-auto h-[500px]">
-              <pre className="text-xs text-green-400 font-mono whitespace-pre-wrap">
-                {JSON.stringify(investigationCase, null, 2)}
-              </pre>
+            <div className="flex flex-col items-center justify-center bg-slate-900 rounded-lg p-8 mt-2 h-[500px] border border-slate-800">
+              <Terminal className="w-12 h-12 text-slate-500 mb-4" />
+              <h4 className="text-slate-300 font-medium mb-2">Raw JSON Payload Available</h4>
+              <p className="text-slate-500 text-sm text-center max-w-sm mb-6">
+                The complete Wazuh log payload contains nested metadata, timelines, and alert details.
+              </p>
+              <button
+                onClick={() => setIsRawLogOpen(true)}
+                className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-6 py-2.5 rounded-lg font-medium text-sm transition-colors flex items-center gap-2 border border-slate-700"
+              >
+                <Terminal className="w-4 h-4" />
+                View Detailed JSON
+              </button>
             </div>
           </Panel>
         </div>
 
       </div>
+
+      <Modal isOpen={isRawLogOpen} onClose={() => setIsRawLogOpen(false)} title={`Raw Log Data`}>
+        <div className="bg-slate-950 rounded-lg p-4 overflow-auto max-h-[70vh]">
+          <pre className="text-xs text-green-400 font-mono whitespace-pre-wrap">
+            {JSON.stringify(investigationCase, null, 2)}
+          </pre>
+        </div>
+      </Modal>
     </div>
   );
 }

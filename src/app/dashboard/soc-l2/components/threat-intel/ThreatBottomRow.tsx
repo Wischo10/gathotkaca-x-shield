@@ -41,7 +41,7 @@ export function ThreatBottomRow() {
           )}
         </div>
         <div className="mt-4 text-right">
-          <button className="text-xs font-medium text-brand-blue flex items-center gap-1 ml-auto hover:underline">
+          <button onClick={() => window.alert("Opening full industry target report...")} className="text-xs font-medium text-brand-blue flex items-center gap-1 ml-auto hover:underline">
             View full report <ArrowRight className="w-3 h-3" />
           </button>
         </div>
@@ -91,7 +91,7 @@ export function ThreatBottomRow() {
           )}
         </div>
         <div className="mt-2 text-right">
-          <button className="text-xs font-medium text-brand-blue flex items-center gap-1 ml-auto hover:underline">
+          <button onClick={() => window.alert("Opening full threat actors list...")} className="text-xs font-medium text-brand-blue flex items-center gap-1 ml-auto hover:underline">
             View all threat actors <ArrowRight className="w-3 h-3" />
           </button>
         </div>
@@ -101,7 +101,7 @@ export function ThreatBottomRow() {
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm flex flex-col h-[380px]">
         <div className="flex justify-between items-center mb-4">
           <h3 className="font-bold text-slate-900 dark:text-white">Threat Intelligence Feeds (Status)</h3>
-          <a href="#" className="text-xs font-medium text-brand-blue hover:underline">View All</a>
+          <button onClick={() => window.alert("Opening Threat Intel Feeds...")} className="text-xs font-medium text-brand-blue hover:underline">View All</button>
         </div>
         <div className="flex-1 overflow-auto">
           {loadingFeeds ? (
@@ -139,7 +139,7 @@ export function ThreatBottomRow() {
           )}
         </div>
         <div className="mt-2 text-right">
-          <button className="text-xs font-medium text-brand-blue flex items-center gap-1 ml-auto hover:underline">
+          <button onClick={() => window.alert("Opening Feeds & Sources Manager...")} className="text-xs font-medium text-brand-blue flex items-center gap-1 ml-auto hover:underline">
             Manage all feeds & sources <ArrowRight className="w-3 h-3" />
           </button>
         </div>

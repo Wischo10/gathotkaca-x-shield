@@ -38,8 +38,8 @@ export function CaseDetailSidebar({ alert, onClose }: { alert: L2Alert, onClose:
       <div className="flex items-center justify-between p-3 border-b border-slate-200 dark:border-slate-800">
         <span className="font-semibold text-sm text-slate-800 dark:text-slate-200">{alert.id}</span>
         <div className="flex items-center gap-1 text-slate-400">
-          <button className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"><ChevronLeft className="w-4 h-4" /></button>
-          <button className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"><ChevronRight className="w-4 h-4" /></button>
+          <button onClick={() => window.alert("Navigating to previous case...")} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"><ChevronLeft className="w-4 h-4" /></button>
+          <button onClick={() => window.alert("Navigating to next case...")} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"><ChevronRight className="w-4 h-4" /></button>
           <button className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded ml-2 text-slate-500 hover:text-slate-700" onClick={onClose}><X className="w-4 h-4" /></button>
         </div>
       </div>

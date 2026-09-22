@@ -157,17 +157,26 @@ export default function SOCL2DashboardPage() {
             ))}
           </div>
           {activeTab === "Threat Intelligence" && (
-            <button className="flex items-center gap-1.5 text-xs font-medium bg-brand-blue text-white px-3 py-1.5 rounded-md hover:bg-brand-blue/90 mb-2 mr-2">
+            <button 
+              onClick={() => window.alert("Opening Manage Feeds & Sources dialog...")}
+              className="flex items-center gap-1.5 text-xs font-medium bg-brand-blue text-white px-3 py-1.5 rounded-md hover:bg-brand-blue/90 mb-2 mr-2"
+            >
               <Settings className="w-3.5 h-3.5" /> Manage Feeds & Sources
             </button>
           )}
           {activeTab === "Playbooks" && (
-            <button className="flex items-center gap-1.5 text-xs font-medium bg-brand-blue text-white px-3 py-1.5 rounded-md hover:bg-brand-blue/90 mb-2 mr-2 shadow-sm">
+            <button 
+              onClick={() => window.alert("Opening Playbook Creator...")}
+              className="flex items-center gap-1.5 text-xs font-medium bg-brand-blue text-white px-3 py-1.5 rounded-md hover:bg-brand-blue/90 mb-2 mr-2 shadow-sm"
+            >
               <Plus className="w-3.5 h-3.5" /> Create Playbook
             </button>
           )}
           {activeTab === "Reports" && (
-            <button className="flex items-center gap-1.5 text-xs font-medium bg-brand-blue text-white px-3 py-1.5 rounded-md hover:bg-brand-blue/90 mb-2 mr-2 shadow-sm">
+            <button 
+              onClick={() => window.alert("Opening Report Generator...")}
+              className="flex items-center gap-1.5 text-xs font-medium bg-brand-blue text-white px-3 py-1.5 rounded-md hover:bg-brand-blue/90 mb-2 mr-2 shadow-sm"
+            >
               <Plus className="w-3.5 h-3.5" /> Create Report
             </button>
           )}

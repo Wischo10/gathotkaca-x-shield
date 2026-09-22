@@ -1,6 +1,7 @@
 import { Panel } from "@/components/ui/Panel";
 import { L2Alert } from "@/types/soc";
-import { Filter, ChevronLeft, ChevronRight, MoreVertical } from "lucide-react";
+import { AlertTriangle, Filter, Search, ShieldAlert, ArrowUpRight, Clock, Plus, ChevronLeft, ChevronRight, MoreVertical } from "lucide-react";
+import { Pagination } from "@/components/ui/Pagination";
 import { useState } from "react";
 
 interface AlertQueueProps {
@@ -200,45 +201,11 @@ export function AlertQueue({ alerts, selectedAlertId, onSelectAlert, severityFil
         <span className="text-sm text-slate-500 dark:text-slate-400 whitespace-nowrap text-center">
           Showing {filteredAlerts.length > 0 ? (validPage - 1) * itemsPerPage + 1 : 0} to {Math.min(validPage * itemsPerPage, filteredAlerts.length)} of {filteredAlerts.length} alerts
         </span>
-        <div className="flex items-center gap-1 overflow-x-auto max-w-full pb-1 min-w-0">
-          <button 
-            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-            disabled={currentPage === 1}
-            className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 disabled:opacity-50"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-            const pageNum = i + 1;
-            return (
-              <button 
-                key={pageNum} 
-                onClick={() => setCurrentPage(pageNum)}
-                className={`w-7 h-7 flex items-center justify-center rounded text-sm ${pageNum === currentPage ? 'bg-brand-blue/10 text-brand-blue font-medium border border-brand-blue/20' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-              >
-                {pageNum}
-              </button>
-            );
-          })}
-          {totalPages > 5 && (
-            <>
-              <span className="text-slate-400 px-1">...</span>
-              <button 
-                onClick={() => setCurrentPage(totalPages)}
-                className={`w-7 h-7 flex items-center justify-center rounded text-sm ${totalPages === currentPage ? 'bg-brand-blue/10 text-brand-blue font-medium border border-brand-blue/20' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-              >
-                {totalPages}
-              </button>
-            </>
-          )}
-          <button 
-            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-            disabled={currentPage === totalPages}
-            className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 disabled:opacity-50"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
-        </div>
+        <Pagination 
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+        />
       </div>
       </div>
     </Panel>

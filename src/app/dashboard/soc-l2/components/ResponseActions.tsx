@@ -15,9 +15,9 @@ export function ResponseActions({ investigationCase }: ResponseActionsProps) {
     <Panel 
       title="Response Actions" 
       action={<a href="#" className="text-brand-blue font-medium text-xs hover:underline">View All Actions</a>}
-      className="h-full flex flex-col"
+      className="flex flex-col"
     >
-      <div className="flex-1 flex flex-col gap-2 mt-2">
+      <div className="flex flex-col gap-2 mt-2">
         <div className="grid grid-cols-2 gap-2">
         <button className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors rounded-md p-3 text-sm font-medium text-slate-800 dark:text-slate-200 flex items-center justify-center gap-2 shadow-sm">
           <div className="bg-orange-50 dark:bg-orange-900/20 p-1 rounded">
