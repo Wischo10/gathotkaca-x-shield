@@ -1,10 +1,24 @@
 import { Search, Filter, Play, Edit, MoreVertical, Shield, Bug, Mail, Database, Key, Server, Cloud } from "lucide-react";
 import { useState } from "react";
 
-const playbooksData: any[] = [];
-
-export function PlaybooksLibrary() {
+export function PlaybooksLibrary({ playbooks = [] }: { playbooks?: any[] }) {
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 8;
+
+  const filteredPlaybooks = playbooks.filter(pb => {
+    if (!searchTerm) return true;
+    const q = searchTerm.toLowerCase();
+    return pb.name.toLowerCase().includes(q) || pb.description?.toLowerCase().includes(q) || pb.type?.toLowerCase().includes(q);
+  });
+
+  const totalPages = Math.max(1, Math.ceil(filteredPlaybooks.length / itemsPerPage));
+  const validPage = Math.min(currentPage, totalPages);
+  const displayedPlaybooks = filteredPlaybooks.slice((validPage - 1) * itemsPerPage, validPage * itemsPerPage);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
 
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex flex-col shadow-sm col-span-1 xl:col-span-2 h-full">
@@ -18,7 +32,7 @@ export function PlaybooksLibrary() {
               type="text" 
               placeholder="Search playbooks..." 
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
               className="pl-9 pr-4 py-1.5 text-sm w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue"
             />
           </div>
@@ -61,10 +75,10 @@ export function PlaybooksLibrary() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-            {playbooksData.length === 0 ? (
+            {displayedPlaybooks.length === 0 ? (
               <tr><td colSpan={8} className="py-8 text-center text-slate-500">No playbooks found.</td></tr>
-            ) : playbooksData.map((pb) => {
-              const Icon = pb.icon;
+            ) : displayedPlaybooks.map((pb) => {
+              const Icon = Shield; // Fallback to Shield since it's dynamic
               return (
                 <tr key={pb.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                   <td className="py-3 px-4">
@@ -114,17 +128,42 @@ export function PlaybooksLibrary() {
       </div>
 
       <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500">
-        <span>Showing 1 to 8 of 48 playbooks</span>
+        <span>
+          Showing {filteredPlaybooks.length > 0 ? (validPage - 1) * itemsPerPage + 1 : 0} to {Math.min(validPage * itemsPerPage, filteredPlaybooks.length)} of {filteredPlaybooks.length} playbooks
+        </span>
         <div className="flex items-center gap-1">
-          <button className="px-2 py-1 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">&lt;</button>
-          <button className="px-2.5 py-1 bg-brand-blue text-white rounded">1</button>
-          <button className="px-2.5 py-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded">2</button>
-          <button className="px-2.5 py-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded">3</button>
-          <button className="px-2.5 py-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded">4</button>
-          <button className="px-2.5 py-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded">5</button>
-          <span>...</span>
-          <button className="px-2.5 py-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded">8</button>
-          <button className="px-2 py-1 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">&gt;</button>
+          <button 
+            disabled={validPage === 1}
+            onClick={() => handlePageChange(validPage - 1)}
+            className="px-2 py-1 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            &lt;
+          </button>
+          
+          {Array.from({ length: totalPages }, (_, i) => i + 1)
+            .filter(p => p === 1 || p === totalPages || Math.abs(p - validPage) <= 1)
+            .map((p, i, arr) => {
+              return (
+                <div key={p} className="flex items-center gap-1">
+                  {i > 0 && arr[i - 1] !== p - 1 && <span>...</span>}
+                  <button 
+                    onClick={() => handlePageChange(p)}
+                    className={`px-2.5 py-1 rounded ${validPage === p ? 'bg-brand-blue text-white' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                  >
+                    {p}
+                  </button>
+                </div>
+              )
+            })
+          }
+          
+          <button 
+            disabled={validPage === totalPages}
+            onClick={() => handlePageChange(validPage + 1)}
+            className="px-2 py-1 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            &gt;
+          </button>
         </div>
       </div>
     </div>

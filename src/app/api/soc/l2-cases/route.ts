@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getLiveEvents } from "@/services/wazuh-indexer";
+import { getEventById } from "@/services/wazuh-indexer";
 import type { L2Alert, InvestigationCase } from "@/types/soc";
 
 export const dynamic = "force-dynamic";
@@ -13,8 +13,7 @@ export async function GET(request: Request) {
        return NextResponse.json({ error: "Alert ID is required" }, { status: 400 });
     }
 
-    const events = await getLiveEvents(50);
-    const event = events.find(e => e.id === alertId);
+    const event = await getEventById(alertId);
 
     if (!event) {
        return NextResponse.json({ error: "Alert not found" }, { status: 404 });

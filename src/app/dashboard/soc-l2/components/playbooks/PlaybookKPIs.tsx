@@ -12,33 +12,17 @@ interface PlaybookStats {
   high: number;
 }
 
-export function PlaybookKPIs() {
-  const [stats, setStats] = useState<PlaybookStats | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/soc/playbook-stats?range=7d")
-      .then(res => res.json())
-      .then(data => {
-        if (data.status === "ok") setStats(data.data);
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
-
+export function PlaybookKPIs({ kpiData }: { kpiData?: any }) {
   const generateSparkline = (trend: "up" | "down") =>
     Array.from({ length: 10 }, (_, i) => ({
       value: trend === "up" ? i * 10 + Math.random() * 20 : 100 - i * 10 + Math.random() * 20
     }));
 
-  const successRate = stats && stats.executed > 0
-    ? Math.round((stats.successful / stats.executed) * 100)
-    : 0;
 
   const kpis = [
     {
       title: "Total Alerts (7d)",
-      value: loading ? "..." : (stats?.totalAlerts ?? 0).toLocaleString(),
+      value: kpiData ? kpiData.totalAlerts.toLocaleString() : "...",
       trend: "Live from Wazuh",
       trendUp: true,
       icon: BookOpen,
@@ -50,7 +34,7 @@ export function PlaybookKPIs() {
     },
     {
       title: "Triggered (High+Critical)",
-      value: loading ? "..." : (stats?.executed ?? 0).toLocaleString(),
+      value: kpiData ? kpiData.triggered.toLocaleString() : "...",
       trend: "Automated triggers",
       trendUp: true,
       icon: Play,
@@ -62,8 +46,8 @@ export function PlaybookKPIs() {
     },
     {
       title: "Successful Responses",
-      value: loading ? "..." : (stats?.successful ?? 0).toLocaleString(),
-      trend: `${successRate}% Success Rate`,
+      value: kpiData ? kpiData.successfulResponses.toLocaleString() : "...",
+      trend: kpiData ? `${kpiData.successRate}% Success Rate` : "...",
       trendUp: true,
       icon: CheckCircle2,
       color: "text-emerald-500",
@@ -74,7 +58,7 @@ export function PlaybookKPIs() {
     },
     {
       title: "Failed / Unhandled",
-      value: loading ? "..." : (stats?.failed ?? 0).toLocaleString(),
+      value: kpiData ? kpiData.failedUnhandled.toLocaleString() : "...",
       trend: "Requires attention",
       trendUp: false,
       icon: XCircle,
@@ -86,9 +70,9 @@ export function PlaybookKPIs() {
     },
     {
       title: "Critical Alerts (7d)",
-      value: loading ? "..." : (stats?.critical ?? 0).toLocaleString(),
+      value: kpiData ? kpiData.criticalAlerts.toLocaleString() : "...",
       trend: "Highest priority",
-      trendUp: stats ? stats.critical < stats.high : true,
+      trendUp: kpiData ? kpiData.criticalAlerts < 100 : true,
       icon: Clock,
       color: "text-orange-500",
       bg: "bg-orange-50 dark:bg-orange-500/10",
@@ -100,7 +84,7 @@ export function PlaybookKPIs() {
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
-      {kpis.map((kpi, idx) => {
+      {kpis.map((kpi: any, idx: number) => {
         const Icon = kpi.icon;
         return (
           <div key={idx} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 flex flex-col justify-between shadow-sm">

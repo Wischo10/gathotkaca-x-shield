@@ -84,16 +84,53 @@ export default function SOCL2DashboardPage() {
           }
         })
         .catch(console.error);
+
+      // Fetch notes for the selected alert
+      fetch(`/api/soc/notes?alert_id=${selectedAlertId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === "ok") {
+            setAllNotes(prev => ({
+              ...prev,
+              [selectedAlertId]: data.data
+            }));
+          }
+        })
+        .catch(console.error);
     } else {
       setInvestigationCase(null);
     }
   }, [selectedAlertId, alerts]);
 
-  const handleAddNote = (alertId: string, note: Note) => {
+  const handleAddNote = async (alertId: string, note: Note) => {
+    // Optimistic UI update
     setAllNotes(prev => ({
       ...prev,
       [alertId]: [note, ...(prev[alertId] || [])]
     }));
+
+    try {
+      const res = await fetch("/api/soc/notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          alert_id: alertId,
+          author: note.author,
+          role: note.role,
+          content: note.content
+        })
+      });
+      const data = await res.json();
+      if (data.status === "ok") {
+        // Replace optimistic note with real data from DB if needed
+        setAllNotes(prev => ({
+          ...prev,
+          [alertId]: [data.data, ...(prev[alertId] || []).filter(n => n.id !== note.id)]
+        }));
+      }
+    } catch (e) {
+      console.error("Failed to save note", e);
+    }
   };
 
   return (
@@ -153,9 +190,9 @@ export default function SOCL2DashboardPage() {
               <ReportsView />
             </div>
           ) : (
-            <>
+            <div className="flex-1 flex flex-col gap-4 overflow-y-auto pr-2 pb-4 -mr-2">
               {/* Top Row */}
-              <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 h-full">
+              <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 flex-1 min-h-[600px]">
                 <div className="xl:col-span-1 h-full overflow-hidden">
                   {activeTab === "Alert Queue" ? (
                     <AlertQueue 
@@ -194,7 +231,7 @@ export default function SOCL2DashboardPage() {
               </div>
 
               {/* Bottom Row */}
-              <div className="grid grid-cols-1 gap-4">
+              <div className="grid grid-cols-1 gap-4 shrink-0">
                 <CaseNote 
                   investigationCase={investigationCase} 
                   user={user} 
@@ -202,7 +239,7 @@ export default function SOCL2DashboardPage() {
                   onAddNote={(note) => selectedAlertId && handleAddNote(selectedAlertId, note)}
                 />
               </div>
-            </>
+            </div>
           )}
         </div>
       </main>

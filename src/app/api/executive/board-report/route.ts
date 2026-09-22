@@ -38,8 +38,8 @@ export async function GET() {
       return r.status === "fulfilled" ? r.value : fallback;
     }
 
-    const current  = val(alertsCurrent, { total: 0, critical: 0, high: 0, medium: 0, low: 0 });
-    const prev7d   = val(alertsPrev,    { total: 0, critical: 0, high: 0, medium: 0, low: 0 });
+    const current  = val(alertsCurrent, { total: 0, totalAlerts: 0, critical: 0, high: 0, medium: 0, low: 0, percentages: { critical: 0, high: 0, medium: 0, low: 0 } });
+    const prev7d   = val(alertsPrev,    { total: 0, totalAlerts: 0, critical: 0, high: 0, medium: 0, low: 0, percentages: { critical: 0, high: 0, medium: 0, low: 0 } });
     const methods  = val(attackMethods, []);
     const comp     = val(compliance, []);
     const vuln     = val(vulnStats, { total: 0, critical: 0, high: 0, medium: 0, low: 0 });
@@ -91,7 +91,7 @@ export async function GET() {
       disconnectedAgents: agentSum.disconnected,
       // Attack landscape
       topAttackMethod,
-      attackMethods: methods.slice(0, 3).map(m => ({ name: m.name, count: m.value })),
+      attackMethods: methods.slice(0, 3).map((m: any) => ({ name: m.name, count: m.value })),
       // Compliance
       compliancePct,
       totalComplianceEvents,

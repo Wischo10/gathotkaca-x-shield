@@ -234,11 +234,11 @@ export function InvestigationList({ alerts, selectedAlertId, onSelectAlert }: In
         })}
       </div>
 
-      <div className="border-t border-slate-100 dark:border-slate-800/50 p-4 flex items-center justify-between mt-auto bg-white dark:bg-slate-900 rounded-b-xl">
-        <span className="text-[10px] text-slate-500 dark:text-slate-400">
+      <div className="border-t border-slate-100 dark:border-slate-800/50 p-4 flex flex-wrap items-center justify-center sm:justify-between gap-4 mt-auto bg-white dark:bg-slate-900 rounded-b-xl shrink-0">
+        <span className="text-[10px] sm:text-sm text-slate-500 dark:text-slate-400 whitespace-nowrap text-center">
           Showing {filteredAlerts.length > 0 ? (validPage - 1) * itemsPerPage + 1 : 0} to {Math.min(validPage * itemsPerPage, filteredAlerts.length)} of {filteredAlerts.length} investigations
         </span>
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-0.5 overflow-x-auto max-w-full pb-1 min-w-0">
           <button 
             onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
             disabled={currentPage === 1}

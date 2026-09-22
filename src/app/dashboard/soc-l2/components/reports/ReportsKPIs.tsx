@@ -3,37 +3,17 @@ import { FileText, CalendarClock, CheckCircle2, Download, Clock, ArrowUp, ArrowD
 import { LineChart, Line, ResponsiveContainer } from "recharts";
 import { useState, useEffect } from "react";
 
-interface ReportStats {
-  totalAlerts: number;
-  escalated: number;
-  closed: number;
-}
-
-export function ReportsKPIs() {
-  const [wazuhTotal, setWazuhTotal] = useState<number | null>(null);
-  const [caseStats, setCaseStats] = useState<{ total: number; closed: number } | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    Promise.all([
-      fetch("/api/soc/playbook-stats?range=7d").then(r => r.json()),
-      fetch("/api/soc/cases/aggregate?range=7d").then(r => r.json()),
-    ]).then(([playbookData, casesData]) => {
-      if (playbookData.status === "ok") setWazuhTotal(playbookData.data.totalAlerts);
-      if (casesData.status === "ok") setCaseStats({ total: casesData.data.total, closed: casesData.data.closed });
-    }).catch(console.error).finally(() => setLoading(false));
-  }, []);
-
+export function ReportsKPIs({ kpis }: { kpis?: any }) {
   const generateSparkline = (trend: "up" | "down") =>
     Array.from({ length: 10 }, (_, i) => ({
       value: trend === "up" ? i * 10 + Math.random() * 20 : 100 - i * 10 + Math.random() * 20
     }));
 
-  const kpis = [
+  const kpiList = [
     {
-      title: "Total Alerts (7d)",
-      value: loading ? "..." : (wazuhTotal ?? 0).toLocaleString(),
-      trend: "Live from Wazuh",
+      title: "Total Reports (7d)",
+      value: kpis ? kpis.totalReports.toLocaleString() : "...",
+      trend: "Generated based on volume",
       trendUp: true,
       icon: FileText,
       color: "text-purple-500",
@@ -43,9 +23,9 @@ export function ReportsKPIs() {
       data: generateSparkline("up"),
     },
     {
-      title: "Escalated Cases (7d)",
-      value: loading ? "..." : (caseStats?.total ?? 0).toLocaleString(),
-      trend: "From soc_cases DB",
+      title: "Generated Today",
+      value: kpis ? kpis.generatedToday.toLocaleString() : "...",
+      trend: "Recent activity",
       trendUp: true,
       icon: CalendarClock,
       color: "text-blue-500",
@@ -55,11 +35,11 @@ export function ReportsKPIs() {
       data: generateSparkline("up"),
     },
     {
-      title: "Cases Resolved (7d)",
-      value: loading ? "..." : (caseStats?.closed ?? 0).toLocaleString(),
-      trend: "Closed tickets",
+      title: "Scheduled Reports",
+      value: kpis ? kpis.scheduled.toLocaleString() : "...",
+      trend: "Active schedules",
       trendUp: true,
-      icon: CheckCircle2,
+      icon: Clock,
       color: "text-emerald-500",
       bg: "bg-emerald-50 dark:bg-emerald-500/10",
       border: "border-emerald-200 dark:border-emerald-900/50",
@@ -67,23 +47,23 @@ export function ReportsKPIs() {
       data: generateSparkline("up"),
     },
     {
-      title: "Active Investigations",
-      value: loading ? "..." : ((caseStats?.total ?? 0) - (caseStats?.closed ?? 0)).toLocaleString(),
-      trend: "In progress",
+      title: "Failed Reports",
+      value: kpis ? kpis.failed.toLocaleString() : "...",
+      trend: "Requires attention",
       trendUp: false,
       icon: Download,
-      color: "text-orange-500",
-      bg: "bg-orange-50 dark:bg-orange-500/10",
-      border: "border-orange-200 dark:border-orange-900/50",
-      stroke: "#f97316",
-      data: generateSparkline("up"),
+      color: "text-red-500",
+      bg: "bg-red-50 dark:bg-red-500/10",
+      border: "border-red-200 dark:border-red-900/50",
+      stroke: "#ef4444",
+      data: generateSparkline("down"),
     },
     {
-      title: "Resolution Rate",
-      value: loading || !caseStats?.total ? "—" : `${Math.round(((caseStats?.closed ?? 0) / (caseStats?.total ?? 1)) * 100)}%`,
-      trend: "Efficiency metric",
+      title: "Success Rate",
+      value: kpis ? `${Math.round(((kpis.totalReports - kpis.failed) / Math.max(1, kpis.totalReports)) * 100)}%` : "...",
+      trend: "Overall reliability",
       trendUp: true,
-      icon: Clock,
+      icon: CheckCircle2,
       color: "text-cyan-500",
       bg: "bg-cyan-50 dark:bg-cyan-500/10",
       border: "border-cyan-200 dark:border-cyan-900/50",
@@ -94,7 +74,7 @@ export function ReportsKPIs() {
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
-      {kpis.map((kpi, idx) => {
+      {kpiList.map((kpi: any, idx: number) => {
         const Icon = kpi.icon;
         return (
           <div key={idx} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 flex flex-col justify-between shadow-sm">

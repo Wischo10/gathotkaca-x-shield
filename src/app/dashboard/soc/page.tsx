@@ -34,16 +34,16 @@ export default function SocDashboardPage() {
   }, []);
 
   const pieData = alerts ? [
-    { name: "Critical", value: alerts.critical, color: SEVERITY_COLORS.critical },
-    { name: "High", value: alerts.high, color: SEVERITY_COLORS.high },
-    { name: "Medium", value: alerts.medium, color: SEVERITY_COLORS.medium },
-    { name: "Low", value: alerts.low, color: SEVERITY_COLORS.low },
+    { name: "Critical", value: alerts.critical || 0, color: SEVERITY_COLORS.critical },
+    { name: "High", value: alerts.high || 0, color: SEVERITY_COLORS.high },
+    { name: "Medium", value: alerts.medium || 0, color: SEVERITY_COLORS.medium },
+    { name: "Low", value: alerts.low || 0, color: SEVERITY_COLORS.low },
   ].filter(d => d.value > 0) : [];
 
   return (
     <>
       <Topbar title="SOC Dashboard" subtitle="Real-time monitoring, detection, and response overview" onMenuClick={openSidebar} />
-      <main className="flex-1 flex flex-col p-4 sm:p-6 bg-slate-50 dark:bg-slate-950">
+      <main className="flex-1 flex flex-col p-4 sm:p-6 bg-slate-50 dark:bg-slate-950 overflow-y-auto">
         
         <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 mb-4">
            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl flex flex-col gap-1">
@@ -60,7 +60,7 @@ export default function SocDashboardPage() {
            </div>
            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl flex flex-col gap-1">
              <div className="text-xs text-slate-500 font-semibold flex items-center gap-1"><span className="text-purple-500 text-lg">🚨</span> Critical Alerts</div>
-             <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">{alerts ? alerts.critical.toLocaleString() : "..."}</div>
+             <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">{alerts ? (alerts.critical || 0).toLocaleString() : "..."}</div>
            </div>
            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl flex flex-col gap-1">
              <div className="text-xs text-slate-500 font-semibold flex items-center gap-1"><span className="text-green-500 text-lg">⏱️</span> MTTD</div>
@@ -73,8 +73,8 @@ export default function SocDashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-4">
-          <Panel title="Alerts by Severity" className="h-64 flex flex-col justify-between">
-             <div className="flex-1 w-full h-full relative">
+          <Panel title="Alerts by Severity">
+             <div className="w-full h-[220px] relative">
                 {!alerts ? (
                   <div className="absolute inset-0 flex items-center justify-center text-slate-400">Loading...</div>
                 ) : pieData.length === 0 ? (
@@ -94,8 +94,8 @@ export default function SocDashboardPage() {
                 )}
              </div>
           </Panel>
-          <Panel title="Alerts Over Time" className="h-64 flex flex-col justify-between lg:col-span-2">
-             <div className="flex-1 w-full h-full relative">
+          <Panel title="Alerts Over Time" className="lg:col-span-2">
+             <div className="w-full h-[220px] relative">
                 {trend.length === 0 ? (
                   <div className="absolute inset-0 flex items-center justify-center text-slate-400">Loading...</div>
                 ) : (
@@ -117,8 +117,8 @@ export default function SocDashboardPage() {
                 )}
              </div>
           </Panel>
-          <Panel title="Authentication Activity" className="h-64 flex flex-col justify-between">
-             <div className="flex-1 w-full h-full relative">
+          <Panel title="Authentication Activity">
+             <div className="w-full h-[220px] relative">
                 {!authStatus ? (
                   <div className="absolute inset-0 flex items-center justify-center text-slate-400">Loading...</div>
                 ) : authStatus.length === 0 ? (
@@ -141,12 +141,12 @@ export default function SocDashboardPage() {
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-          <Panel title="Incidents List" className="h-64 flex flex-col justify-between">
-             <div className="flex-1 w-full h-full overflow-y-auto pr-2">
+          <Panel title="Incidents List">
+             <div className="w-full h-[220px] overflow-y-auto pr-2 relative">
                 {!incidents ? (
-                  <div className="flex h-full items-center justify-center text-slate-400">Loading...</div>
+                  <div className="absolute inset-0 flex items-center justify-center text-slate-400">Loading...</div>
                 ) : incidents.length === 0 ? (
-                  <div className="flex h-full items-center justify-center text-slate-400">No Data</div>
+                  <div className="absolute inset-0 flex items-center justify-center text-slate-400">No Data</div>
                 ) : (
                   <div className="flex flex-col gap-2 pt-2">
                     {incidents.slice(0, 5).map((inc: any, idx: number) => (
@@ -166,16 +166,16 @@ export default function SocDashboardPage() {
                 )}
              </div>
           </Panel>
-          <Panel title="MITRE ATT&CK Tactic Distribution" className="h-64 flex flex-col justify-between lg:col-span-2">
-             <div className="flex-1 w-full h-full">
+          <Panel title="MITRE ATT&CK Tactic Distribution" className="lg:col-span-2">
+             <div className="w-full h-[220px] relative">
                 {!mitreTactics ? (
-                  <div className="flex h-full items-center justify-center text-slate-400">Loading...</div>
+                  <div className="absolute inset-0 flex items-center justify-center text-slate-400">Loading...</div>
                 ) : mitreTactics.length === 0 ? (
-                  <div className="flex h-full items-center justify-center text-slate-400">No Data</div>
+                  <div className="absolute inset-0 flex items-center justify-center text-slate-400">No Data</div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={mitreTactics} cx="50%" cy="50%" innerRadius={40} outerRadius={80} paddingAngle={2} dataKey="value">
+                      <Pie data={mitreTactics} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={2} dataKey="value">
                         {mitreTactics.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
@@ -187,12 +187,12 @@ export default function SocDashboardPage() {
                 )}
              </div>
           </Panel>
-          <Panel title="Regulatory Compliance" className="h-64 flex flex-col justify-between">
-             <div className="flex-1 w-full h-full p-2">
+          <Panel title="Regulatory Compliance">
+             <div className="w-full h-[220px] relative p-2">
                 {!compliance ? (
-                  <div className="flex h-full items-center justify-center text-slate-400">Loading...</div>
+                  <div className="absolute inset-0 flex items-center justify-center text-slate-400">Loading...</div>
                 ) : compliance.length === 0 ? (
-                  <div className="flex h-full items-center justify-center text-slate-400">No Data</div>
+                  <div className="absolute inset-0 flex items-center justify-center text-slate-400">No Data</div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={compliance} layout="vertical" margin={{ top: 0, right: 10, left: 10, bottom: 0 }}>

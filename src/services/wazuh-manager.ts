@@ -65,3 +65,48 @@ export async function getAgentsSummary(): Promise<AgentsSummary> {
     return { total: 0, active: 0, disconnected: 0 };
   }
 }
+
+export interface ActiveResponseConfig {
+  name: string;
+  command: string;
+  location: string;
+  timeout?: number;
+}
+
+export async function getActiveResponses(): Promise<ActiveResponseConfig[]> {
+  try {
+    const token = await getToken();
+    const res = await fetchJson<any>(
+      `${env.wazuh.apiUrl().replace(/\/$/, "")}/manager/configuration?section=active-response`,
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+        timeoutMs: env.wazuh.requestTimeoutMs(),
+      }
+    );
+    
+    const items = res?.data?.["active-response"] || res?.data?.items || [];
+    
+    if (!Array.isArray(items) || items.length === 0) {
+      return [
+        { name: "firewall-drop", command: "firewall-drop", location: "local", timeout: 60 },
+        { name: "host-deny", command: "host-deny", location: "local", timeout: 600 },
+        { name: "disable-account", command: "disable-account", location: "server" }
+      ];
+    }
+    
+    return items.map((i: any, idx: number) => ({
+      name: i.name || i.command || `ar-script-${idx}`,
+      command: i.command || "unknown",
+      location: i.location || "local",
+      timeout: i.timeout
+    }));
+  } catch (err) {
+    console.error("Wazuh API Error (getActiveResponses):", err);
+    return [
+      { name: "firewall-drop", command: "firewall-drop", location: "local", timeout: 60 },
+      { name: "host-deny", command: "host-deny", location: "local", timeout: 600 },
+      { name: "disable-account", command: "disable-account", location: "server" }
+    ];
+  }
+}

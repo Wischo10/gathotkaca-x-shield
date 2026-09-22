@@ -1,5 +1,6 @@
 "use client";
 import { Topbar } from "@/components/layout/Topbar";
+import Link from "next/link";
 import { useSidebarToggle } from "@/app/dashboard/SidebarContext";
 import { Panel } from "@/components/ui/Panel";
 
@@ -35,13 +36,30 @@ export default function ComplianceDashboardPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <Panel title="Kepatuhan UU PDP per Prinsip" className="h-64 flex flex-col justify-between">
-             <div className="flex-1 flex items-center justify-center text-slate-400">[Table Placeholder]</div>
+             <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-2">
+               <span>[Table Placeholder]</span>
+             </div>
           </Panel>
           <Panel title="Klasifikasi Temuan UU PDP" className="h-64 flex flex-col justify-between">
              <div className="flex-1 flex items-center justify-center text-slate-400">[Donut Chart Placeholder]</div>
           </Panel>
-          <Panel title="Kepatuhan per Regulasi / Framework" className="h-64 flex flex-col justify-between">
-             <div className="flex-1 flex items-center justify-center text-slate-400">[List Placeholder]</div>
+          <Panel title="Recent Control Deficiencies" className="h-64 flex flex-col">
+             <div className="flex-1 overflow-auto">
+               <div className="flex items-center justify-between p-2 hover:bg-slate-50 dark:hover:bg-slate-900 rounded border-b border-slate-100 dark:border-slate-800">
+                 <div>
+                   <div className="text-sm font-semibold">Access Control Failure</div>
+                   <div className="text-xs text-slate-500">Domain: Identity</div>
+                 </div>
+                 <Link href="/dashboard/soc-l2?controlId=identity-01" className="text-xs text-brand-blue hover:underline">View SOC Evidence →</Link>
+               </div>
+               <div className="flex items-center justify-between p-2 hover:bg-slate-50 dark:hover:bg-slate-900 rounded">
+                 <div>
+                   <div className="text-sm font-semibold">Unencrypted Data Transfer</div>
+                   <div className="text-xs text-slate-500">Domain: Network</div>
+                 </div>
+                 <Link href="/dashboard/soc-l2?controlId=network-02" className="text-xs text-brand-blue hover:underline">View SOC Evidence →</Link>
+               </div>
+             </div>
           </Panel>
         </div>
       </main>

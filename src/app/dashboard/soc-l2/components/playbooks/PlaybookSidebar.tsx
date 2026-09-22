@@ -1,22 +1,6 @@
 import { Shield, Bug, Mail, Database, Server } from "lucide-react";
 
-const popularPlaybooks = [
-  { id: 1, name: "Brute Force - Account Lockout", category: "Authentication", icon: Shield, executions: 28, trend: "+25%" },
-  { id: 2, name: "IOC Enrichment & Blocking", category: "Threat Intel", icon: Database, executions: 24, trend: "+41%" },
-  { id: 3, name: "Malware Detected - Endpoint", category: "Malware", icon: Bug, executions: 20, trend: "+18%" },
-  { id: 4, name: "Phishing Email Reported", category: "Phishing", icon: Mail, executions: 18, trend: "+12%" },
-  { id: 5, name: "Data Exfiltration - Investigation", category: "Data Loss", icon: Server, executions: 12, trend: "-5%" },
-];
-
-const recentExecutions = [
-  { id: 1, playbook: "Brute Force - Account Lockout", status: "Success", time: "May 19, 10:22 AM", user: "Fandi Juncrry", duration: "2m 18s" },
-  { id: 2, playbook: "Malware Detected - Endpoint", status: "Success", time: "May 19, 09:58 AM", user: "Rizky Pratama", duration: "4m 32s" },
-  { id: 3, playbook: "Phishing Email Reported", status: "Success", time: "May 19, 09:41 AM", user: "Siti Aisyah", duration: "1m 45s" },
-  { id: 4, playbook: "IOC Enrichment & Blocking", status: "Failed", time: "May 19, 09:30 AM", user: "Andi Wijaya", duration: "3m 12s" },
-  { id: 5, playbook: "Data Exfiltration - Investigation", status: "Success", time: "May 19, 09:15 AM", user: "Dewi Lestari", duration: "6m 05s" },
-];
-
-export function PlaybookSidebar() {
+export function PlaybookSidebar({ popular = [], recent = [] }: { popular?: any[], recent?: any[] }) {
   return (
     <div className="flex flex-col gap-4 col-span-1 h-full">
       {/* Popular Playbooks */}
@@ -26,9 +10,10 @@ export function PlaybookSidebar() {
           <button className="text-xs text-brand-blue font-medium hover:underline">View All</button>
         </div>
         <div className="flex flex-col gap-3">
-          {popularPlaybooks.map((pb, idx) => {
-            const Icon = pb.icon;
-            const isTrendUp = pb.trend.startsWith('+');
+          {popular.length === 0 && <p className="text-xs text-slate-500 py-2">No active responses found.</p>}
+          {popular.map((pb, idx) => {
+            const Icon = Shield;
+            const isTrendUp = pb.trend?.startsWith('+');
             return (
               <div key={pb.id} className="flex items-center justify-between group">
                 <div className="flex items-center gap-3">
@@ -74,7 +59,12 @@ export function PlaybookSidebar() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {recentExecutions.map((exec) => (
+              {recent.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-4 text-center text-xs text-slate-500">No recent executions.</td>
+                </tr>
+              )}
+              {recent.map((exec) => (
                 <tr key={exec.id}>
                   <td className="py-2 pr-2 text-slate-900 dark:text-slate-200 font-medium truncate max-w-[100px]" title={exec.playbook}>
                     {exec.playbook}

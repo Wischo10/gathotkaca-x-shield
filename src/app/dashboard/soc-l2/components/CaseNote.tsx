@@ -8,7 +8,8 @@ export interface Note {
   id: string;
   author: string;
   content: string;
-  time: string;
+  time?: string;
+  created_at?: string;
   role?: string;
   isLatest?: boolean;
 }
@@ -92,7 +93,9 @@ export function CaseNote({ investigationCase, user, savedNotes, onAddNote }: Cas
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-500 whitespace-nowrap">{n.time}</span>
+                    <span className="text-xs text-slate-500 whitespace-nowrap">
+                      {n.time ? n.time : (n.created_at ? new Date(n.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) : '')}
+                    </span>
                     <button className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
                       <MoreVertical className="w-4 h-4" />
                     </button>

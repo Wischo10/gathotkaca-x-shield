@@ -104,6 +104,7 @@ export interface L2Alert {
   asset: string;
   status: "New" | "In Progress" | "Closed" | "On Hold";
   assignee?: string;
+  controlId?: string;
   firstSeen: string;
   lastSeen: string;
   totalEvents: number;

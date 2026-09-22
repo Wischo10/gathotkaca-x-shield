@@ -1,28 +1,26 @@
 import { NextResponse } from "next/server";
 import { generateExecutiveSummary } from "@/services/ollama-service";
-import { getAlertsBySeverity, getTopVictims, getAttackMethods } from "@/services/wazuh-indexer";
-import { getRecentIncidents } from "@/services/bitdefender-service";
+import { getAggregatedKPIs } from "@/services/kpi-service";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const [alerts, victims, methods, incidents] = await Promise.all([
-      getAlertsBySeverity("7d"),
-      getTopVictims(1),
-      getAttackMethods(1),
-      getRecentIncidents(10)
-    ]);
+    const kpis = await getAggregatedKPIs("daily");
 
     const stats = {
-      totalAlerts: alerts.total,
-      criticalAlerts: alerts.critical,
-      topVictim: victims.length > 0 ? victims[0].name : "Unknown",
-      topAttackMethod: methods.length > 0 ? methods[0].name : "Unknown",
-      criticalIncidents: incidents.length
+      totalAlerts: kpis.soc.totalAlerts,
+      criticalAlerts: kpis.ciso.significantIncidents, // Mapped for context
+      topVictim: "Unknown (Data from unified taxonomy pending)", 
+      topAttackMethod: "Unknown",
+      criticalIncidents: kpis.ciso.significantIncidents,
+      // Injecting new unified stats
+      overallCompliance: kpis.executive.overallComplianceScore,
+      riskExposure: kpis.executive.riskExposureUsd,
+      topRisks: kpis.executive.topRisks.join(", ")
     };
 
-    const data = await generateExecutiveSummary(stats);
+    const data = await generateExecutiveSummary(stats as any);
     return NextResponse.json({ status: "ok", data });
   } catch (error: any) {
     console.error("AI Executive Summary API error:", error);

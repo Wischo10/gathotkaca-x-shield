@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
       const batch = sourceIPs.slice(i, i + BATCH_SIZE);
 
       const settled = await Promise.allSettled(
-        batch.map(async ({ ip, count }) => {
+        batch.map(async ({ ip, count }: { ip: string; count: number }) => {
           const geoRes = await fetch(`https://ipwho.is/${ip}`, {
             headers: { "Accept": "application/json" },
             next: { revalidate: 3600 }, // Cache GeoIP for 1 hour

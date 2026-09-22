@@ -9,7 +9,7 @@ export async function GET(request: Request) {
     const severitiesParam = searchParams.get('severities');
     const severities = severitiesParam ? severitiesParam.split(',') : [];
 
-    const events = await getLiveEvents(50, severities);
+    const events = await getLiveEvents(500, severities);
     
     // Map LiveEvents to L2Alerts
     const alerts = events.map(e => ({

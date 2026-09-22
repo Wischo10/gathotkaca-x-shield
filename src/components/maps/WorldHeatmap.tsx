@@ -138,7 +138,11 @@ export default function WorldHeatmap({ data, onCountryClick }: WorldHeatmapProps
               key={d.countryCode}
               coordinates={[d.longitude, d.latitude]}
               onClick={() => onCountryClick && onCountryClick(d)}
-              style={{ cursor: "pointer" }}
+              style={{
+                default: { cursor: "pointer" },
+                hover: { cursor: "pointer" },
+                pressed: { cursor: "pointer" }
+              }}
             >
               <circle r={4} fill="#ef4444" fillOpacity={0.8} stroke="#fff" strokeWidth={1} />
               <circle r={7} fill="none" stroke="#ef4444" strokeWidth={1} strokeOpacity={0.5} />

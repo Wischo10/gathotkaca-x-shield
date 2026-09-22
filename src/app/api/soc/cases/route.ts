@@ -20,7 +20,6 @@ export async function POST(req: NextRequest) {
           alert_id,
           title,
           status: "in_progress",
-          resolution_type: "manual", // Default to manual when escalated by an analyst
           severity: severity || "medium",
           assigned_to: assigned_to || "unassigned",
         }

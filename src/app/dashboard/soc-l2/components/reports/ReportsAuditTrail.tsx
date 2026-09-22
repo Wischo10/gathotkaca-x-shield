@@ -1,12 +1,6 @@
 import { ArrowRight } from "lucide-react";
 
-const audits = [
-  { id: 1, time: "May 19, 2025 09:15 AM", activity: "Report Generated", name: "Weekly Security Operations Summary", user: "Fandi Juncrry", details: "Scheduled report generated successfully" },
-  { id: 2, time: "May 19, 2025 08:45 AM", activity: "Report Exported", name: "Top Threats & Indicators Report", user: "Rizky Pratama", details: "Exported to PDF" },
-  { id: 3, time: "May 19, 2025 08:30 AM", activity: "Report Shared", name: "Incident Summary Report", user: "Andi Wijaya", details: "Shared via email to 8 recipients" },
-  { id: 4, time: "May 19, 2025 07:40 AM", activity: "Report Viewed", name: "Compliance Posture Report (UU PDP)", user: "Siti Aisyah", details: "Viewed in dashboard" },
-  { id: 5, time: "May 18, 2025 06:15 PM", activity: "Report Generated", name: "Case Management Overview", user: "Fandi Juncrry", details: "Scheduled report generated successfully" },
-];
+const audits: any[] = [];
 
 export function ReportsAuditTrail() {
   return (
@@ -25,6 +19,11 @@ export function ReportsAuditTrail() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            {audits.length === 0 && (
+              <tr>
+                <td colSpan={5} className="py-8 text-center text-xs text-slate-500">No audit trail available</td>
+              </tr>
+            )}
             {audits.map((audit) => (
               <tr key={audit.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                 <td className="py-2.5 pr-2 text-slate-500 dark:text-slate-400 whitespace-nowrap">{audit.time}</td>

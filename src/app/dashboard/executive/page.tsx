@@ -20,6 +20,7 @@ import {
 } from "recharts";
 import { Modal } from "@/components/ui/Modal";
 import { RefreshCw, Download, AlertTriangle as AlertTriangleIcon, X } from "lucide-react";
+import Link from "next/link";
 
 // Dynamic import — react-simple-maps uses SVG/browser APIs, must be client-only
 const WorldHeatmap = dynamic(() => import("@/components/maps/WorldHeatmap"), {
@@ -575,7 +576,7 @@ export default function ExecutiveDashboardPage() {
                     Network: "🌐", Endpoint: "💻", Identity: "🔑", Application: "⚙️", Compliance: "📋"
                   };
                   return (
-                    <div key={risk.domain} className="flex flex-col gap-1">
+                    <Link href={`/dashboard/ciso?riskDomain=${encodeURIComponent(risk.domain)}`} key={risk.domain} className="flex flex-col gap-1 hover:bg-slate-50 dark:hover:bg-slate-800 p-2 rounded-lg transition-colors cursor-pointer -mx-2">
                       <div className="flex items-center justify-between text-[11px]">
                         <span className="font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1">
                           <span>{domainIcons[risk.domain] ?? "🔒"}</span>
@@ -593,12 +594,12 @@ export default function ExecutiveDashboardPage() {
                           style={{ width: `${risk.score}%` }}
                         />
                       </div>
-                    </div>
+                    </Link>
                   );
                 })
               )}
             </div>
-            <div onClick={() => setSelectedFeature("Top Risks by Domain")} className="mt-2 text-right text-xs text-brand-blue hover:underline cursor-pointer">View risk register →</div>
+            <Link href="/dashboard/ciso" className="mt-2 text-right text-xs text-brand-blue hover:underline cursor-pointer block">View risk register →</Link>
           </Panel>
         </div>
 
@@ -1241,7 +1242,7 @@ export default function ExecutiveDashboardPage() {
               const c = levelColors[risk.level] ?? levelColors.low;
               const domainIcons: Record<string, string> = { Network: "🌐", Endpoint: "💻", Identity: "🔑", Application: "⚙️", Compliance: "📋" };
               return (
-                <div key={risk.domain} className="rounded-xl border border-slate-100 dark:border-slate-800 p-4">
+                <Link href={`/dashboard/ciso?riskDomain=${encodeURIComponent(risk.domain)}`} key={risk.domain} className="rounded-xl border border-slate-100 dark:border-slate-800 p-4 hover:border-blue-500 hover:shadow-sm transition-all cursor-pointer block">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <span className="text-xl">{domainIcons[risk.domain] ?? "🔒"}</span>
@@ -1260,7 +1261,7 @@ export default function ExecutiveDashboardPage() {
                     <span>🔴 Critical: <strong className="text-red-600">{risk.criticalCount.toLocaleString()}</strong></span>
                     <span>🟠 High: <strong className="text-orange-500">{risk.highCount.toLocaleString()}</strong></span>
                   </div>
-                </div>
+                </Link>
               );
             })}
           </div>

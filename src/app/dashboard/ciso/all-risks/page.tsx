@@ -386,13 +386,13 @@ export default function AllRisksDetailPage() {
           </div>
 
           {/* Pagination Controls */}
-          <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-100 pt-3 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
-            <div>
+          <div className="mt-4 flex flex-wrap items-center justify-center sm:justify-between gap-3 border-t border-slate-100 pt-3 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 shrink-0">
+            <div className="whitespace-nowrap text-center">
               Showing page <span className="font-bold text-slate-900 dark:text-white">{currentPage}</span> of{" "}
               <span className="font-bold text-slate-900 dark:text-white">{totalPages}</span> ({filteredAndSortedRisks.length} total filtered items)
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-1 min-w-0">
               <button
                 onClick={() => handlePageChange(currentPage - 1)}
                 disabled={currentPage === 1}

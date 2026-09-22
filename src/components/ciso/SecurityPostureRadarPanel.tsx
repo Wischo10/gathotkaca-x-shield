@@ -52,11 +52,12 @@ export function SecurityPostureRadarPanel() {
             <span>Score / Trend</span>
           </div>
           {CISO_MOCK_POSTURE_DOMAINS.map((item) => (
-            <div
+            <Link
+              href={`/dashboard/compliance?controlDomain=${encodeURIComponent(item.domain)}`}
               key={item.domain}
-              className="flex items-center justify-between py-1 text-slate-700 dark:text-slate-300"
+              className="flex items-center justify-between py-1 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded px-1 -mx-1 transition-colors cursor-pointer"
             >
-              <span className="font-medium">{item.domain}</span>
+              <span className="font-medium hover:underline">{item.domain}</span>
               <div className="flex items-center gap-1.5">
                 <span className="font-semibold text-slate-900 dark:text-white">
                   {item.score}
@@ -69,7 +70,7 @@ export function SecurityPostureRadarPanel() {
                   {item.isUp ? "↑" : "↓"} {item.trend}
                 </span>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       </div>

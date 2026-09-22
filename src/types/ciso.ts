@@ -6,6 +6,16 @@ export type IncidentLifecycleEventType =
   | "contained"
   | "closed";
 
+export interface RiskCategory {
+  id: string;
+  name: string;
+  description: string | null;
+  riskScore: number;
+  businessImpactId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface IncidentLifecycleEvent {
   id: string;
   incidentId: string;
