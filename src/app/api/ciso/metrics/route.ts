@@ -1,13 +1,15 @@
 import "server-only";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getCisoMetrics } from "@/services/ciso-service";
+import { getSessionFromRequest } from "@/lib/get-session";
 import { toErrorResult } from "@/lib/api-result";
 import type { ApiResult } from "@/types/soc";
 import type { CisoMetricsData } from "@/types/ciso";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(): Promise<NextResponse<ApiResult<CisoMetricsData>>> {
+export async function GET(request: NextRequest) {
+  if (!await getSessionFromRequest(request)) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   try {
     const data = await getCisoMetrics();
     const body: ApiResult<CisoMetricsData> = {

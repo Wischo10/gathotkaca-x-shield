@@ -29,14 +29,19 @@ export interface TotalRiskSummary {
   eligibleCount: number;
 }
 
-type RecognizedTreatmentStatus = "Planned" | "In Progress" | "Completed";
+export type RecognizedTreatmentStatus = "Planned" | "In Progress" | "Completed";
 
-function normalizeTreatmentStatus(value: string | null): RecognizedTreatmentStatus | null {
+export function normalizeTreatmentStatus(value: string | null): RecognizedTreatmentStatus | null {
   const normalized = value?.trim().toLowerCase();
   if (normalized === "planned") return "Planned";
   if (normalized === "in progress") return "In Progress";
   if (normalized === "completed") return "Completed";
   return null;
+}
+
+/** A risk is scorable only when it is assessed and has a recognized residual-risk category. */
+export function isScorableRiskAssessment(risk: RiskRecord): boolean {
+  return risk.assessmentStatus === "assessed" && normalizeRiskCategory(risk.residualRisk) !== null;
 }
 
 export interface TreatmentProgressSummary {
@@ -66,7 +71,7 @@ export function summarizeTreatmentProgress(risks: RiskRecord[]): TreatmentProgre
 
 /** Project-defined portfolio summary; values are ordinal, never percentages. */
 export function summarizeTotalRisk(risks: RiskRecord[]): TotalRiskSummary | null {
-  const values = risks.filter(risk => risk.assessmentStatus === "assessed")
+  const values = risks.filter(isScorableRiskAssessment)
     .map(risk => ordinal(risk.residualRisk)).filter(value => value > 0);
   if (values.length === 0) return null;
   const portfolioMean = Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2));
@@ -85,7 +90,7 @@ function validDateValue(value: string | null): number | null {
 /** Project-defined ordering for completed manual business-risk assessments only. */
 export function rankTopRisks(risks: RiskRecord[]): RiskRecord[] {
   return risks
-    .filter(risk => risk.assessmentStatus === "assessed" && normalizeRiskCategory(risk.residualRisk) !== null)
+    .filter(isScorableRiskAssessment)
     .sort((left, right) => {
       const residual = ordinal(right.residualRisk) - ordinal(left.residualRisk);
       if (residual) return residual;

@@ -238,79 +238,34 @@ export async function getBitdefenderActiveIncidents(): Promise<MetricCardValue> 
   }
 }
 
-/**
- * 2. Critical Vulnerabilities from OpenSearch (wazuh-states-vulnerabilities-*)
- * Definition is always unique critical CVEs; findings remain supporting metadata.
- */
-async function getCriticalVulnerabilities(totalRegisteredAssets?: number): Promise<MetricCardValue & { affectedAssetsCount?: number; totalFindingsCount?: number }> {
-  try {
-    const vulnIndex = env.wazuhIndexer.vulnerabilityIndex();
-    const query = {
-      size: 0,
-      track_total_hits: true,
-      query: {
-        term: {
-          "vulnerability.severity": "Critical",
-        },
-      },
-      aggs: {
-        unique_cves: {
-          cardinality: {
-            field: "vulnerability.id",
-          },
-        },
-        affected_assets: {
-          cardinality: {
-            field: "agent.id",
-          },
-        },
-      },
-    };
-
-    const res = await fetchOpenSearch<{
-      timed_out?: boolean;
-      _shards?: { failed: number };
-      hits: { total: { value: number } };
-      aggregations?: {
-        unique_cves?: { value: number };
-        affected_assets?: { value: number };
-      };
-    }>(`${env.wazuhIndexer.url().replace(/\/$/, "")}/${vulnIndex}/_search`, query, 15000);
-
-    if (res.timed_out) throw new Error("OpenSearch query timed out");
-    if (res._shards?.failed !== 0) throw new Error("OpenSearch partial shard results");
-    const uniqueCves = res.aggregations?.unique_cves?.value;
-    if (typeof uniqueCves !== "number" || !Number.isInteger(uniqueCves) || uniqueCves < 0) {
-      throw new Error("Invalid unique-CVE aggregation");
-    }
-    const totalFindings = res.hits?.total?.value;
-    // Preserve the existing technical exposure binding; missing values stay unavailable.
-    const exposureCount = res.aggregations?.affected_assets?.value;
-    const affectedAssets = !res.timed_out && res._shards?.failed === 0
-      && typeof exposureCount === "number" && Number.isInteger(exposureCount) && exposureCount >= 0
-      ? exposureCount : undefined;
-    const fetchedAt = new Date().toISOString();
-    return {
-      value: uniqueCves,
-      trend30d: null,
-      trendAvailable: false,
-      source: `OpenSearch: ${uniqueCves} unique critical CVEs (${vulnIndex})`,
-      availability: { status: "available", checkedAt: fetchedAt, fetchedAt, cached: false },
-      affectedAssetsCount: affectedAssets,
-      totalFindingsCount: totalFindings,
-      details: {
-        current: uniqueCves,
-        previous30d: null,
-        explanation: "Unique critical vulnerability.id cardinality from current vulnerability state; no historical snapshots. Raw findings never substitute for CVEs.",
-        criticalAffectedAssets: affectedAssets,
-        totalAssets: totalRegisteredAssets,
-        criticalFindings: totalFindings,
-        uniqueCriticalCVEs: uniqueCves,
-      },
-    };
-  } catch (err) {
-    return unavailableCount("OpenSearch Vulnerabilities", err);
+/** Build the headline from the same exact, truncation-checked population as the age panel. */
+function getCriticalVulnerabilities(
+  population: VulnerabilitySlaOverview,
+  totalRegisteredAssets?: number
+): MetricCardValue & { affectedAssetsCount?: number; totalFindingsCount?: number } {
+  if (!population.available || population.totalCritical === null
+    || population.criticalFindings === null || population.affectedAgents === null) {
+    return unavailableCount("OpenSearch Vulnerabilities", new Error("Exact current critical-CVE population unavailable"));
   }
+  const fetchedAt = population.asOf;
+  return {
+    value: population.totalCritical,
+    trend30d: null,
+    trendAvailable: false,
+    source: population.source,
+    availability: { status: "available", checkedAt: fetchedAt, fetchedAt, cached: false },
+    affectedAssetsCount: population.affectedAgents,
+    totalFindingsCount: population.criticalFindings,
+    details: {
+      current: population.totalCritical,
+      previous30d: null,
+      explanation: "Exact, truncation-checked unique vulnerability.id population from current Critical Wazuh vulnerability state. Historical trend is unavailable because earlier snapshots used an approximate method.",
+      criticalAffectedAssets: population.affectedAgents,
+      totalAssets: totalRegisteredAssets,
+      criticalFindings: population.criticalFindings,
+      uniqueCriticalCVEs: population.totalCritical,
+    },
+  };
 }
 
 /**
@@ -341,33 +296,16 @@ async function getOverallComplianceScore(): Promise<MetricCardValue> {
     const avgScore = Math.round(sumScore / assessedFrameworks.length);
 
     // Collect valid trend30d values
-    const validTrends = assessedFrameworks
-      .map((f) => f.trend30d)
-      .filter((t): t is number => typeof t === "number" && t !== null);
-
-    const trend30d = validTrends.length > 0
-      ? Math.round(validTrends.reduce((a, b) => a + b, 0) / validTrends.length)
-      : null;
-
-    // Collect previous scores if available
-    const prevScores = assessedFrameworks
-      .map((f) => f.previousScore)
-      .filter((p): p is number => typeof p === "number" && p !== null);
-
-    const previous30d = prevScores.length > 0
-      ? Math.round(prevScores.reduce((a, b) => a + b, 0) / prevScores.length)
-      : null;
-
     return {
       value: avgScore,
-      trend30d,
-      trendAvailable: trend30d !== null,
+      trend30d: null,
+      trendAvailable: false,
       unit: "%",
       source: `Formal Compliance Assessments (${assessedFrameworks.map((f) => f.name).join(", ")})`,
       details: {
         current: avgScore,
-        previous30d: trend30d !== null ? previous30d : null,
-        explanation: "Average of completed formal framework assessment scores only; incomplete assessments and observation-only telemetry are excluded.",
+        previous30d: null,
+        explanation: "Equal-weight average of completed formal framework scores only. Control scores use Passed / (Passed + Partial + Failed); incomplete assessments and observation-only telemetry are excluded.",
       },
     };
   } catch (err) {
@@ -541,6 +479,7 @@ async function getVulnerabilitySlaOverview(): Promise<VulnerabilitySlaOverview> 
   const asOf = Date.now();
   const unavailable: VulnerabilitySlaOverview = {
     available: false, dataAvailable: false, total: null, totalCritical: null,
+    criticalFindings: null, affectedAgents: null,
     overdue: null, overduePct: null, dueSoon: null, dueSoonPct: null,
     compliant: null, compliantPct: null, unclassified: null, unclassifiedPct: null,
     inProgress: null, inProgressPct: null, scope: "Critical",
@@ -557,7 +496,8 @@ async function getVulnerabilitySlaOverview(): Promise<VulnerabilitySlaOverview> 
     const vulnIndex = env.wazuhIndexer.vulnerabilityIndex();
     const query = {
       size: 0,
-      // Same critical population as the summary card; no historical alert index.
+      track_total_hits: true,
+      // Single shared current population for the headline and age panel.
       query: { term: { "vulnerability.severity": "Critical" } },
       aggs: {
         cves: {
@@ -568,6 +508,10 @@ async function getVulnerabilitySlaOverview(): Promise<VulnerabilitySlaOverview> 
             missing_detection: { missing: { field: "vulnerability.detected_at" } },
             future_detection: { filter: { range: { "vulnerability.detected_at": { gt: asOf } } } },
           },
+        },
+        affected_agents: {
+          // Supporting affected-agent count is also exact or the result fails closed.
+          terms: { field: "agent.id", size: 10000, shard_size: 10000 },
         },
       },
     };
@@ -580,22 +524,31 @@ async function getVulnerabilitySlaOverview(): Promise<VulnerabilitySlaOverview> 
     const res = await fetchOpenSearch<{
       timed_out: boolean;
       _shards: { total: number; failed: number };
-      aggregations?: { cves?: {
-        sum_other_doc_count: number; doc_count_error_upper_bound: number; buckets: CveBucket[];
-      } };
+      hits?: { total?: { value?: number; relation?: string } };
+      aggregations?: {
+        cves?: { sum_other_doc_count: number; doc_count_error_upper_bound: number; buckets: CveBucket[] };
+        affected_agents?: { sum_other_doc_count: number; doc_count_error_upper_bound: number; buckets: Array<{ key: string; doc_count: number }> };
+      };
     }>(`${env.wazuhIndexer.url().replace(/\/$/, "")}/${vulnIndex}/_search`, query, 20000);
     const cves = res.aggregations?.cves;
+    const affectedAgents = res.aggregations?.affected_agents;
+    const criticalFindings = res.hits?.total?.value;
     if (res.timed_out !== false || !res._shards || res._shards.total <= 0 || res._shards.failed !== 0
       || !cves || !Array.isArray(cves.buckets)
-      || cves.sum_other_doc_count !== 0 || cves.doc_count_error_upper_bound !== 0) {
-      throw new Error("Incomplete or truncated SLA aggregation");
+      || cves.sum_other_doc_count !== 0 || cves.doc_count_error_upper_bound !== 0
+      || !affectedAgents || !Array.isArray(affectedAgents.buckets)
+      || affectedAgents.sum_other_doc_count !== 0 || affectedAgents.doc_count_error_upper_bound !== 0
+      || res.hits?.total?.relation !== "eq" || !Number.isInteger(criticalFindings) || criticalFindings! < 0) {
+      throw new Error("Incomplete or truncated critical vulnerability population");
     }
     const counts = { overdue: 0, dueSoon: 0, compliant: 0, unclassified: 0 };
     const seen = new Set<string>();
     const dayMs = 24 * 60 * 60 * 1000;
     for (const cve of cves.buckets) {
-      if (typeof cve.key !== "string" || !cve.key || seen.has(cve.key)
-        || !Number.isInteger(cve.doc_count) || cve.doc_count <= 0
+      // Terms omits missing identifiers; discard an empty key if an upstream
+      // mapping nevertheless permits one. Never count it as a CVE.
+      if (typeof cve.key !== "string" || !cve.key.trim()) continue;
+      if (seen.has(cve.key) || !Number.isInteger(cve.doc_count) || cve.doc_count <= 0
         || !cve.oldest_detection || !("value" in cve.oldest_detection)
         || !Number.isInteger(cve.missing_detection?.doc_count) || cve.missing_detection.doc_count < 0
         || !Number.isInteger(cve.future_detection?.doc_count) || cve.future_detection.doc_count < 0) {
@@ -611,6 +564,14 @@ async function getVulnerabilitySlaOverview(): Promise<VulnerabilitySlaOverview> 
       else counts.compliant++;
     }
     const total = seen.size;
+    const agentIds = new Set<string>();
+    for (const agent of affectedAgents.buckets) {
+      if (typeof agent.key !== "string" || !agent.key.trim()) continue;
+      if (agentIds.has(agent.key) || !Number.isInteger(agent.doc_count) || agent.doc_count <= 0) {
+        throw new Error("Missing or invalid affected-agent aggregation");
+      }
+      agentIds.add(agent.key);
+    }
     if (Object.values(counts).reduce((sum, count) => sum + count, 0) !== total) {
       throw new Error("SLA counts do not partition the CVE population");
     }
@@ -635,6 +596,7 @@ async function getVulnerabilitySlaOverview(): Promise<VulnerabilitySlaOverview> 
     return {
       ...unavailable,
       available: true, dataAvailable: true, total, totalCritical: total, ...counts,
+      criticalFindings: criticalFindings!, affectedAgents: agentIds.size,
       overduePct: percentages.overdue, dueSoonPct: percentages.dueSoon,
       compliantPct: percentages.compliant, unclassifiedPct: percentages.unclassified,
       inProgress,
@@ -713,15 +675,15 @@ export async function getCisoMetrics(): Promise<CisoMetricsData> {
   const agentsSummary = await getAgentsSummary();
   const totalAgents = agentsSummary?.total;
 
-  const [activeIncidents, criticalVulnerabilities, complianceScore, vulnerabilitySla, nistPosture, riskResult] = await Promise.all([
+  const [activeIncidents, complianceScore, vulnerabilitySla, nistPosture, riskResult] = await Promise.all([
     getBitdefenderActiveIncidents(),
-    getCriticalVulnerabilities(totalAgents),
     getOverallComplianceScore(),
     getVulnerabilitySlaOverview(),
     getNistPostureAssessment(),
     listRisks().then(risks => ({ status: "available" as const, risks }))
       .catch(error => ({ status: "unavailable" as const, error })),
   ]);
+  const criticalVulnerabilities = getCriticalVulnerabilities(vulnerabilitySla, totalAgents);
 
   // Use exactly the Active Incidents result from this metrics request. The KPI
   // service must not independently infer a count from process cache.
@@ -817,8 +779,6 @@ export async function getCisoMetrics(): Promise<CisoMetricsData> {
       observedAt: securityPostureScore.value === null ? null : observedNow },
     { key: "total_risk_score", metric: totalRiskScore, observedAt: genuineObservedAt(totalRiskScore, observedNow) },
     { key: "active_incidents", metric: activeIncidents, observedAt: genuineObservedAt(activeIncidents, observedNow) },
-    { key: "critical_vulnerabilities", metric: criticalVulnerabilities, observedAt: genuineObservedAt(criticalVulnerabilities, observedNow) },
-    { key: "compliance_score", metric: complianceScore, observedAt: genuineObservedAt(complianceScore, observedNow) },
     { key: "risk_treatment_progress", metric: riskTreatmentProgress, observedAt: genuineObservedAt(riskTreatmentProgress, observedNow) },
   ];
   const eligibleSnapshots: SnapshotMetric[] = snapshotCandidates.flatMap(({ key, metric, observedAt }) =>

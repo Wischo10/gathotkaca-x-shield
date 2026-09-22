@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { Panel, PanelEmpty, PanelError, PanelLoading } from "@/components/ui/Panel";
+import { SourceFreshness } from "@/components/ui/SourceFreshness";
 import { useApiResult } from "@/hooks/useApiResult";
 import type { ThreatIntelligenceOverviewData } from "@/types/threat-intel";
 
@@ -13,9 +15,9 @@ export function ThreatIntelPanel() {
     <Panel
       title="Threat Intelligence Overview"
       action={
-        <span className="inline-flex items-center rounded bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700" title={state.phase === "ready" && state.data.observedAt ? `Collected ${new Date(state.data.observedAt).toLocaleString()}` : undefined}>
+        <span className="inline-flex items-center rounded bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700" title={state.phase === "ready" && state.data.observedAt ? `Retrieved ${new Date(state.data.observedAt).toLocaleString()}` : undefined}>
           {state.phase === "ready" && state.data.observedAt
-            ? `${state.data.availability === "cached" ? "Cached" : "Observed"} ${new Date(state.data.observedAt).toLocaleString()} · 7d`
+            ? `${state.data.availability === "cached" ? "Cached result retrieved" : "Retrieved"} ${new Date(state.data.observedAt).toLocaleString()} · 7d`
             : "Last 7 Days"}
         </span>
       }
@@ -33,7 +35,9 @@ export function ThreatIntelPanel() {
 
       {/* FOOTER: Provider Health Status & Navigation */}
       <div className="mt-2.5 flex flex-wrap items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-2 text-[10px]">
-        <div className="flex items-center gap-2.5 text-slate-400">
+        <div className="flex flex-col gap-1 text-slate-400">
+          <SourceFreshness source="ThreatFox (primary 7-day IOC feed)" timestamp={state.phase === "ready" ? state.data.observedAt : null} timestampLabel={state.phase === "ready" && state.data.availability === "cached" ? "Retrieved (cached result)" : "Retrieved"}/>
+          <div className="flex items-center gap-2.5">
           <span className="flex items-center gap-1">
             <span
               className={`h-1.5 w-1.5 rounded-full ${
@@ -42,7 +46,7 @@ export function ThreatIntelPanel() {
                   : "bg-amber-500"
               }`}
             />
-            <span title={state.phase === "ready" ? state.data.providers.threatFox.detail : undefined}>ThreatFox</span>
+            <span title={state.phase === "ready" ? state.data.providers.threatFox.detail : undefined}>ThreatFox · primary</span>
           </span>
           <span className="flex items-center gap-1">
             <span
@@ -52,7 +56,7 @@ export function ThreatIntelPanel() {
                   : "bg-amber-500"
               }`}
             />
-            <span title={state.phase === "ready" ? state.data.providers.abuseIpDb.detail : undefined}>AbuseIPDB</span>
+            <span title={state.phase === "ready" ? state.data.providers.abuseIpDb.detail : undefined}>AbuseIPDB · enrichment</span>
           </span>
           <span className="flex items-center gap-1">
             <span
@@ -62,10 +66,11 @@ export function ThreatIntelPanel() {
                   : "bg-amber-500"
               }`}
             />
-            <span title={state.phase === "ready" ? state.data.providers.virusTotal.detail : undefined}>VirusTotal</span>
+            <span title={state.phase === "ready" ? state.data.providers.virusTotal.detail : undefined}>VirusTotal · enrichment</span>
           </span>
+          </div>
         </div>
-        <a href="/dashboard/ciso/threat-intelligence" className="font-medium text-brand-blue hover:underline">View threats →</a>
+        <Link href="/dashboard/ciso/threat-intelligence" className="font-medium text-brand-blue hover:underline">View threats →</Link>
       </div>
     </Panel>
   );
@@ -104,7 +109,7 @@ function ThreatIntelContent({ data }: { data: ThreatIntelligenceOverviewData }) 
                   {kpis.totalIocsTrendPct >= 0 ? "↑" : "↓"} {Math.abs(kpis.totalIocsTrendPct)}%
                 </span>
               ) : (
-                <span className="text-[9px] text-slate-400">—</span>
+                <span className="text-[9px] text-slate-400">N/A</span>
               )}
             </div>
           </div>
@@ -145,7 +150,7 @@ function ThreatIntelContent({ data }: { data: ThreatIntelligenceOverviewData }) 
                   {kpis.c2TrendPct >= 0 ? "↑" : "↓"} {Math.abs(kpis.c2TrendPct)}%
                 </span>
               ) : (
-                <span className="text-[9px] text-slate-400">—</span>
+                <span className="text-[9px] text-slate-400">N/A</span>
               )}
             </div>
           </div>
@@ -228,26 +233,13 @@ function ThreatIntelContent({ data }: { data: ThreatIntelligenceOverviewData }) 
           <span>IOC Type Distribution</span>
           <span>{kpis.totalIocs.toLocaleString()} Total</span>
         </div>
-        <div className="grid grid-cols-3 gap-1.5 text-[10px]">
-          <div className="flex flex-col rounded bg-white dark:bg-slate-900/60 p-1.5 border border-slate-100 dark:border-slate-800">
-            <span className="text-slate-400 text-[9px]">Domains & URLs</span>
-            <span className="font-bold text-slate-700 dark:text-slate-200">
-              {kpis.maliciousDomainsCount.toLocaleString()}
-            </span>
-          </div>
-          <div className="flex flex-col rounded bg-white dark:bg-slate-900/60 p-1.5 border border-slate-100 dark:border-slate-800">
-            <span className="text-slate-400 text-[9px]">Malicious IPs</span>
-            <span className="font-bold text-slate-700 dark:text-slate-200">
-              {kpis.maliciousIpsCount.toLocaleString()}
-            </span>
-          </div>
-          <div className="flex flex-col rounded bg-white dark:bg-slate-900/60 p-1.5 border border-slate-100 dark:border-slate-800">
-            <span className="text-slate-400 text-[9px]">File Hashes</span>
-            <span className="font-bold text-slate-700 dark:text-slate-200">
-              {kpis.maliciousHashesCount.toLocaleString()}
-            </span>
-          </div>
+        <div className="grid grid-cols-4 gap-1.5 text-[10px]">
+          {iocTypeDistribution.map(item => <div key={item.name} className="flex flex-col rounded bg-white dark:bg-slate-900/60 p-1.5 border border-slate-100 dark:border-slate-800">
+            <span className="text-slate-400 text-[9px]">{item.name}</span>
+            <span className="font-bold text-slate-700 dark:text-slate-200">{item.count.toLocaleString()}</span>
+          </div>)}
         </div>
+        <p className="mt-1.5 text-[9px] text-slate-400">Trends compare the latest 3.5 days with the preceding 3.5 days; relative change is N/A when the preceding count is zero.</p>
       </div>
     </div>
   );

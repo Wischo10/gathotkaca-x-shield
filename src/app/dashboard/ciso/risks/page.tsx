@@ -5,10 +5,14 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Topbar } from "@/components/layout/Topbar";
 import { Panel, PanelEmpty } from "@/components/ui/Panel";
 import { useSidebarToggle } from "@/context/sidebar-context";
+import { isScorableRiskAssessment, normalizeRiskCategory } from "@/lib/risk-ranking";
 import type { RiskRecord } from "@/types/risk";
 import type { RiskEvidenceResponse, RiskEvidenceSuggestion } from "@/types/risk-evidence";
 
 const endpoint = "/api/ciso/risks";
+const riskCategories = ["Low", "Medium", "High", "Critical"] as const;
+const riskCategoryFields = new Set(["inherentRisk", "residualRisk", "severity"]);
+const treatmentStatuses = ["Planned", "In Progress", "Completed"] as const;
 
 const businessContextFields = [
   ["title", "Risk title"],
@@ -102,7 +106,7 @@ export default function RiskRegisterPage() {
     const form = document.getElementById("new-risk-assessment") as HTMLFormElement | null;
     if (!form) return;
     for (const [name, value] of Object.entries(risk)) {
-      const field = form.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement | null;
+      const field = form.elements.namedItem(name) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null;
       if (field && typeof value === "string") field.value = value;
     }
     setEditingRiskId(risk.id);
@@ -148,8 +152,9 @@ export default function RiskRegisterPage() {
   }
 
   const inputClass = "mt-1 w-full rounded border border-slate-300 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-900";
-  const assessedRisks = risks.filter(risk => risk.assessmentStatus === "assessed");
-  const eligibleTreatments = assessedRisks.filter(risk => risk.treatmentStatus);
+  const assessedRisks = risks.filter(isScorableRiskAssessment);
+  const needsAssessmentRisks = risks.filter(risk => !isScorableRiskAssessment(risk));
+  const eligibleTreatments = risks.filter(risk => risk.assessmentStatus === "assessed" && risk.treatmentStatus);
   const completedTreatments = eligibleTreatments.filter(risk => risk.treatmentStatus === "Completed");
   const coreInputFields = new Set(["title", "scenarioDescription", "threatNarrative", "vulnerabilityNarrative"]);
   const renderField = ([name, label]: readonly [string, string]) => (
@@ -157,6 +162,10 @@ export default function RiskRegisterPage() {
       <span className="text-xs text-slate-600 dark:text-slate-300">{label}</span>
       {multiline.has(name)
         ? <textarea name={name} required={coreInputFields.has(name) || assessmentStatus === "assessed"} maxLength={10000} rows={3} className={inputClass} />
+        : riskCategoryFields.has(name)
+          ? <select name={name} required={assessmentStatus === "assessed"} defaultValue="" className={inputClass}><option value="">Select category</option>{riskCategories.map(category => <option key={category}>{category}</option>)}</select>
+          : name === "treatmentStatus"
+            ? <select name={name} required={assessmentStatus === "assessed"} defaultValue="" className={inputClass}><option value="">Select status</option>{treatmentStatuses.map(status => <option key={status}>{status}</option>)}</select>
         : <input name={name} required={coreInputFields.has(name) || assessmentStatus === "assessed"} maxLength={10000} className={inputClass} />}
     </label>
   );
@@ -165,9 +174,9 @@ export default function RiskRegisterPage() {
     <Topbar title="Risk Register" subtitle="Human-governed business risk assessments" onMenuClick={openSidebar} />
     <main className="flex-1 space-y-4 bg-slate-50 p-4 sm:p-6 dark:bg-slate-950">
       <Link href="/dashboard/ciso" className="text-sm text-brand-blue hover:underline">Back to CISO dashboard</Link>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{[["Total Risks",risks.length],["Assessed",assessedRisks.length],["Needs Assessment",risks.filter(r=>r.assessmentStatus==="needs_assessment").length],["Treatment Progress",eligibleTreatments.length?`${Math.round(completedTreatments.length/eligibleTreatments.length*100)}%`:"N/A"]].map(([label,value])=><div key={label as string} className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900"><div className="text-xs text-slate-500">{label}</div><div className="mt-1 text-2xl font-bold">{storageAvailable===true?value:"N/A"}</div></div>)}</div>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{[["Total Risks",risks.length],["Assessed",assessedRisks.length],["Needs Assessment",needsAssessmentRisks.length],["Treatment Progress",eligibleTreatments.length?`${Math.round(completedTreatments.length/eligibleTreatments.length*100)}%`:"N/A"]].map(([label,value])=><div key={label as string} className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900"><div className="text-xs text-slate-500">{label}</div><div className="mt-1 text-2xl font-bold">{storageAvailable===true?value:"N/A"}</div></div>)}</div>
 
-      <Panel title="Risk Register" action={<span className="text-xs text-slate-400">{storageAvailable === true ? `${risks.length} Total Risks · ${risks.filter(risk => risk.assessmentStatus === "needs_assessment").length} Needs Assessment · ${risks.filter(risk => risk.assessmentStatus === "assessed").length} Assessed` : "Manual risk assessments only"}</span>}>
+      <Panel title="Risk Register" action={<span className="text-xs text-slate-400">{storageAvailable === true ? `${risks.length} Total Risks · ${needsAssessmentRisks.length} Needs Assessment · ${assessedRisks.length} Assessed` : "Manual risk assessments only"}</span>}>
         {storageAvailable === null && <p className="py-8 text-center text-sm text-slate-400">Checking risk storage...</p>}
         {storageAvailable === false && <PanelEmpty message="Risk storage unavailable" />}
         {storageAvailable === true && risks.length === 0 && <PanelEmpty message="0 Total Risks — no risk assessments recorded." />}
@@ -177,16 +186,19 @@ export default function RiskRegisterPage() {
               <tr><th className="py-2">Risk</th><th>Status</th><th>Service / Unit</th><th>Manual Assessment</th><th>Owner</th><th>Treatment</th><th>Due / Review</th><th>Source</th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {risks.map(risk => <tr key={risk.id}>
+              {risks.map(risk => {
+                const scorable = isScorableRiskAssessment(risk);
+                const normalizedResidualRisk = normalizeRiskCategory(risk.residualRisk);
+                return <tr key={risk.id}>
                 <td className="py-3 pr-4"><div className="font-semibold">{risk.riskCode}: {risk.title}</div><div className="mt-1 max-w-xs text-slate-500">{risk.scenarioDescription}</div></td>
-                <td className="pr-4"><span className={risk.assessmentStatus === "assessed" ? "rounded bg-green-100 px-2 py-1 text-green-700" : "rounded bg-amber-100 px-2 py-1 text-amber-700"}>{risk.assessmentStatus === "assessed" ? "Assessed" : "Needs Assessment"}</span>{risk.assessmentStatus === "needs_assessment" && <button type="button" onClick={() => completeAssessment(risk)} className="mt-2 block text-brand-blue hover:underline">Complete Assessment</button>}</td>
+                <td className="pr-4"><span className={scorable ? "rounded bg-green-100 px-2 py-1 text-green-700" : "rounded bg-amber-100 px-2 py-1 text-amber-700"}>{scorable ? "Assessed" : "Needs Assessment"}</span>{!scorable && <button type="button" onClick={() => completeAssessment(risk)} className="mt-2 block text-brand-blue hover:underline">Complete Assessment</button>}</td>
                 <td className="pr-4"><div>{risk.businessService ?? "N/A"}</div><div className="text-slate-500">{risk.businessUnit ?? "N/A"}</div></td>
-                <td className="pr-4"><div>Likelihood: {risk.likelihood ?? "Not Assessed"}</div><div>Impact: {risk.impact ?? "Not Assessed"}</div><div>Inherent: {risk.inherentRisk ?? "Not Assessed"}</div><div>Residual: {risk.residualRisk ?? "Not Assessed"}</div><div>Severity: {risk.severity ?? "Not Assessed"}</div></td>
+                <td className="pr-4"><div>Likelihood: {risk.likelihood ?? "Not Assessed"}</div><div>Impact: {risk.impact ?? "Not Assessed"}</div><div>Inherent: {normalizeRiskCategory(risk.inherentRisk) ?? "Needs Review"}</div><div>Residual: {normalizedResidualRisk ?? "Needs Review"}</div><div>Severity: {normalizeRiskCategory(risk.severity) ?? "Needs Review"}</div></td>
                 <td className="pr-4">{risk.riskOwner ?? "N/A"}</td>
                 <td className="max-w-xs pr-4"><div>{risk.treatmentStrategy ?? "Not Assessed"} · {risk.treatmentStatus ?? "Not Assessed"}</div><div className="text-slate-500">{risk.treatmentOwner ?? "N/A"}: {risk.treatmentAction ?? "N/A"}</div></td>
                 <td className="pr-4"><div>Due: {risk.dueDate ?? "N/A"}</div><div>Review: {risk.reviewDate ?? "N/A"}</div></td>
                 <td>{risk.assessmentSource === "manual_risk_assessment" ? "Manual risk assessment" : risk.assessmentSource}</td>
-              </tr>)}
+              </tr>;})}
             </tbody>
           </table>
         </div>}

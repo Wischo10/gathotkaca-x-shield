@@ -3,12 +3,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getBitdefenderIncidentsWithLifecycle } from "@/services/incident-lifecycle-service";
 import { toErrorResult } from "@/lib/api-result";
 import { HttpError } from "@/lib/http";
-import type { ApiResult } from "@/types/soc";
-import type { IncidentListResponse } from "@/types/ciso";
+import { getSessionFromRequest } from "@/lib/get-session";
 
 export async function GET(
   request: NextRequest
-): Promise<NextResponse<ApiResult<IncidentListResponse>>> {
+) {
+  if (!await getSessionFromRequest(request)) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   try {
     const searchParams = request.nextUrl.searchParams;
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));

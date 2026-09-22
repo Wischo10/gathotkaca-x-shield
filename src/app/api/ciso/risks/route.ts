@@ -9,7 +9,8 @@ const unavailable = () => NextResponse.json(
   { status: 503 }
 );
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  if (!await getSessionFromRequest(request)) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   try {
     const items = await listRisks();
     return NextResponse.json(

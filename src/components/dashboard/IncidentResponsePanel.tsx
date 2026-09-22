@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Panel, PanelEmpty, PanelError, PanelLoading } from "@/components/ui/Panel";
+import { ConfirmActionDialog } from "@/components/ui/ConfirmActionDialog";
 import { useApiResult } from "@/hooks/useApiResult";
 import type { IncidentListResponse, BitdefenderIncidentListItem } from "@/types/ciso";
 
@@ -12,10 +13,22 @@ interface IncidentActionState {
   message?: string;
   error?: string;
 }
+type IncidentAction = "acknowledge" | "respond" | "contain";
+type Confirmation = { incidentId: string; action: IncidentAction; title: string; description: string; confirmLabel: string };
 
 export function IncidentResponsePanel({ onActionCompleted }: { onActionCompleted?: () => void }) {
   const state = useApiResult<IncidentListResponse>("/api/ciso/incidents?perPage=10");
   const [actionState, setActionState] = useState<IncidentActionState | null>(null);
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
+
+  const requestConfirmation = (incidentId: string, action: IncidentAction) => {
+    const content: Record<IncidentAction, Omit<Confirmation, "incidentId" | "action">> = {
+      acknowledge: { title: "Acknowledge Incident", description: "Confirm that this incident should be marked as acknowledged. This will update the internal incident lifecycle record.", confirmLabel: "Confirm Acknowledge" },
+      respond: { title: "Start Incident Response", description: "Confirm that response should be recorded as started in the internal incident lifecycle. This does not execute an action in an external security system.", confirmLabel: "Confirm Response" },
+      contain: { title: "Mark Incident as Contained", description: "Confirm that this incident should be recorded as contained. This records an internal lifecycle transition and does not execute containment in Wazuh, Bitdefender, or another external security system.", confirmLabel: "Confirm Contained" },
+    };
+    setConfirmation({ incidentId, action, ...content[action] });
+  };
 
   const handleAction = async (
     incidentId: string,
@@ -126,7 +139,7 @@ export function IncidentResponsePanel({ onActionCompleted }: { onActionCompleted
                   <IncidentRow
                     key={inc.id}
                     incident={inc}
-                    onAction={handleAction}
+                    onAction={requestConfirmation}
                     actionLoading={actionState?.incidentId === inc.id && actionState.loading}
                     currentAction={actionState?.incidentId === inc.id ? actionState.action : undefined}
                   />
@@ -145,6 +158,7 @@ export function IncidentResponsePanel({ onActionCompleted }: { onActionCompleted
           </div>
         </div>
       )}
+      <ConfirmActionDialog open={confirmation !== null} title={confirmation?.title ?? "Confirm action"} description={confirmation?.description ?? ""} confirmLabel={confirmation?.confirmLabel ?? "Confirm"} busy={actionState?.loading === true} onCancel={() => setConfirmation(null)} onConfirm={() => { if (!confirmation || actionState?.loading) return; const selected = confirmation; void handleAction(selected.incidentId, selected.action).finally(() => setConfirmation(null)); }}/>
     </Panel>
   );
 }

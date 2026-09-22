@@ -2,7 +2,7 @@ import "server-only";
 import { getDb } from "@/lib/db";
 import { env } from "@/lib/env";
 import { getNistPostureAssessment } from "@/services/nist-posture-service";
-import { calculateAssessmentCompleteness } from "@/lib/assessment-completeness";
+import { calculateControlAssessmentSummary } from "@/lib/assessment-completeness";
 import type {
   ComplianceFrameworkItem,
   ComplianceOverviewData,
@@ -215,9 +215,7 @@ export async function getComplianceOverview(): Promise<ComplianceOverviewData> {
       lastAssessedAt: string | null;
     }
   > = {};
-  const dbTrends: Record<string, number | null> = {};
-
-  // 1. Query PostgreSQL Database for Formal Assessments & Snapshots
+  // 1. Query PostgreSQL for current formal assessment outcomes.
   try {
     const db = getDb();
 
@@ -267,7 +265,7 @@ export async function getComplianceOverview(): Promise<ComplianceOverviewData> {
       const partial = parseInt(row.partial_count, 10) || 0;
       const pending = parseInt(row.pending_count, 10) || 0;
       const notApplicable = parseInt(row.not_applicable_count, 10) || 0;
-      const evaluated = passed + failed;
+      const evaluated = passed + partial + failed;
       dbAssessments[row.framework_id] = {
         passed, failed, partial, pending, notApplicable, evaluated,
         totalControls: controlCounts[row.framework_id] ?? 0,
@@ -281,23 +279,6 @@ export async function getComplianceOverview(): Promise<ComplianceOverviewData> {
       };
     }
 
-    // Query 30-day historical trend from snapshots
-    const snapshotsRes = await db.query<{
-      framework_id: string;
-      score: string;
-    }>(
-      `SELECT DISTINCT ON (framework_id)
-         framework_id,
-         score
-       FROM compliance_snapshots
-       WHERE snapshot_at <= NOW() - INTERVAL '25 days'
-         AND snapshot_at >= NOW() - INTERVAL '35 days'
-       ORDER BY framework_id, snapshot_at DESC`
-    );
-
-    for (const row of snapshotsRes.rows) {
-      dbTrends[row.framework_id] = parseFloat(row.score);
-    }
   } catch {
     dbAvailable = false;
   }
@@ -327,6 +308,7 @@ export async function getComplianceOverview(): Promise<ComplianceOverviewData> {
       let totalApplicableControls: number | undefined;
       let assessmentScopeLabel: string | undefined;
       let lastAssessedAt: string | null = null;
+      let controlSummary: ReturnType<typeof calculateControlAssessmentSummary> | null = null;
 
       // MITRE is an observation-only telemetry row, not a formal assessment.
       if (def.id === "mitre") {
@@ -347,9 +329,14 @@ export async function getComplianceOverview(): Promise<ComplianceOverviewData> {
         lastAssessedAt = nistPosture.domains.reduce<string | null>((latest, domain) =>
           domain.assessedAt && (!latest || domain.assessedAt > latest) ? domain.assessedAt : latest, null);
       }
-      // Control-based scores use the existing passed / (passed + failed) rule.
+      // Control-based formal scores award credit only to Passed outcomes while
+      // retaining Partial and Failed outcomes in the denominator.
       else if (dbData) {
-        if (dbData.evaluated > 0) score = Math.round((dbData.passed / dbData.evaluated) * 100);
+        controlSummary = calculateControlAssessmentSummary(
+          dbData.passed, dbData.partial, dbData.failed,
+          Math.max(0, dbData.totalControls - dbData.notApplicable)
+        );
+        score = controlSummary.score;
         passedControls = dbData.passed;
         partialControls = dbData.partial;
         failedControls = dbData.failed;
@@ -362,24 +349,19 @@ export async function getComplianceOverview(): Promise<ComplianceOverviewData> {
       }
       // Frameworks without genuine formal assessments remain Not Assessed.
 
-      // Calculate real trend if 30-day snapshot exists in DB (takes precedence if DB snapshots exist)
-      if (def.id !== "mitre" && score !== null && dbTrends[def.id] !== undefined && dbTrends[def.id] !== null) {
-        const oldScore = dbTrends[def.id]!;
-        trend30d = Number((score - oldScore).toFixed(2));
-      }
-
-      const completeness = assessedControls !== undefined && totalApplicableControls !== undefined
-        ? calculateAssessmentCompleteness(assessedControls, totalApplicableControls) : null;
+      const completeness = controlSummary ?? (assessedControls !== undefined && totalApplicableControls !== undefined
+        ? calculateControlAssessmentSummary(assessedControls, 0, 0, totalApplicableControls) : null);
       const scoreIsInterim = def.id !== "mitre" && score !== null && completeness?.assessmentComplete === false;
       const status: ComplianceStatus = def.id === "mitre" && score !== null
-        ? "telemetry" : completeness?.assessmentComplete ? deriveStatus(score) : "not_assessed";
+        ? "telemetry" : completeness?.assessmentComplete
+          ? controlSummary?.finalComplianceStatus ?? deriveStatus(score) : "not_assessed";
 
       return {
         id: def.id,
         name: def.name,
         code: def.code,
         score,
-        previousScore: def.id === "mitre" ? (mitreTelemetry?.previousScore ?? null) : (dbTrends[def.id] ?? null),
+        previousScore: def.id === "mitre" ? (mitreTelemetry?.previousScore ?? null) : null,
         trend30d,
         trendUnit: trend30d !== null ? "percentage_points" : undefined,
         status,
@@ -399,62 +381,20 @@ export async function getComplianceOverview(): Promise<ComplianceOverviewData> {
         lastAssessedAt,
         context: def.id === "mitre" && score !== null
           ? `${passedControls} / ${evaluatedControls} techniques observed; denominator is a static Enterprise base-technique reference scope, not formal compliance.`
-          : scoreIsInterim ? "Interim score from score-eligible assessed controls; framework assessment is incomplete."
-            : score !== null ? "Formal score from explicit human assessment records only." : "No genuine formal assessment is recorded.",
+          : scoreIsInterim ? "Interim formal score: Passed / (Passed + Partial + Failed); framework assessment is incomplete."
+            : score !== null ? "Formal score: Passed / (Passed + Partial + Failed). Partial receives no compliant credit." : "No genuine formal assessment is recorded.",
       };
     }
   );
 
-  if (dbAvailable) {
-    try {
-      const db = getDb();
-      const observedNow = new Date().toISOString();
-      for (const framework of frameworks) {
-        if (framework.metricKind !== "formal_assessment" || framework.score === null
-          || !framework.lastAssessedAt || framework.assessmentComplete !== true) continue;
-        await db.query(
-          `INSERT INTO compliance_snapshots
-             (framework_id, score, passed_controls, failed_controls, evaluated_controls,
-              status, snapshot_at, source_status, observed_at, observation_date)
-           VALUES ($1, $2, $3, $4, $5, $6, $7::timestamptz, 'available', $7::timestamptz,
-                   ($7::timestamptz AT TIME ZONE 'UTC')::date)
-           ON CONFLICT (framework_id, observation_date) DO UPDATE SET
-             score = EXCLUDED.score, passed_controls = EXCLUDED.passed_controls,
-             failed_controls = EXCLUDED.failed_controls, evaluated_controls = EXCLUDED.evaluated_controls,
-             status = EXCLUDED.status, snapshot_at = EXCLUDED.snapshot_at,
-             source_status = EXCLUDED.source_status, observed_at = EXCLUDED.observed_at`,
-          [framework.id, framework.score, framework.passedControls ?? null,
-            framework.failedControls ?? null, framework.evaluatedControls ?? null,
-            framework.status, observedNow]
-        );
-      }
-      const { rows } = await db.query<{ framework_id: string; score: string }>(
-        `SELECT DISTINCT ON (framework_id) framework_id, score
-         FROM compliance_snapshots
-         WHERE observed_at BETWEEN NOW() - INTERVAL '35 days' AND NOW() - INTERVAL '25 days'
-         ORDER BY framework_id,
-           ABS(EXTRACT(EPOCH FROM (observed_at - (NOW() - INTERVAL '30 days'))))`
-      );
-      const realHistory = Object.fromEntries(rows.map(row => [row.framework_id, Number(row.score)]));
-      for (const framework of frameworks) {
-        const previous = realHistory[framework.id];
-        if (framework.metricKind === "formal_assessment" && framework.score !== null && Number.isFinite(previous)) {
-          framework.previousScore = previous;
-          framework.trend30d = Number((framework.score - previous).toFixed(2));
-          framework.trendUnit = "percentage_points";
-          framework.trendStatus = "available";
-        } else if (framework.metricKind === "formal_assessment") {
-          framework.trendStatus = framework.score === null ? "not_assessed" : "insufficient_history";
-        }
-      }
-    } catch {
-      for (const framework of frameworks) {
-        if (framework.metricKind === "formal_assessment") framework.trendStatus = framework.score === null ? "not_assessed" : "unavailable";
-      }
-    }
-  } else {
-    for (const framework of frameworks) {
-      if (framework.metricKind === "formal_assessment") framework.trendStatus = "unavailable";
+  // Existing snapshots have no scoring-methodology version. Formal trends fail
+  // closed rather than comparing the new inclusive denominator with old scores.
+  for (const framework of frameworks) {
+    if (framework.metricKind === "formal_assessment") {
+      framework.trend30d = null;
+      framework.previousScore = null;
+      framework.trendUnit = undefined;
+      framework.trendStatus = framework.score === null ? "not_assessed" : "unavailable";
     }
   }
 

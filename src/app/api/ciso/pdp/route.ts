@@ -14,12 +14,12 @@ const uuid = (v:unknown) => v===null||v==="" ? null : typeof v==="string"&&/^[0-
 const evidenceTypes=["Policy","SOP / Procedure","Configuration","System Record","Audit / Review Record","Contract / Agreement","Approval","Report","Screenshot / Export Reference","Other"];
 const evidenceType=(v:unknown)=>typeof v==="string"&&evidenceTypes.includes(v)?v:null;
 const timestamp=(v:unknown)=>typeof v==="string"&&v.length<=64&&Number.isFinite(Date.parse(v))?v:null;
-async function actor(request:NextRequest){ const session=await getSessionFromRequest(request); if(!session)return null; if(!["admin","ciso"].includes(session.role))return null; return session.email.trim().toLowerCase()||session.id; }
-
 export async function GET(request:NextRequest){ if(!await getSessionFromRequest(request))return NextResponse.json({error:"Authentication required."},{status:401}); try{return NextResponse.json({status:"ok",data:await getPdpBaseline()},{headers:{"Cache-Control":"no-store"}});}catch{return unavailable();} }
 
 export async function POST(request:NextRequest){
-  const assessedBy=await actor(request); if(!assessedBy)return NextResponse.json({error:"Admin or CISO authentication required."},{status:403});
+  const session=await getSessionFromRequest(request); if(!session)return NextResponse.json({error:"Authentication required."},{status:401});
+  if(!["admin","ciso"].includes(session.role))return NextResponse.json({error:"Admin or CISO authentication required."},{status:403});
+  const assessedBy=session.email.trim().toLowerCase()||session.id;
   if(!env.database.url())return unavailable();
   const origin=request.headers.get("origin"); if(origin&&origin!==request.nextUrl.origin)return NextResponse.json({error:"Cross-origin writes are not allowed."},{status:403});
   let body:any; try{body=await request.json();}catch{return NextResponse.json({error:"Invalid JSON payload."},{status:400});}

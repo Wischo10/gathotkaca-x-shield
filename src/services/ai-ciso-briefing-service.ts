@@ -12,6 +12,13 @@ export class AiBriefingError extends Error {
 
 type FactId = `F${number}`;
 type NormalizedFact = AiCisoNormalizedFact & { id: FactId };
+const OLLAMA_TIMEOUT_MS = 180000;
+const OLLAMA_NUM_PREDICT = 160;
+
+function logDiagnostic(stage: string, startedAt: number, detail?: string) {
+  const suffix = detail ? ` ${detail}` : "";
+  console.info(`[AI CISO Briefing] stage=${stage} elapsedMs=${Date.now() - startedAt}${suffix}`);
+}
 
 function configured() {
   try { return { url: env.ollama.url(), model: env.ollama.model() }; }
@@ -68,6 +75,7 @@ function realFactProvenance(source: string) {
 }
 
 export async function generateAiCisoBriefing(): Promise<AiCisoBriefing> {
+  const startedAt = Date.now();
   const { url, model } = configured();
   const [metrics, compliance, threatIntel, thirdPartyResult] = await Promise.all([
     getCisoMetrics(), getComplianceOverview(), getThreatIntelligenceOverview(),
@@ -86,7 +94,7 @@ export async function generateAiCisoBriefing(): Promise<AiCisoBriefing> {
   if (sla.available) {
     add(facts, "F3", "critical_vulnerabilities_overdue", sla.overdue, "count", "vulnerabilitySla", `Critical vulnerabilities overdue: ${sla.overdue}.`);
     add(facts, "F4", "critical_vulnerabilities_due_soon", sla.dueSoon, "count", "vulnerabilitySla", `Critical vulnerabilities due soon: ${sla.dueSoon}.`);
-    add(facts, "F5", "critical_vulnerabilities_compliant", sla.compliant, "count", "vulnerabilitySla", `Critical vulnerabilities compliant: ${sla.compliant}.`);
+    add(facts, "F5", "critical_vulnerabilities_within_configured_threshold", sla.compliant, "count", "vulnerabilitySla", `Critical vulnerabilities within configured threshold: ${sla.compliant}.`);
   }
   const mitre = compliance.frameworks.find(item => item.metricKind === "telemetry_observation" && item.code === "MITRE-ATTACK");
   sourceAvailability.mitreObservedBreadth = !!mitre && finite(mitre.score) && finite(mitre.passedControls);
@@ -135,39 +143,71 @@ export async function generateAiCisoBriefing(): Promise<AiCisoBriefing> {
   const threatIds = (["F8", "F9", "F10", "F11", "F12"] as FactId[]).filter(has);
   if (threatIds.length) allowedActions.push({ text: "Compare relevant external threat-intelligence observations with local telemetry before drawing conclusions about organizational exposure.", factIds: threatIds });
 
+  // The model selects IDs only. Full fact metadata and provenance remain on the
+  // server for validation and the API response, but are not duplicated in the
+  // inference prompt. Array order provides stable action indexes.
+  const modelInput = {
+    facts: facts.map(({ id, text }) => ({ id, text })),
+    actions: allowedActions.map((item, index) => ({ index, text: item.text, factIds: item.factIds })),
+  };
+  logDiagnostic("facts_ready", startedAt);
+
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 180000);
+  const ollamaStartedAt = Date.now();
+  const timeout = setTimeout(() => controller.abort(), OLLAMA_TIMEOUT_MS);
   try {
     const response = await fetch(`${url.replace(/\/$/, "")}/api/chat`, {
       method: "POST", signal: controller.signal, headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model, stream: false, think: false, options: { temperature: 0, num_predict: 600 },
+      body: JSON.stringify({ model, stream: false, think: false, options: { temperature: 0, num_predict: OLLAMA_NUM_PREDICT },
         format: { type: "object", additionalProperties: false, required: ["summaryFactIds", "observationFactIds", "actionIndexes"], properties: {
           summaryFactIds: { type: "array", minItems: 1, maxItems: 3, items: { type: "string", enum: facts.map(f => f.id) } },
           observationFactIds: { type: "array", minItems: 1, maxItems: 4, items: { type: "string", enum: facts.map(f => f.id) } },
           actionIndexes: { type: "array", minItems: 1, maxItems: 4, items: { type: "integer", minimum: 0, maximum: Math.max(0, allowedActions.length - 1) } },
         } }, messages: [
-          { role: "system", content: "Select the most CISO-relevant supplied fact IDs and approved action indexes. Never create prose, values, IDs, or actions. Zero is distinct from unavailable. Not Assessed is not Non-Compliant. Not Measurable is not poor performance. Awaiting Lifecycle Data is not KPI failure. Return only the required JSON." },
-          { role: "user", content: JSON.stringify({ generatedAt:new Date().toISOString(),sourceAvailability,normalizedFacts: facts, allowedActions }) },
+          { role: "system", content: "Select the most CISO-relevant supplied fact IDs and approved action indexes. Use only supplied IDs and indexes; invent nothing. Zero is not unavailable. Not Assessed is not Non-Compliant. Not Measurable or Awaiting Lifecycle Data is not failure. Return only the required JSON." },
+          { role: "user", content: JSON.stringify(modelInput) },
         ] }),
     });
-    if (!response.ok) throw new AiBriefingError("unavailable");
+    if (!response.ok) {
+      logDiagnostic("ollama_http_error", ollamaStartedAt, `httpStatus=${response.status}`);
+      throw new AiBriefingError("unavailable");
+    }
+    logDiagnostic("ollama_complete", ollamaStartedAt);
     const result = await response.json() as { message?: { content?: string } };
-    if (typeof result.message?.content !== "string") throw new AiBriefingError("invalid_output");
+    if (typeof result.message?.content !== "string") {
+      logDiagnostic("validation_failed", startedAt, "category=invalid_envelope");
+      throw new AiBriefingError("invalid_output");
+    }
     let parsed: Record<string, unknown>;
-    try { parsed = JSON.parse(result.message.content) as Record<string, unknown>; } catch { throw new AiBriefingError("invalid_output"); }
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new AiBriefingError("invalid_output");
+    try { parsed = JSON.parse(result.message.content) as Record<string, unknown>; }
+    catch {
+      logDiagnostic("validation_failed", startedAt, "category=json_parse");
+      throw new AiBriefingError("invalid_output");
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      logDiagnostic("validation_failed", startedAt, "category=response_shape");
+      throw new AiBriefingError("invalid_output");
+    }
     const ids=(value:unknown,max:number):FactId[]|null=>Array.isArray(value)&&value.length>0&&value.length<=max&&value.every(id=>typeof id==="string"&&factMap.has(id as FactId))&&new Set(value).size===value.length?value as FactId[]:null;
     const summaryIds=ids(parsed.summaryFactIds,3),observationIds=ids(parsed.observationFactIds,4);
     const actionIndexes=Array.isArray(parsed.actionIndexes)&&parsed.actionIndexes.length>0&&parsed.actionIndexes.length<=4&&parsed.actionIndexes.every(index=>Number.isInteger(index)&&Number(index)>=0&&Number(index)<allowedActions.length)&&new Set(parsed.actionIndexes).size===parsed.actionIndexes.length?parsed.actionIndexes as number[]:null;
-    if(!summaryIds||!observationIds||!actionIndexes)throw new AiBriefingError("invalid_output");
+    if(!summaryIds||!observationIds||!actionIndexes){
+      logDiagnostic("validation_failed", startedAt, "category=grounding_schema");
+      throw new AiBriefingError("invalid_output");
+    }
     const generationMode: AiCisoGenerationMode = "ollama_grounded";
     const summary=summaryIds.map(id=>factMap.get(id)!.text).join(" ");
     const keyObservations=observationIds.map(id=>({text:factMap.get(id)!.text,factIds:[id]}));
     const priorityActions=actionIndexes.map(index=>allowedActions[index]);
-    if (!summary || !keyObservations.length || !priorityActions.length) throw new AiBriefingError("invalid_output");
+    if (!summary || !keyObservations.length || !priorityActions.length) {
+      logDiagnostic("validation_failed", startedAt, "category=reconstruction");
+      throw new AiBriefingError("invalid_output");
+    }
+    logDiagnostic("complete", startedAt);
     return { executiveSummary: summary, keyObservations, priorityActions, generatedAt: new Date().toISOString(), model, generationMode, sourceAvailability, normalizedFacts: facts, sourceFreshness:{cisoMetrics:metrics.updatedAt,compliance:compliance.updatedAt,threatIntelligence:threatIntel.observedAt??null} };
   } catch (error) {
     if (error instanceof AiBriefingError) throw error;
+    logDiagnostic("ollama_transport_error", ollamaStartedAt, `category=${controller.signal.aborted ? "timeout" : "transport"}`);
     throw new AiBriefingError("unavailable");
   } finally { clearTimeout(timeout); }
 }

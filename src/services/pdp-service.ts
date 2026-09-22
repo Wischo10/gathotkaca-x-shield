@@ -33,8 +33,8 @@ export async function getPdpBaseline(): Promise<PdpBaselineData> {
     const compliant=controls.filter(x=>x.assessmentStatus==="compliant").length, partial=controls.filter(x=>x.assessmentStatus==="partial").length, nonCompliant=controls.filter(x=>x.assessmentStatus==="non_compliant").length;
     const assessed=compliant+partial+nonCompliant;
     const assessmentSummary=calculateControlAssessmentSummary(compliant,partial,nonCompliant,controls.length);
-    // Reuse the formal compliance methodology: passed / (passed + failed).
-    // Partial remains visible but does not silently gain a numeric weight.
+    // Formal score: compliant / (compliant + partial + non-compliant).
+    // Partial remains visible in the denominator and receives no compliant credit.
     const unresolved=findings.filter(x=>x.status!=="Resolved"&&x.status!=="Accepted");
     const eligible=remediations.length, completed=remediations.filter(x=>x.status==="Completed").length;
     const today=new Date().toISOString().slice(0,10);

@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getComplianceOverview } from "@/services/compliance-service";
+import { getSessionFromRequest } from "@/lib/get-session";
 import { toErrorResult } from "@/lib/api-result";
 import type { ApiResult } from "@/types/soc";
 import type { ComplianceOverviewData } from "@/types/compliance";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_req: NextRequest) {
+export async function GET(request: NextRequest) {
+  if (!await getSessionFromRequest(request)) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   try {
     const data = await getComplianceOverview();
     const body: ApiResult<ComplianceOverviewData> = {

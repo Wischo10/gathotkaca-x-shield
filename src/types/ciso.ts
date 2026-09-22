@@ -86,6 +86,10 @@ export interface VulnerabilitySlaOverview {
   /** Total Critical unique CVEs in scope */
   total: number | null;
   totalCritical: number | null;
+  /** Current critical finding documents, distinct from unique CVEs. */
+  criticalFindings: number | null;
+  /** Exact distinct affected agents for the same current critical population. */
+  affectedAgents: number | null;
   /** Vulns older than SLA threshold for their severity */
   overdue: number | null;
   overduePct?: number | null;

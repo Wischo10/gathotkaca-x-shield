@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Panel, PanelEmpty } from "@/components/ui/Panel";
 import { Topbar } from "@/components/layout/Topbar";
 import { useSidebarToggle } from "@/context/sidebar-context";
@@ -8,7 +9,8 @@ import { ThreatIntelPanel } from "@/components/dashboard/ThreatIntelPanel";
 import { ComplianceOverviewPanel } from "@/components/dashboard/ComplianceOverviewPanel";
 import { AiCisoBriefingPanel } from "@/components/dashboard/AiCisoBriefingPanel";
 import { DataProvenanceBadge } from "@/components/ui/DataProvenanceBadge";
-import { rankTopRisks } from "@/lib/risk-ranking";
+import { SourceFreshness } from "@/components/ui/SourceFreshness";
+import { isScorableRiskAssessment, normalizeRiskCategory, rankTopRisks } from "@/lib/risk-ranking";
 
 import { useApiResult } from "@/hooks/useApiResult";
 import { NIST_FUNCTIONS, type CisoMetricsData } from "@/types/ciso";
@@ -61,6 +63,9 @@ interface MetricCardProps {
   loading?: boolean;
   detailHref?: string;
   detailLabel?: string;
+  sourceLabel?: string;
+  freshnessAt?: string | null;
+  freshnessLabel?: string;
 }
 
 const MetricCard = ({
@@ -80,6 +85,9 @@ const MetricCard = ({
   loading = false,
   detailHref,
   detailLabel = "View details",
+  sourceLabel,
+  freshnessAt,
+  freshnessLabel,
 }: MetricCardProps) => {
   const hasValue = value !== null && value !== undefined;
   const isTrendValid = trendAvailable && trend30d !== null && trend30d !== undefined;
@@ -123,7 +131,8 @@ const MetricCard = ({
         )}
       </div>
       {basis && <div className="mt-0.5 text-[11px] leading-4 text-slate-400 dark:text-slate-500">{basis}</div>}
-      {detailHref && <a href={detailHref} className="mt-1 text-[11px] font-medium text-brand-blue hover:underline">{detailLabel} →</a>}
+      {sourceLabel && <SourceFreshness source={sourceLabel} timestamp={freshnessAt} timestampLabel={freshnessLabel} className="mt-1" />}
+      {detailHref && <Link href={detailHref} className="mt-1 text-[11px] font-medium text-brand-blue hover:underline">{detailLabel} →</Link>}
       <div className="mt-auto pt-2.5" aria-hidden="true">
         <div className="h-6 rounded-md bg-gradient-to-b from-transparent to-slate-50/80 dark:to-slate-800/20">
           <div className="relative top-4 h-px w-full bg-slate-200/70 dark:bg-slate-700/60" />
@@ -160,13 +169,13 @@ export default function CISODashboardPage() {
     ...RISK_REGISTER_BUCKETS.map(bucket => ({
       name: bucket.label,
       count: risksState.data.items.filter(risk =>
-        risk.assessmentStatus === "assessed" && risk.residualRisk === bucket.rating
+        isScorableRiskAssessment(risk) && normalizeRiskCategory(risk.residualRisk) === bucket.rating
       ).length,
       color: bucket.color,
     })),
     {
       name: "Needs Assessment",
-      count: risksState.data.items.filter(risk => risk.assessmentStatus === "needs_assessment").length,
+      count: risksState.data.items.filter(risk => !isScorableRiskAssessment(risk)).length,
       color: "#94a3b8",
     },
   ] : [];
@@ -225,11 +234,11 @@ export default function CISODashboardPage() {
       : { value: "Unavailable", badge: "Source unavailable", detail: "Incident KPI source is unavailable." };
     if (kind === "mttd") return {
       value: "Not Measurable", badge: "Telemetry limitation",
-      detail: "Occurrence timestamp unavailable from current incident telemetry. Detection source: Bitdefender sensor alerts.",
+      detail: "Verified occurrence timestamps are unavailable; detection timestamps alone cannot establish MTTD.",
     };
     if (item.value !== null && item.eligibleIncidents && item.eligibleIncidents > 0) return {
       value: formatDuration(item.value), badge: "Data available",
-      detail: `${item.eligibleIncidents} eligible incident${item.eligibleIncidents === 1 ? "" : "s"} · Last 30 days`,
+      detail: `${kind === "mtta" ? "Acknowledged − detected" : kind === "mttc" ? "Contained − detected" : "Resolved − detected"} · Last 30 days`,
     };
     if (/Unavailable/i.test(item.source)) return {
       value: "Unavailable", badge: "Source unavailable", detail: item.explanation || "Lifecycle storage is unavailable.",
@@ -247,7 +256,7 @@ export default function CISODashboardPage() {
     return <>
       <div className="text-lg font-bold leading-tight text-slate-800 dark:text-white">{presentation.value}</div>
       <div className="text-[10px] font-medium text-brand-blue">{presentation.badge}</div>
-      {kind !== "mttd" && <div className="text-[10px] text-slate-500">{item?.eligibleIncidents ?? 0} eligible incidents</div>}
+      {kind !== "mttd" && <div className="text-[10px] text-slate-500">Based on {item?.eligibleIncidents ?? 0} eligible timestamp pair{item?.eligibleIncidents === 1 ? "" : "s"}</div>}
       <div className="text-[10px] leading-tight text-slate-400">{presentation.detail}</div>
     </>;
   };
@@ -266,19 +275,22 @@ export default function CISODashboardPage() {
       <main className="flex-1 space-y-4 p-4 sm:p-6 bg-slate-50 dark:bg-slate-950">
         
         {/* Metric Header with Timestamp */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
             Executive Security Overview
           </span>
-          <span className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">
-            {metrics?.updatedAt ? `${formatRelativeTime(metrics.updatedAt)} · individual sources may differ` : "Loading dashboard data..."}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">
+              {metrics?.updatedAt ? `${formatRelativeTime(metrics.updatedAt)} · individual sources may differ` : "Loading dashboard data..."}
+            </span>
+            <Link href="/dashboard/ciso/report" className="text-xs font-semibold text-brand-blue hover:underline">View Executive Report →</Link>
+          </div>
         </div>
 
         {/* ROW 1: Real Telemetry & Data-Driven Metric Cards */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <MetricCard
-            title="Security Posture Score"
+            title="NIST CSF Assessment Score"
             loading={metricsState.phase === "loading"}
             value={metrics?.securityPostureScore.value}
             max={metrics?.securityPostureScore.max}
@@ -288,7 +300,10 @@ export default function CISODashboardPage() {
             trendColor="blue"
             icon="shield"
             tooltip={metrics?.securityPostureScore.details?.explanation || metrics?.securityPostureScore.source}
-            basis={`Manual NIST · ${latestNistAssessment ? `last assessed ${formatTimestamp(latestNistAssessment)}` : "not assessed"}`}
+            basis="Six persisted function assessments required"
+            sourceLabel="Manual NIST CSF 2.0 assessments"
+            freshnessAt={latestNistAssessment}
+            freshnessLabel="Latest assessment"
             detailHref="/dashboard/ciso/security-posture" detailLabel="View posture"
           />
           <MetricCard
@@ -309,6 +324,9 @@ export default function CISODashboardPage() {
               : undefined}
             emptyText={metrics?.totalRiskScore.availability?.status === "unavailable"
               ? "Source unavailable" : "No completed risk assessments"}
+            sourceLabel="PostgreSQL Risk Register"
+            freshnessAt={latestRiskUpdate}
+            freshnessLabel="Latest register update"
             detailHref="/dashboard/ciso/risks" detailLabel="View risks"
           />
           <MetricCard
@@ -321,7 +339,9 @@ export default function CISODashboardPage() {
             trendColor="orange"
             icon="incident"
             tooltip={metrics?.activeIncidents.availability?.error?.message || metrics?.activeIncidents.source || (metricsState.phase === "error" ? metricsState.message : "Loading Bitdefender incident count...")}
-            basis={metrics?.activeIncidents.availability?.fetchedAt ? `${metrics.activeIncidents.availability.cached ? "Cached; fetched" : "Fetched"} ${formatTimestamp(metrics.activeIncidents.availability.fetchedAt)}` : undefined}
+            sourceLabel="Bitdefender GravityZone"
+            freshnessAt={metrics?.activeIncidents.availability?.fetchedAt}
+            freshnessLabel={metrics?.activeIncidents.availability?.cached ? "Retrieved (cached result)" : "Retrieved"}
             detailHref="/dashboard/ciso/incidents" detailLabel="View incidents"
           />
           <MetricCard
@@ -334,7 +354,8 @@ export default function CISODashboardPage() {
             trendColor="purple"
             icon="vulnerability"
             tooltip={metrics?.criticalVulnerabilities.availability?.error?.message || metrics?.criticalVulnerabilities.source || (metricsState.phase === "error" ? metricsState.message : "Loading unique critical CVE count...")}
-            basis={metrics?.criticalVulnerabilities.availability?.fetchedAt ? `Current Wazuh vulnerability state · observed ${formatTimestamp(metrics.criticalVulnerabilities.availability.fetchedAt)}` : "Current Wazuh vulnerability state"}
+            basis="Current Wazuh vulnerability state"
+            sourceLabel="Wazuh / OpenSearch"
             detailHref="/dashboard/vulnerability" detailLabel="View vulnerabilities"
           />
           <MetricCard
@@ -347,8 +368,9 @@ export default function CISODashboardPage() {
             trendUnit="pp"
             trendColor="green"
             icon="compliance"
-            tooltip="Average assessment score across completed formal frameworks. Partial and incomplete frameworks do not contribute to the aggregate."
-            basis="Completed formal framework assessments"
+            tooltip="Equal-weight average across completed formal frameworks. Framework score = Passed / (Passed + Partial + Failed). Incomplete frameworks and MITRE telemetry are excluded."
+            basis="Completed formal frameworks · equally weighted"
+            sourceLabel="PostgreSQL formal assessments"
             detailHref="/dashboard/compliance" detailLabel="View compliance"
           />
           <MetricCard
@@ -369,13 +391,16 @@ export default function CISODashboardPage() {
             basis="Eligible assessed treatments"
             emptyText={metrics?.riskTreatmentProgress.availability?.status === "unavailable"
               ? "Source unavailable" : "No eligible treatments"}
+            sourceLabel="PostgreSQL Risk Register"
+            freshnessAt={latestRiskUpdate}
+            freshnessLabel="Latest register update"
             detailHref="/dashboard/ciso/risks" detailLabel="View treatments"
           />
         </div>
 
         {/* ROW 2: Analytical Panels */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <Panel title="Security Posture Overview" action={<span className="text-xs text-slate-400" title={latestNistAssessment ? `Latest recorded assessment: ${formatTimestamp(latestNistAssessment)}` : "No complete recorded assessment"}>NIST CSF 2.0 · {latestNistAssessment ? `assessed ${new Date(latestNistAssessment).toLocaleDateString()}` : "not assessed"}</span>}>
+          <Panel title="NIST CSF 2.0 Assessment Overview" action={<span className="text-xs text-slate-400" title={latestNistAssessment ? `Latest recorded assessment: ${formatTimestamp(latestNistAssessment)}` : "No complete recorded assessment"}>Manual assessment · {latestNistAssessment ? `assessed ${new Date(latestNistAssessment).toLocaleDateString()}` : "not assessed"}</span>}>
             <div className="flex h-56 items-center gap-2 overflow-x-auto">
               {/* Neutral scaffold; the data polygon requires all six actual assessments. */}
               <svg viewBox="0 0 280 260" className="h-full min-w-[150px] flex-1" role="img" aria-label={radarAvailable ? "NIST CSF six-function assessment radar, scale 0 to 100" : "NIST CSF six-function radar. Insufficient assessment data; no score polygon rendered."}>
@@ -422,10 +447,10 @@ export default function CISODashboardPage() {
               </table>
             </div>
             <div className="mt-2 text-right text-xs">
-              <a href="/dashboard/ciso/security-posture" className="text-brand-blue hover:underline">View full security posture →</a>
+              <Link href="/dashboard/ciso/security-posture" className="text-brand-blue hover:underline">View full NIST assessment →</Link>
             </div>
           </Panel>
-          <Panel title="Incident Response KPI" action={<div className="flex items-center gap-2">{metrics?.incidentKpi.provenance && <DataProvenanceBadge provenance={metrics.incidentKpi.provenance}/>}<a href="/dashboard/ciso/incidents" className="text-xs font-medium text-brand-blue hover:underline">View Incidents →</a></div>}>
+          <Panel title="Incident Response KPI" action={<div className="flex items-center gap-2">{metrics?.incidentKpi.provenance && <DataProvenanceBadge provenance={metrics.incidentKpi.provenance}/>}<Link href="/dashboard/ciso/incidents" className="text-xs font-medium text-brand-blue hover:underline">View Incidents →</Link></div>}>
             <div className="grid min-h-56 grid-cols-2 gap-4">
               <div 
                 className="flex flex-col justify-center gap-1 border-r border-b border-slate-100 dark:border-slate-800 p-2"
@@ -456,6 +481,7 @@ export default function CISODashboardPage() {
                 {renderIncidentKpi(metrics?.incidentKpi?.mttc, "mttc")}
               </div>
             </div>
+            <SourceFreshness source="Bitdefender GravityZone + PostgreSQL incident lifecycle" className="mt-2 border-t border-slate-100 pt-2 dark:border-slate-800" />
             {metrics?.incidentTicketing.incidentKpi && (
               <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-800">
                 <div className="mb-2 flex items-center justify-between gap-2">
@@ -511,7 +537,7 @@ export default function CISODashboardPage() {
               const chartData = [
                 { name: "Overdue", value: sla.overdue ?? 0, fill: "#ef4444" },
                 { name: "Due Soon", value: sla.dueSoon ?? 0, fill: "#f97316" },
-                { name: "Compliant", value: sla.compliant ?? 0, fill: "#22c55e" },
+                { name: "Within Configured Threshold", value: sla.compliant ?? 0, fill: "#22c55e" },
                 { name: "Unclassified", value: sla.unclassified ?? 0, fill: "#94a3b8" },
               ].filter(d => d.value > 0);
 
@@ -559,17 +585,17 @@ export default function CISODashboardPage() {
                       </span>
                     </div>
 
-                    {/* 4. Compliant */}
+                    {/* 4. Within configured threshold */}
                     <div className="flex justify-between items-center pr-2">
                       <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-green-500"></span> Compliant
+                        <span className="w-2 h-2 rounded-full bg-green-500"></span> Within Configured Threshold
                       </span>
                       <span className="font-semibold text-slate-700 dark:text-slate-300">
                         {sla.compliant !== null ? `${sla.compliant} (${sla.compliantPct ?? (sla.totalCritical ? Math.round((sla.compliant / sla.totalCritical) * 100) : 0)}%)` : "N/A"}
                       </span>
                     </div>
                     {sla.unclassified !== null && sla.unclassified > 0 && (
-                      <div className="flex justify-between items-center pr-2" title="Detection age unavailable or incomplete; not counted as compliant">
+                      <div className="flex justify-between items-center pr-2" title="Detection age unavailable or incomplete; not counted within the configured threshold">
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-400"></span> Unclassified</span>
                         <span className="font-semibold text-slate-700 dark:text-slate-300">{sla.unclassified} ({sla.unclassifiedPct}%)</span>
                       </div>
@@ -594,13 +620,11 @@ export default function CISODashboardPage() {
                 </div>
               </>;
             })()}
-            <div className="mt-2 flex items-center justify-between text-[11px] text-slate-400">
-              <span title={(metrics?.vulnerabilitySlaOverview || metrics?.vulnerabilitySla)?.source || "Wazuh/OpenSearch vulnerability telemetry"}>
-                Source: Wazuh/OpenSearch · {metrics?.vulnerabilitySla?.asOf ? `as of ${formatTimestamp(metrics.vulnerabilitySla.asOf)}` : "unavailable"} ⓘ
-              </span>
-              <a href="/dashboard/vulnerability" className="text-brand-blue hover:underline">
+            <div className="mt-2 flex items-end justify-between gap-2 text-[11px] text-slate-400">
+              <SourceFreshness source="Wazuh / OpenSearch vulnerability state" />
+              <Link href="/dashboard/vulnerability" className="text-brand-blue hover:underline">
                 View vulnerability dashboard →
-              </a>
+              </Link>
             </div>
           </Panel>
         </div>
@@ -642,7 +666,7 @@ export default function CISODashboardPage() {
                : risksState.phase === "loading"
                  ? <PanelEmpty message="Loading risk register..." />
                  : <PanelEmpty message="Risk Register unavailable" />}
-             <div className="mt-auto flex items-center justify-between border-t border-slate-100 pt-2 text-xs dark:border-slate-800"><span className="text-[10px] text-slate-400">{latestRiskUpdate ? `Updated ${formatTimestamp(latestRiskUpdate)}` : risksState.phase === "ready" ? "Empty register" : risksState.phase === "loading" ? "Loading…" : "Source unavailable"}</span><a href="/dashboard/ciso/risks" className="font-medium text-brand-blue hover:underline">View risk register →</a></div>
+             <div className="mt-auto flex items-end justify-between gap-2 border-t border-slate-100 pt-2 text-xs dark:border-slate-800"><SourceFreshness source="PostgreSQL Risk Register" timestamp={latestRiskUpdate} timestampLabel="Latest record update"/><Link href="/dashboard/ciso/risks" className="font-medium text-brand-blue hover:underline">View risk register →</Link></div>
           </Panel>
           <Panel title="Top Risks" className="h-64 flex flex-col justify-between">
              {risksState.phase === "loading" ? <PanelEmpty message="Loading assessed risks..." />
@@ -656,7 +680,7 @@ export default function CISODashboardPage() {
                      <div className="mt-1 flex gap-3 text-[10px] text-slate-500"><span>Treatment: {risk.treatmentStatus ?? "N/A"}</span><span>Due: {risk.dueDate ?? "N/A"}</span></div>
                    </li>)}</ol>
                  </div>}
-             <div className="text-right text-xs"><a href="/dashboard/ciso/risks" className="text-brand-blue hover:underline">Review assessed risks →</a></div>
+             <div className="flex items-end justify-between gap-2 text-xs"><SourceFreshness source="PostgreSQL Risk Register" timestamp={latestRiskUpdate} timestampLabel="Latest record update"/><Link href="/dashboard/ciso/risks" className="text-brand-blue hover:underline">Review assessed risks →</Link></div>
           </Panel>
         </div>
         
@@ -712,7 +736,7 @@ export default function CISODashboardPage() {
                    </ul>
                  </div>
                : thirdPartiesState.phase === "loading" ? <PanelEmpty message="Loading third-party register..." /> : <PanelEmpty message="N/A — third-party register unavailable" />}
-             <div className="mt-auto flex items-center justify-between border-t border-slate-100 pt-3 text-xs dark:border-slate-800"><span className="text-[10px] text-slate-400">{latestThirdPartyUpdate ? `Updated ${formatTimestamp(latestThirdPartyUpdate)}` : thirdPartiesState.phase === "ready" ? "Empty register" : thirdPartiesState.phase === "loading" ? "Loading…" : "Source unavailable"}</span><a href="/dashboard/ciso/third-parties" className="font-medium text-brand-blue hover:underline">View third-party risk →</a></div>
+             <div className="mt-auto flex items-end justify-between gap-2 border-t border-slate-100 pt-3 text-xs dark:border-slate-800"><SourceFreshness source="PostgreSQL Third-Party Register" timestamp={latestThirdPartyUpdate} timestampLabel="Latest record update"/><Link href="/dashboard/ciso/third-parties" className="font-medium text-brand-blue hover:underline">View third-party risk →</Link></div>
           </Panel>
           <AiCisoBriefingPanel />
         </div>

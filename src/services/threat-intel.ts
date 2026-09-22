@@ -58,6 +58,16 @@ interface CacheEntry {
 let cachedData: CacheEntry | null = null;
 export const THREAT_INTEL_CACHE_TTL_MS = 5 * 60 * 1000;
 
+type ExecutiveIocType = "Domains / URLs" | "IP Addresses" | "Hashes" | "Other";
+
+function classifyIocType(value: string | null | undefined): ExecutiveIocType {
+  const normalized = value?.trim().toLowerCase() ?? "";
+  if (normalized === "domain" || normalized === "url") return "Domains / URLs";
+  if (normalized === "ip" || normalized === "ip:port") return "IP Addresses";
+  if (normalized.includes("hash")) return "Hashes";
+  return "Other";
+}
+
 export async function getThreatIntelligenceOverview(): Promise<ThreatIntelligenceOverviewData> {
   const now = Date.now();
   if (
@@ -125,10 +135,16 @@ export async function getThreatIntelligenceOverview(): Promise<ThreatIntelligenc
   let maliciousIpsCount = 0;
   let maliciousHashesCount = 0;
   let maliciousDomainsCount = 0;
+  let otherIocsCount = 0;
 
   const malwareCounts: Record<string, number> = {};
   const threatTypeCounts: Record<string, number> = {};
-  const iocTypeCounts: Record<string, number> = {};
+  const iocTypeCounts: Record<ExecutiveIocType, number> = {
+    "Domains / URLs": 0,
+    "IP Addresses": 0,
+    Hashes: 0,
+    Other: 0,
+  };
 
   const sampleIps: string[] = [];
   const sampleHashes: string[] = [];
@@ -142,26 +158,24 @@ export async function getThreatIntelligenceOverview(): Promise<ThreatIntelligenc
   let prevPeriodC2 = 0;
 
   for (const item of iocs) {
-    // IOC Type classification
-    if (item.ioc_type === "ip:port" || item.ioc_type === "ip") {
+    // Each accepted ThreatFox IOC contributes to exactly one executive type bucket.
+    const executiveIocType = classifyIocType(item.ioc_type);
+    iocTypeCounts[executiveIocType]++;
+    if (executiveIocType === "IP Addresses") {
       maliciousIpsCount++;
-      iocTypeCounts["Malicious IP"] = (iocTypeCounts["Malicious IP"] || 0) + 1;
       const cleanIp = item.ioc.split(":")[0];
       if (cleanIp && sampleIps.length < 3 && !sampleIps.includes(cleanIp)) {
         sampleIps.push(cleanIp);
       }
-    } else if (item.ioc_type.includes("hash") || item.ioc_type === "sha256_hash" || item.ioc_type === "md5_hash" || item.ioc_type === "sha1_hash") {
+    } else if (executiveIocType === "Hashes") {
       maliciousHashesCount++;
-      iocTypeCounts["File Hashes"] = (iocTypeCounts["File Hashes"] || 0) + 1;
       if (sampleHashes.length < 2) {
         sampleHashes.push(item.ioc);
       }
-    } else if (item.ioc_type === "domain" || item.ioc_type === "url") {
+    } else if (executiveIocType === "Domains / URLs") {
       maliciousDomainsCount++;
-      iocTypeCounts["Domains & URLs"] = (iocTypeCounts["Domains & URLs"] || 0) + 1;
     } else {
-      const typeLabel = item.ioc_type_desc || item.ioc_type || "Other";
-      iocTypeCounts[typeLabel] = (iocTypeCounts[typeLabel] || 0) + 1;
+      otherIocsCount++;
     }
 
     // Threat Type classification
@@ -344,6 +358,7 @@ export async function getThreatIntelligenceOverview(): Promise<ThreatIntelligenc
       maliciousIpsCount,
       maliciousHashesCount,
       maliciousDomainsCount,
+      otherIocsCount,
     } : null,
     topMalware: threatFoxAvailable ? topMalware : [],
     topThreatTypes: threatFoxAvailable ? topThreatTypes : [],

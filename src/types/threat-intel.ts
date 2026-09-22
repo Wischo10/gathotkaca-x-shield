@@ -8,6 +8,7 @@ export interface ThreatIntelKpi {
   maliciousIpsCount: number;
   maliciousHashesCount: number;
   maliciousDomainsCount: number;
+  otherIocsCount: number;
 }
 
 export interface ThreatCategoryItem {

@@ -4,12 +4,14 @@ import Link from "next/link";
 import { Topbar } from "@/components/layout/Topbar";
 import { Panel, PanelEmpty, PanelError, PanelLoading } from "@/components/ui/Panel";
 import { DataProvenanceBadge } from "@/components/ui/DataProvenanceBadge";
+import { ConfirmActionDialog } from "@/components/ui/ConfirmActionDialog";
 import { useApiResult } from "@/hooks/useApiResult";
 import { useSidebarToggle } from "@/context/sidebar-context";
 import type { IncidentListResponse } from "@/types/ciso";
 import type { IncidentTicketingOverview } from "@/types/incident-ticketing";
 
 type Action = "acknowledge" | "contain" | "resolve";
+type Confirmation = { incidentId: string; action: Action; title: string; description: string; confirmLabel: string };
 
 export default function CisoIncidentsPage() {
   const openSidebar = useSidebarToggle();
@@ -17,6 +19,15 @@ export default function CisoIncidentsPage() {
   const ticketingState = useApiResult<IncidentTicketingOverview>("/api/ciso/incident-ticketing");
   const [pending, setPending] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
+  function confirmAction(incidentId: string, action: Action) {
+    const content: Record<Action, Omit<Confirmation, "incidentId" | "action">> = {
+      acknowledge: { title: "Acknowledge Incident", description: "Confirm that this incident should be marked as acknowledged. This will update the internal incident lifecycle record.", confirmLabel: "Confirm Acknowledge" },
+      contain: { title: "Mark Incident as Contained", description: "Confirm that this incident should be recorded as contained. This records an internal lifecycle transition and does not execute containment in Wazuh, Bitdefender, or another external security system.", confirmLabel: "Confirm Contained" },
+      resolve: { title: "Resolve Incident", description: "Confirm that this incident should be recorded as resolved in the internal incident lifecycle.", confirmLabel: "Confirm Resolve" },
+    };
+    setConfirmation({ incidentId, action, ...content[action] });
+  }
   async function perform(incidentId: string, action: Action) {
     setPending(`${incidentId}:${action}`); setMessage(null);
     try {
@@ -24,7 +35,8 @@ export default function CisoIncidentsPage() {
       const body = await response.json().catch(() => null);
       setMessage(response.ok ? body?.message ?? "Lifecycle action recorded." : body?.error ?? "Lifecycle action failed.");
       if (response.ok) state.reload();
-    } finally { setPending(null); }
+    } catch { setMessage("Lifecycle action failed."); }
+    finally { setPending(null); }
   }
   return <><Topbar title="CISO Incident Detail" subtitle="Bitdefender source incidents with internal analyst lifecycle events" onMenuClick={openSidebar}/><main className="flex-1 space-y-4 bg-slate-50 p-4 sm:p-6 dark:bg-slate-950">
     <Link href="/dashboard/ciso" className="text-sm text-brand-blue hover:underline">← Back to CISO dashboard</Link>
@@ -42,9 +54,9 @@ export default function CisoIncidentsPage() {
             <td><b>Gathotkaca analyst actions</b><div>Acknowledged: {item.acknowledgedAt ? new Date(item.acknowledgedAt).toLocaleString() : "Not recorded"}</div><div>Contained: {item.containedAt ? new Date(item.containedAt).toLocaleString() : "Not recorded"}</div><div>Resolved: {item.resolvedAt ? new Date(item.resolvedAt).toLocaleString() : "Not recorded"}</div></td>
             <td>{item.detectedAt && item.acknowledgedAt ? "Eligible" : "Not eligible"}</td><td>{item.detectedAt && item.containedAt ? "Eligible" : "Not eligible"}</td><td>{item.detectedAt && item.resolvedAt ? "Eligible" : "Not eligible"}</td>
             <td><div className="flex gap-1">{canAcknowledge
-              ? <ActionButton label="Acknowledge" disabled={pending !== null} busy={pending === `${item.id}:acknowledge`} onClick={() => perform(item.id, "acknowledge")}/>
-              : canContain ? <ActionButton label="Mark Contained" disabled={pending !== null} busy={pending === `${item.id}:contain`} onClick={() => perform(item.id, "contain")}/>
-              : canResolve ? <ActionButton label="Resolve" disabled={pending !== null} busy={pending === `${item.id}:resolve`} onClick={() => perform(item.id, "resolve")}/>
+              ? <ActionButton label="Acknowledge" disabled={pending !== null} busy={pending === `${item.id}:acknowledge`} onClick={() => confirmAction(item.id, "acknowledge")}/>
+              : canContain ? <ActionButton label="Mark Contained" disabled={pending !== null} busy={pending === `${item.id}:contain`} onClick={() => confirmAction(item.id, "contain")}/>
+              : canResolve ? <ActionButton label="Resolve" disabled={pending !== null} busy={pending === `${item.id}:resolve`} onClick={() => confirmAction(item.id, "resolve")}/>
               : <span className="text-slate-400">{item.resolvedAt ? "Resolved" : item.detectedAt ? "No valid action" : "Detection unavailable"}</span>}
             </div></td></tr>;
         })}</tbody></table><div className="mt-3 text-xs text-slate-500">{state.data.total} active Bitdefender incidents. MTTD remains unavailable because no trustworthy pre-detection occurrence timestamp exists.</div></div>)}
@@ -71,7 +83,7 @@ export default function CisoIncidentsPage() {
           </tr>)}</tbody>
         </table>
       </div>}
-    </Panel></main></>;
+    </Panel></main><ConfirmActionDialog open={confirmation !== null} title={confirmation?.title ?? "Confirm action"} description={confirmation?.description ?? ""} confirmLabel={confirmation?.confirmLabel ?? "Confirm"} busy={pending !== null} onCancel={() => setConfirmation(null)} onConfirm={() => { if (!confirmation || pending !== null) return; const selected = confirmation; void perform(selected.incidentId, selected.action).finally(() => setConfirmation(null)); }}/></>;
 }
 function ActionButton({ label, disabled, busy, onClick }: { label: string; disabled: boolean; busy: boolean; onClick: () => void }) {
   return <button type="button" disabled={disabled} onClick={onClick} className="rounded border border-slate-300 px-2 py-1 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700">{busy ? "Saving…" : label}</button>;

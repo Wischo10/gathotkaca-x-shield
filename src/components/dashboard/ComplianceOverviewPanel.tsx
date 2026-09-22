@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { Panel, PanelEmpty, PanelError, PanelLoading } from "@/components/ui/Panel";
+import { SourceFreshness } from "@/components/ui/SourceFreshness";
 import { useApiResult } from "@/hooks/useApiResult";
 import type {
   ComplianceFrameworkItem,
@@ -18,6 +19,13 @@ export function ComplianceOverviewPanel() {
     if (selectedFramework === "all") return state.data.frameworks;
     return state.data.frameworks.filter((f) => f.id === selectedFramework);
   }, [state, selectedFramework]);
+  const latestFormalAssessment = state.phase === "ready"
+    ? state.data.frameworks
+      .filter(item => item.metricKind !== "telemetry_observation" && item.lastAssessedAt)
+      .map(item => item.lastAssessedAt as string)
+      .sort()
+      .at(-1) ?? null
+    : null;
 
   return (
     <Panel
@@ -74,13 +82,18 @@ export function ComplianceOverviewPanel() {
         </div>
       )}
 
-      <div className="mt-3 flex items-center justify-end border-t border-slate-100 dark:border-slate-800 pt-2 text-xs">
-        <a
+      <div className="mt-3 flex items-end justify-between gap-3 border-t border-slate-100 dark:border-slate-800 pt-2 text-xs">
+        <span className="text-[10px] leading-4 text-slate-400">
+          <span className="block">Formal score: Passed / (Passed + Partial + Failed); Partial receives no compliant credit.</span>
+          <span className="block">Executive aggregate: completed frameworks equally weighted; incomplete frameworks and MITRE observations excluded.</span>
+          <SourceFreshness source="PostgreSQL formal assessments" timestamp={latestFormalAssessment} timestampLabel="Latest formal assessment" className="mt-1"/>
+        </span>
+        <Link
           href="/dashboard/compliance"
           className="text-brand-blue hover:underline cursor-pointer font-medium"
         >
           View compliance dashboard →
-        </a>
+        </Link>
       </div>
     </Panel>
   );

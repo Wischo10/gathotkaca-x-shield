@@ -31,10 +31,14 @@ export function calculateControlAssessmentSummary(
   totalControls: number
 ) {
   const completeness = calculateAssessmentCompleteness(compliant + partial + nonCompliant, totalControls);
-  const scoreEligible = compliant + nonCompliant;
-  const score = scoreEligible > 0 ? Math.round(compliant / scoreEligible * 100) : null;
+  // Formal score methodology: fully compliant controls receive credit; Partial
+  // and Non-Compliant controls remain in the assessed-result denominator.
+  // No unapproved fractional credit is assigned to Partial outcomes.
+  const assessedResults = compliant + partial + nonCompliant;
+  const score = assessedResults > 0 ? Math.round(compliant / assessedResults * 100) : null;
   const finalComplianceStatus = completeness.assessmentComplete && score !== null
-    ? score >= 85 ? "compliant" as const : score >= 50 ? "partial" as const : "non_compliant" as const
+    ? partial > 0 ? "partial" as const
+      : score >= 85 ? "compliant" as const : score >= 50 ? "partial" as const : "non_compliant" as const
     : null;
   return { ...completeness, score, finalComplianceStatus };
 }

@@ -1,6 +1,7 @@
 import "server-only";
 import { getDb, getPostgresPool } from "@/lib/db";
 import { env } from "@/lib/env";
+import { normalizeRiskCategory, normalizeTreatmentStatus } from "@/lib/risk-ranking";
 import type { CreateRiskAssessment, NewRiskAssessment, RiskRecord } from "@/types/risk";
 
 const TEXT_FIELDS = [
@@ -14,6 +15,7 @@ const CORE_FIELDS = ["title", "scenarioDescription", "threatNarrative", "vulnera
 const CREATE_TEXT_FIELDS = TEXT_FIELDS.filter(field => field !== "riskCode");
 const ASSESSMENT_FIELDS = CREATE_TEXT_FIELDS.filter(field => !CORE_FIELDS.includes(field as typeof CORE_FIELDS[number]));
 const INPUT_FIELDS = [...CREATE_TEXT_FIELDS, "dueDate", "reviewDate", "notes", "assessmentStatus"] as const;
+const RISK_CATEGORY_FIELDS = ["inherentRisk", "residualRisk", "severity"] as const;
 
 function validDate(value: unknown): value is string {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
@@ -32,6 +34,13 @@ export function validateRiskAssessment(value: unknown): CreateRiskAssessment | n
     if (input[field] !== null && input[field] !== undefined
       && (typeof input[field] !== "string" || !input[field].trim() || input[field].length > 10000)) return null;
   }
+  for (const field of RISK_CATEGORY_FIELDS) {
+    const fieldValue = input[field];
+    if (fieldValue !== null && fieldValue !== undefined
+      && normalizeRiskCategory(typeof fieldValue === "string" ? fieldValue : null) === null) return null;
+  }
+  if (input.treatmentStatus !== null && input.treatmentStatus !== undefined
+    && normalizeTreatmentStatus(typeof input.treatmentStatus === "string" ? input.treatmentStatus : null) === null) return null;
   if (input.assessmentStatus === "assessed") {
     if (ASSESSMENT_FIELDS.some(field => typeof input[field] !== "string" || !(input[field] as string).trim())) return null;
     if (!validDate(input.dueDate) || !validDate(input.reviewDate)) return null;
@@ -44,6 +53,12 @@ export function validateRiskAssessment(value: unknown): CreateRiskAssessment | n
     if (field === "assessmentStatus") return [field, fieldValue];
     if (field === "dueDate" || field === "reviewDate") return [field, fieldValue ?? null];
     if (field === "notes") return [field, typeof fieldValue === "string" ? fieldValue.trim() || null : null];
+    if (RISK_CATEGORY_FIELDS.includes(field as typeof RISK_CATEGORY_FIELDS[number])) {
+      return [field, normalizeRiskCategory(typeof fieldValue === "string" ? fieldValue : null)];
+    }
+    if (field === "treatmentStatus") {
+      return [field, normalizeTreatmentStatus(typeof fieldValue === "string" ? fieldValue : null)];
+    }
     return [field, typeof fieldValue === "string" ? fieldValue.trim() : null];
   })) as unknown as CreateRiskAssessment;
 }
