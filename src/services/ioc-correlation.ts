@@ -142,8 +142,14 @@ export async function getTopIocDetections(): Promise<TopIocDetection[]> {
   const result = await getDb().query<{
     indicator_value: string; wazuh_observation_count: string | number;
     enriched_at: Date | string; wazuh_last_observed_at: Date | string;
+    country_code: string | null; abuse_confidence_score: string | number | null;
+    total_reports: string | number | null; last_reported_at: string | null;
   }>(
-    `SELECT indicator_value, wazuh_observation_count, enriched_at, wazuh_last_observed_at
+    `SELECT indicator_value, wazuh_observation_count, enriched_at, wazuh_last_observed_at,
+            NULLIF(provider_evidence->>'countryCode', '') AS country_code,
+            NULLIF(provider_evidence->>'abuseConfidenceScore', '') AS abuse_confidence_score,
+            NULLIF(provider_evidence->>'totalReports', '') AS total_reports,
+            NULLIF(provider_evidence->>'lastReportedAt', '') AS last_reported_at
      FROM ioc_correlations
      WHERE indicator_type = 'ip' AND ti_provider = 'abuseipdb'
        AND correlation_status = 'confirmed_malicious'
@@ -154,6 +160,10 @@ export async function getTopIocDetections(): Promise<TopIocDetection[]> {
     iocValue: row.indicator_value, type: "IP", detectionCount: Number(row.wazuh_observation_count),
     provider: "abuseipdb", enrichedAt: new Date(row.enriched_at).toISOString(),
     lastObservedAt: new Date(row.wazuh_last_observed_at).toISOString(),
+    countryCode: row.country_code,
+    abuseConfidenceScore: row.abuse_confidence_score === null ? null : Number(row.abuse_confidence_score),
+    totalReports: row.total_reports === null ? null : Number(row.total_reports),
+    lastReportedAt: row.last_reported_at,
   }));
 }
 
@@ -203,9 +213,10 @@ export async function backfillConfirmedIocCountries(limit = 10): Promise<Country
 
 /** PostgreSQL-only attack-country read model; no provider or Wazuh access. */
 export async function getAttackCountryDetections(): Promise<AttackCountryDetection[]> {
-  const rows = (await getDb().query<{ country_code: string; detection_count: string | number }>(
+  const rows = (await getDb().query<{ country_code: string; detection_count: string | number; ioc_count: string | number }>(
     `SELECT provider_evidence->>'countryCode' AS country_code,
-            SUM(wazuh_observation_count)::bigint AS detection_count
+            SUM(wazuh_observation_count)::bigint AS detection_count,
+            COUNT(DISTINCT indicator_value)::int AS ioc_count
      FROM ioc_correlations
      WHERE indicator_type = 'ip' AND ti_provider = 'abuseipdb'
        AND correlation_status = 'confirmed_malicious'
@@ -218,5 +229,6 @@ export async function getAttackCountryDetections(): Promise<AttackCountryDetecti
     countryCode: row.country_code,
     countryName: null,
     detectionCount: Number(row.detection_count),
+    iocCount: Number(row.ioc_count),
   }));
 }

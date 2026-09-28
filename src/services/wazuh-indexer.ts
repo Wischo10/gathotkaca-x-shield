@@ -10,6 +10,8 @@ import type {
   TimeSeriesPoint,
   TopAlertingRule,
   SocTelemetry,
+  SocAlertDetailResult,
+  SocAlertRecord,
   WazuhIpIocCandidate,
 } from "@/types/soc";
 
@@ -120,6 +122,127 @@ const RANGE_TO_GTE: Record<string, string> = {
   "30d": "now-30d",
 };
 
+type OpenSearchQuery = Record<string, unknown>;
+
+// Application classification priority. A document matching multiple metadata
+// rules is assigned only to the first rule, so displayed source counts remain
+// mutually exclusive and never double-count an alert document.
+const DETECTION_SOURCE_RULES: Array<{ key: string; label: string; query: OpenSearchQuery }> = [
+  { key: "nginx", label: "Nginx", query: { prefix: { location: "/var/log/nginx/" } } },
+  { key: "suricata", label: "Suricata IDS", query: { term: { location: "/var/log/suricata/eve.json" } } },
+  { key: "linux_audit", label: "Linux Audit", query: { term: { location: "/var/log/audit/audit.log" } } },
+  { key: "container_logs", label: "Container Logs", query: { prefix: { location: "/var/log/containers/" } } },
+  { key: "journald", label: "Journald", query: { term: { location: "journald" } } },
+  { key: "windows_event_channel", label: "Windows Event Channel", query: { exists: { field: "data.win.system.channel" } } },
+  { key: "virustotal", label: "VirusTotal Integration", query: { bool: { should: [{ term: { location: "virustotal" } }, { term: { "data.integration": "virustotal" } }], minimum_should_match: 1 } } },
+  { key: "wazuh_fim", label: "Wazuh FIM", query: { term: { location: "syscheck" } } },
+  { key: "wazuh_rootcheck", label: "Wazuh Rootcheck", query: { term: { location: "rootcheck" } } },
+  { key: "opnsense", label: "OPNsense", query: { prefix: { location: "/var/ossec/logs/opnsense" } } },
+  { key: "apache", label: "Apache", query: { prefix: { location: "/var/log/apache2/" } } },
+  { key: "system_syslog", label: "System Syslog", query: { term: { location: "/var/log/syslog" } } },
+];
+
+function mutuallyExclusiveDetectionSourceFilters(): Record<string, OpenSearchQuery> {
+  const higherPriorityQueries: OpenSearchQuery[] = [];
+  return Object.fromEntries(DETECTION_SOURCE_RULES.map((rule) => {
+    const exclusiveQuery = higherPriorityQueries.length === 0
+      ? rule.query
+      : { bool: { filter: [rule.query], must_not: [...higherPriorityQueries] } };
+    higherPriorityQueries.push(rule.query);
+    return [rule.key, exclusiveQuery];
+  }));
+}
+
+export const SOC_DETECTION_SOURCE_LABELS = [...DETECTION_SOURCE_RULES.map((rule) => rule.label), "Unclassified"] as const;
+
+export interface SocAlertDetailFilters {
+  severity?: Severity;
+  ruleId?: string;
+  agent?: string;
+  sourceIp?: string;
+  tactic?: string;
+  ageBucket?: "0-15m" | "15-60m" | "1-4h" | "4-24h" | ">24h";
+  day?: string;
+  detectionSource?: string;
+  limit?: number;
+  offset?: number;
+}
+
+/** Bounded read-only alert evidence query with a fixed source allowlist. */
+export async function getSocAlertDetails(filters: SocAlertDetailFilters = {}): Promise<SocAlertDetailResult> {
+  const limit = Math.min(Math.max(Math.trunc(filters.limit ?? 25), 1), 50);
+  const offset = Math.min(Math.max(Math.trunc(filters.offset ?? 0), 0), 500);
+  const clauses: OpenSearchQuery[] = [{ range: { "@timestamp": { gte: "now-7d", lte: "now" } } }];
+  if (filters.severity === "critical") clauses.push({ range: { "rule.level": { gte: WAZUH_SEVERITY_LEVELS.criticalMin } } });
+  if (filters.severity === "high") clauses.push({ range: { "rule.level": { gte: WAZUH_SEVERITY_LEVELS.highMin, lt: WAZUH_SEVERITY_LEVELS.criticalMin } } });
+  if (filters.severity === "medium") clauses.push({ range: { "rule.level": { gte: WAZUH_SEVERITY_LEVELS.mediumMin, lt: WAZUH_SEVERITY_LEVELS.highMin } } });
+  if (filters.severity === "low") clauses.push({ range: { "rule.level": { lt: WAZUH_SEVERITY_LEVELS.mediumMin } } });
+  if (filters.ruleId) clauses.push({ term: { "rule.id": filters.ruleId } });
+  if (filters.agent) clauses.push({ term: { "agent.name": filters.agent } });
+  if (filters.sourceIp) clauses.push({ term: { "data.srcip": filters.sourceIp } });
+  if (filters.tactic) clauses.push({ term: { "rule.mitre.tactic": filters.tactic } });
+  if (filters.day) clauses.push({ range: { "@timestamp": { gte: `${filters.day}T00:00:00.000Z`, lt: `${filters.day}T00:00:00.000Z||+1d` } } });
+  const ageRanges: Record<NonNullable<SocAlertDetailFilters["ageBucket"]>, OpenSearchQuery> = {
+    "0-15m": { range: { "@timestamp": { gte: "now-15m", lte: "now" } } },
+    "15-60m": { range: { "@timestamp": { gte: "now-60m", lt: "now-15m" } } },
+    "1-4h": { range: { "@timestamp": { gte: "now-4h", lt: "now-60m" } } },
+    "4-24h": { range: { "@timestamp": { gte: "now-24h", lt: "now-4h" } } },
+    ">24h": { range: { "@timestamp": { gte: "now-7d", lt: "now-24h" } } },
+  };
+  if (filters.ageBucket) clauses.push(ageRanges[filters.ageBucket]);
+  if (filters.detectionSource) {
+    const exclusive = mutuallyExclusiveDetectionSourceFilters();
+    const rule = DETECTION_SOURCE_RULES.find((item) => item.label === filters.detectionSource);
+    if (rule) clauses.push(exclusive[rule.key]);
+    else if (filters.detectionSource === "Unclassified") clauses.push({ bool: { must_not: DETECTION_SOURCE_RULES.map((item) => item.query) } });
+  }
+  const response = await fetchIndexerJson<{ timed_out?: boolean; _shards?: { failed: number }; hits: { total: { value: number } | number; hits: Array<{ _id: string; _source?: Record<string, unknown> }> } }>(
+    `/${encodeURIComponent(env.wazuhIndexer.alertsIndex())}/_search`,
+    { size: limit, from: offset, track_total_hits: true, sort: [{ "@timestamp": { order: "desc" } }], query: { bool: { filter: clauses } }, _source: [
+      "@timestamp", "rule.id", "rule.level", "rule.description", "rule.mitre.id", "rule.mitre.tactic",
+      "agent.id", "agent.name", "agent.ip", "data.srcip", "data.dstuser", "user", "location",
+      "data.win.system.channel", "data.integration",
+    ] }
+  );
+  if (response.timed_out || (response._shards?.failed ?? 0) > 0) throw new Error("Wazuh alert detail query was incomplete");
+  const total = typeof response.hits.total === "number" ? response.hits.total : response.hits.total.value;
+  return { records: response.hits.hits.map((hit) => mapAlertRecord(hit._id, hit._source ?? {})), total, limit, offset, range: "7d", provenance: "REAL", sourceLabel: "Wazuh / OpenSearch" };
+}
+
+function mapAlertRecord(id: string, source: Record<string, unknown>): SocAlertRecord {
+  const rule = objectValue(source.rule); const agent = objectValue(source.agent); const data = objectValue(source.data);
+  const mitre = objectValue(rule.mitre); const win = objectValue(data.win); const system = objectValue(win.system);
+  const level = Number(rule.level);
+  const location = stringValue(source.location);
+  const integration = stringValue(data.integration);
+  return {
+    id, timestamp: stringValue(source["@timestamp"]) ?? "", severity: levelToSeverity(Number.isFinite(level) ? level : 0),
+    ruleLevel: Number.isFinite(level) ? level : 0, ruleId: stringValue(rule.id) ?? "-", ruleDescription: stringValue(rule.description) ?? "-",
+    agentId: stringValue(agent.id), agentName: stringValue(agent.name), agentIp: stringValue(agent.ip), sourceIp: stringValue(data.srcip),
+    user: stringValue(source.user), destinationUser: stringValue(data.dstuser), location, channel: stringValue(system.channel), integration,
+    mitreTactics: stringArray(mitre.tactic), mitreTechniqueIds: stringArray(mitre.id), detectionSource: classifyDetectionSource(location, stringValue(system.channel), integration),
+  };
+}
+
+function objectValue(value: unknown): Record<string, unknown> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
+function stringValue(value: unknown): string | null { return typeof value === "string" && value.trim() ? value.trim() : typeof value === "number" ? String(value) : null; }
+function stringArray(value: unknown): string[] { return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : typeof value === "string" ? [value] : []; }
+function classifyDetectionSource(location: string | null, channel: string | null, integration: string | null): string | null {
+  if (location?.startsWith("/var/log/nginx/")) return "Nginx";
+  if (location === "/var/log/suricata/eve.json") return "Suricata IDS";
+  if (location === "/var/log/audit/audit.log") return "Linux Audit";
+  if (location?.startsWith("/var/log/containers/")) return "Container Logs";
+  if (location === "journald") return "Journald";
+  if (channel) return "Windows Event Channel";
+  if (location === "virustotal" || integration === "virustotal") return "VirusTotal Integration";
+  if (location === "syscheck") return "Wazuh FIM";
+  if (location === "rootcheck") return "Wazuh Rootcheck";
+  if (location?.startsWith("/var/ossec/logs/opnsense")) return "OPNsense";
+  if (location?.startsWith("/var/log/apache2/")) return "Apache";
+  if (location === "/var/log/syslog") return "System Syslog";
+  return null;
+}
+
 /**
  * Real document counts from the configured Wazuh alerts index.
  * The project severity convention maps Wazuh rule levels >= 14 to Critical.
@@ -222,7 +345,7 @@ interface SocTelemetryResponse {
     trend?: { buckets?: Array<{ key_as_string?: string; key: number; critical?: { doc_count: number }; high?: { doc_count: number }; medium?: { doc_count: number }; low?: { doc_count: number } }> };
     aging?: { buckets?: Record<string, { doc_count: number }> };
     mitre?: { buckets?: Array<{ key: string; doc_count: number }> };
-    top_rules?: { buckets?: Array<{ key: string; doc_count: number; descriptions?: { buckets?: Array<{ key: string; doc_count: number }> } }> };
+    top_rules?: { buckets?: Array<{ key: string; doc_count: number; representative_description?: { hits?: { hits?: Array<{ _source?: { rule?: { description?: unknown } } }> } } }> };
     live_events?: unknown;
     detection_sources?: { buckets?: Record<string, { doc_count: number }> };
   };
@@ -246,7 +369,7 @@ export async function getSocTelemetry(range = "7d"): Promise<SocTelemetry> {
           medium: { range: { "rule.level": { gte: WAZUH_SEVERITY_LEVELS.mediumMin, lt: WAZUH_SEVERITY_LEVELS.highMin } } },
           low: { range: { "rule.level": { lt: WAZUH_SEVERITY_LEVELS.mediumMin } } },
         } } },
-        trend: { date_histogram: { field: "@timestamp", fixed_interval: "1d", min_doc_count: 0, extended_bounds: { min: "now-7d", max: "now" } }, aggs: {
+        trend: { date_histogram: { field: "@timestamp", calendar_interval: "1d", time_zone: "UTC", min_doc_count: 0, extended_bounds: { min: "now-7d", max: "now" } }, aggs: {
           critical: { filter: { range: { "rule.level": { gte: WAZUH_SEVERITY_LEVELS.criticalMin } } } },
           high: { filter: { range: { "rule.level": { gte: WAZUH_SEVERITY_LEVELS.highMin, lt: WAZUH_SEVERITY_LEVELS.criticalMin } } } },
           medium: { filter: { range: { "rule.level": { gte: WAZUH_SEVERITY_LEVELS.mediumMin, lt: WAZUH_SEVERITY_LEVELS.highMin } } } },
@@ -260,22 +383,9 @@ export async function getSocTelemetry(range = "7d"): Promise<SocTelemetry> {
           ">24h": { range: { "@timestamp": { lt: "now-24h" } } },
         } } },
         mitre: { terms: { field: "rule.mitre.tactic", size: 20 } },
-        top_rules: { terms: { field: "rule.id", size: 10 }, aggs: { descriptions: { terms: { field: "rule.description.keyword", size: 1 } } } },
+        top_rules: { terms: { field: "rule.id", size: 10 }, aggs: { representative_description: { top_hits: { size: 1, _source: ["rule.description"] } } } },
         live_events: { top_hits: { size: 10, sort: [{ "@timestamp": { order: "desc" } }], _source: ["@timestamp", "rule.id", "rule.description", "rule.level", "agent.name", "agent.ip", "data.srcip", "data.dstuser", "data.dstuser", "user"] } },
-        detection_sources: { filters: { filters: {
-          nginx: { prefix: { location: "/var/log/nginx/" } },
-          suricata: { term: { location: "/var/log/suricata/eve.json" } },
-          linux_audit: { term: { location: "/var/log/audit/audit.log" } },
-          container_logs: { prefix: { location: "/var/log/containers/" } },
-          journald: { term: { location: "journald" } },
-          windows_event_channel: { exists: { field: "data.win.system.channel" } },
-          virustotal: { bool: { should: [{ term: { location: "virustotal" } }, { term: { "data.integration": "virustotal" } }], minimum_should_match: 1 } },
-          wazuh_fim: { term: { location: "syscheck" } },
-          wazuh_rootcheck: { term: { location: "rootcheck" } },
-          opnsense: { prefix: { location: "/var/ossec/logs/opnsense" } },
-          apache: { prefix: { location: "/var/log/apache2/" } },
-          system_syslog: { term: { location: "/var/log/syslog" } },
-        }, other_bucket: true, other_bucket_key: "unclassified" } },
+        detection_sources: { filters: { filters: mutuallyExclusiveDetectionSourceFilters(), other_bucket: true, other_bucket_key: "unclassified" } },
       },
     }
   );
@@ -300,20 +410,16 @@ export async function getSocTelemetry(range = "7d"): Promise<SocTelemetry> {
   const liveEvents = (response.aggregations.live_events as unknown as { hits?: { hits?: Array<{ _source?: Record<string, unknown> }> } } | undefined)?.hits?.hits?.map((hit) => mapLiveEvent(hit._source ?? {})) ?? [];
   const sourceBuckets = response.aggregations.detection_sources?.buckets;
   if (!sourceBuckets) throw new Error("Missing Wazuh detection source buckets");
-  const sourceLabels: Record<string, string> = {
-    nginx: "Nginx", suricata: "Suricata IDS", linux_audit: "Linux Audit",
-    container_logs: "Container Logs", journald: "Journald",
-    windows_event_channel: "Windows Event Channel", virustotal: "VirusTotal Integration",
-    wazuh_fim: "Wazuh FIM", wazuh_rootcheck: "Wazuh Rootcheck",
-    opnsense: "OPNsense", apache: "Apache", system_syslog: "System Syslog",
-  };
-  const detectionSourceItems = Object.entries(sourceLabels)
-    .map(([key, source]) => ({ source, count: sourceBuckets[key]?.doc_count ?? 0 }))
+  const detectionSourceItems = DETECTION_SOURCE_RULES
+    .map(({ key, label }) => ({ source: label, count: sourceBuckets[key]?.doc_count ?? 0 }))
     .filter((item) => item.count > 0)
     .sort((a, b) => b.count - a.count);
   const sourceUnclassified = sourceBuckets.unclassified?.doc_count ?? 0;
   const sourceClassified = detectionSourceItems.reduce((sum, item) => sum + item.count, 0);
   const sourceTotal = sourceClassified + sourceUnclassified;
+  if (sourceTotal !== totalEvents || sourceClassified > totalEvents) {
+    throw new Error("Wazuh detection source aggregation was inconsistent");
+  }
   return {
     range: "7d",
     observedAt,
@@ -324,13 +430,16 @@ export async function getSocTelemetry(range = "7d"): Promise<SocTelemetry> {
     trend,
     aging: agingCounts.map((item) => ({ ...item, percentage: totalEvents === 0 ? 0 : item.count / totalEvents * 100 })),
     mitre: (response.aggregations.mitre?.buckets ?? []).map((bucket) => ({ tactic: bucket.key, count: bucket.doc_count })),
-    topRules: (response.aggregations.top_rules?.buckets ?? []).map((bucket) => ({ id: bucket.key, description: bucket.descriptions?.buckets?.[0]?.key ?? "-", count: bucket.doc_count })),
+    topRules: (response.aggregations.top_rules?.buckets ?? []).map((bucket) => {
+      const value = bucket.representative_description?.hits?.hits?.[0]?._source?.rule?.description;
+      return { id: bucket.key, description: typeof value === "string" ? value.trim() : "", count: bucket.doc_count };
+    }),
     liveEvents,
     detectionSources: {
-      total: sourceTotal,
+      total: totalEvents,
       classified: sourceClassified,
       unclassified: sourceUnclassified,
-      coveragePercent: sourceTotal === 0 ? 0 : sourceClassified / sourceTotal * 100,
+      coveragePercent: totalEvents === 0 ? 0 : Math.min(100, sourceClassified / totalEvents * 100),
       sources: detectionSourceItems,
     },
   };
@@ -360,7 +469,7 @@ export async function getAlertsTrend(
   return telemetry.trend.map((point) => ({ date: point.timestamp, critical: point.critical, high: point.high, medium: point.medium, low: point.low }));
 }
 
-/** Most recent N events for the "Live Events" table. */
+/** Most recent N alert documents for the "Recent Alerts" table. */
 export async function getLiveEvents(limit = 10): Promise<LiveEvent[]> {
   const telemetry = await getSocTelemetry("7d");
   return telemetry.liveEvents.slice(0, Math.min(limit, 10));
@@ -372,7 +481,10 @@ export async function getTopAlertingRules(
   limit = 8
 ): Promise<TopAlertingRule[]> {
   const telemetry = await getSocTelemetry(range);
-  return telemetry.topRules.slice(0, limit).map((rule) => ({ ruleName: `${rule.id} — ${rule.description}`, count: rule.count }));
+  return telemetry.topRules.slice(0, limit).map((rule) => ({
+    ruleName: rule.description ? `${rule.id} — ${rule.description}` : `Rule ${rule.id}`,
+    count: rule.count,
+  }));
 }
 
 function levelToSeverity(level: number): Severity {

@@ -1,14 +1,14 @@
 import "server-only";
 import { getSocAlertCounts } from "@/services/wazuh-indexer";
-import { getLifecycleMetrics, getPersistedVerifiedIncidentMetrics } from "@/services/incident-lifecycle-service";
+import { getLifecycleMetrics, getPersistedVerifiedIncidentMetrics, INCIDENT_VERIFICATION_FRESHNESS_MS } from "@/services/incident-lifecycle-service";
+import { getIncidentTicketingDemo } from "@/services/incident-ticketing-provider";
 import type { SocMetric, SocMetrics } from "@/types/soc";
 
 const RANGE = "7d" as const;
 const WAZUH_SOURCE = "Wazuh Indexer alerts index";
-const INCIDENT_VERIFICATION_FRESHNESS_MS = 24 * 60 * 60 * 1000;
 
 function unavailable(source: string, reason: string, sampleCount?: number): SocMetric {
-  return { value: null, source, reason, ...(sampleCount === undefined ? {} : { sampleCount }) };
+  return { value: null, source, provenance: "NOT_AVAILABLE", reason, ...(sampleCount === undefined ? {} : { sampleCount }) };
 }
 
 /**
@@ -16,15 +16,19 @@ function unavailable(source: string, reason: string, sampleCount?: number): SocM
  *
  * Incidents means Bitdefender incidents whose earliest valid
  * details.alerts[].date falls inside the dashboard window. MTTD remains
- * unavailable by methodology. MTTR uses genuine detected + response_started
- * operational lifecycle pairs in the same window.
+ * unavailable by methodology. Mean time to response start uses genuine
+ * detected + response_started operational lifecycle pairs in the same window.
  */
 export async function getSocMetrics(includeWazuh = true): Promise<SocMetrics> {
+  const workflowDemo = getIncidentTicketingDemo();
   let totalEvents = unavailable(WAZUH_SOURCE, "Wazuh Indexer unavailable");
   let totalAlerts = unavailable(WAZUH_SOURCE, "Wazuh Indexer unavailable");
   let criticalAlerts = unavailable(WAZUH_SOURCE, "Wazuh Indexer unavailable");
-  let incidents = unavailable("Bitdefender GravityZone incidents", "Bitdefender unavailable");
-  let mttrMinutes = unavailable("incident_lifecycle_events", "Lifecycle storage unavailable", 0);
+  let incidents = unavailable("incident_lifecycle_events", "Persisted verified incident data unavailable");
+  incidents.availability = "unavailable";
+  let meanTimeToResponseStartMinutes = workflowDemo
+    ? { value: workflowDemo.meanTimeToResponseStartMinutes, source: "demo incident lifecycle fixtures", sourceLabel: workflowDemo.sourceLabel, provenance: "DEMO" as const, sampleCount: workflowDemo.fixtureIds.length }
+    : unavailable("incident_lifecycle_events", "Lifecycle storage unavailable", 0);
 
   const [wazuhResult, incidentsResult, lifecycleResult] = await Promise.allSettled([
     includeWazuh ? getSocAlertCounts(RANGE) : Promise.reject(new Error("Wazuh omitted from this request")),
@@ -34,9 +38,9 @@ export async function getSocMetrics(includeWazuh = true): Promise<SocMetrics> {
 
   if (wazuhResult.status === "fulfilled") {
     const wazuh = wazuhResult.value;
-    totalEvents = { value: wazuh.totalEvents, source: WAZUH_SOURCE };
-    totalAlerts = { value: wazuh.totalAlerts, source: WAZUH_SOURCE };
-    criticalAlerts = { value: wazuh.criticalAlerts, source: `${WAZUH_SOURCE}; rule.level >= 14` };
+    totalEvents = { value: wazuh.totalEvents, source: WAZUH_SOURCE, provenance: "REAL" };
+    totalAlerts = { value: wazuh.totalAlerts, source: WAZUH_SOURCE, provenance: "REAL" };
+    criticalAlerts = { value: wazuh.criticalAlerts, source: `${WAZUH_SOURCE}; rule.level >= 14`, provenance: "REAL" };
   } else if (includeWazuh) {
     console.warn("[SOC metrics] Wazuh counts unavailable:", wazuhResult.reason instanceof Error ? wazuhResult.reason.message : "unknown error");
   }
@@ -49,6 +53,7 @@ export async function getSocMetrics(includeWazuh = true): Promise<SocMetrics> {
       value: incidentsResult.value.uniqueVerifiedIncidentIdsInWindow,
       availability: isFresh ? "available" : "stale",
       source: "incident_lifecycle_events (verified Bitdefender details.alerts[].date)",
+      provenance: "REAL",
       lastVerifiedAt,
     };
   } else if (incidentsResult.status === "fulfilled") {
@@ -61,9 +66,11 @@ export async function getSocMetrics(includeWazuh = true): Promise<SocMetrics> {
 
   if (lifecycleResult.status === "fulfilled") {
     const lifecycle = lifecycleResult.value;
-    mttrMinutes = lifecycle.validMttrPairs > 0 && lifecycle.mttrMinutes !== null
-      ? { value: lifecycle.mttrMinutes, source: "incident_lifecycle_events", sampleCount: lifecycle.validMttrPairs }
-      : unavailable("incident_lifecycle_events", "No valid detected/response_started pairs in the window", 0);
+    meanTimeToResponseStartMinutes = lifecycle.validMttrPairs > 0 && lifecycle.mttrMinutes !== null
+      ? { value: lifecycle.mttrMinutes, source: "incident_lifecycle_events", provenance: "REAL", sampleCount: lifecycle.validMttrPairs }
+      : workflowDemo
+        ? { value: workflowDemo.meanTimeToResponseStartMinutes, source: "demo incident lifecycle fixtures", sourceLabel: workflowDemo.sourceLabel, provenance: "DEMO", sampleCount: workflowDemo.fixtureIds.length }
+        : unavailable("incident_lifecycle_events", "No valid detected/response_started pairs in the window", 0);
   } else {
     console.warn("[SOC metrics] Lifecycle metrics unavailable:", lifecycleResult.reason instanceof Error ? lifecycleResult.reason.message : "unknown error");
   }
@@ -74,8 +81,11 @@ export async function getSocMetrics(includeWazuh = true): Promise<SocMetrics> {
     totalAlerts,
     incidents,
     criticalAlerts,
-    mttdMinutes: unavailable("Bitdefender GravityZone telemetry", "No defensible occurrence timestamp is established"),
-    mttrMinutes,
+    mttdMinutes: workflowDemo
+      ? { value: workflowDemo.mttdMinutes, source: "demo incident lifecycle fixtures", sourceLabel: workflowDemo.sourceLabel, provenance: "DEMO", sampleCount: workflowDemo.fixtureIds.length }
+      : unavailable("Bitdefender GravityZone telemetry", "No defensible occurrence timestamp is established"),
+    meanTimeToResponseStartMinutes,
+    workflowDemo,
     verification: {
       incidents: incidentsResult.status === "fulfilled" ? incidentsResult.value : null,
       lifecycle: lifecycleResult.status === "fulfilled" ? {

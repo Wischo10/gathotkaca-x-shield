@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAlertsTrend } from "@/services/wazuh-indexer";
 import { toErrorResult } from "@/lib/api-result";
+import { getSessionFromRequest } from "@/lib/auth";
 import type { ApiResult, TimeSeriesPoint } from "@/types/soc";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
+  if (!await getSessionFromRequest(req)) {
+    return NextResponse.json({ status: "error", message: "Authentication required." }, { status: 401 });
+  }
   const range = req.nextUrl.searchParams.get("range") ?? "7d";
 
   try {
