@@ -4,8 +4,6 @@ import { ExternalLink, ArrowRight, Loader2 } from "lucide-react";
 import { getThreatFoxIOCs, ThreatFoxIOC } from "@/services/threat-intel-service";
 import { Modal } from "@/components/ui/Modal";
 
-import { IndonesiaThreats } from "./IndonesiaThreats";
-
 export function ThreatMiddleRow() {
   const [iocs, setIocs] = useState<ThreatFoxIOC[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,7 +66,7 @@ export function ThreatMiddleRow() {
 
   return (
     <>
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         
         {/* Global Threat Landscape */}
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm flex flex-col h-[320px]">
@@ -216,9 +214,6 @@ export function ThreatMiddleRow() {
             </button>
           </div>
         </div>
-
-        <IndonesiaThreats />
-
       </div>
 
       <Modal isOpen={isIocModalOpen} onClose={() => setIsIocModalOpen(false)} title="IOC Summary">

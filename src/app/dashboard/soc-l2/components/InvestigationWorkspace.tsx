@@ -21,6 +21,7 @@ export function InvestigationWorkspace({ investigationCase, user }: Investigatio
   
   const [localStatus, setLocalStatus] = useState("");
   const [isEscalated, setIsEscalated] = useState(false);
+  const [actionTaken, setActionTaken] = useState("");
   const [hasCase, setHasCase] = useState(false);
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
   const [noteText, setNoteText] = useState("");
@@ -35,6 +36,7 @@ export function InvestigationWorkspace({ investigationCase, user }: Investigatio
     if (investigationCase) {
       setLocalStatus(investigationCase.alert.status || "In Progress");
       setIsEscalated(false);
+      setActionTaken("");
       setHasCase(false);
     }
   }, [investigationCase?.alert?.id]);
@@ -88,7 +90,8 @@ export function InvestigationWorkspace({ investigationCase, user }: Investigatio
           alert_id: alert.id,
           title: alert.title,
           severity: alert.severity.toLowerCase(),
-          assigned_to: user?.email || "Analyst"
+          assigned_to: user?.email || "Analyst",
+          latest_action: actionTaken || undefined
         })
       });
       if (res.ok) {
@@ -199,6 +202,15 @@ export function InvestigationWorkspace({ investigationCase, user }: Investigatio
             )}
           </div>
 
+          {!isEscalated && (
+            <input 
+              type="text" 
+              placeholder="Initial Action Taken..." 
+              value={actionTaken}
+              onChange={(e) => setActionTaken(e.target.value)}
+              className="text-xs border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1.5 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 min-w-[200px] outline-none focus:border-brand-blue"
+            />
+          )}
           <button 
             onClick={handleEscalate}
             disabled={isEscalating || isEscalated}

@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { alert_id, title, severity, assigned_to } = body;
+    const { alert_id, title, severity, assigned_to, latest_action } = body;
 
     if (!alert_id || !title) {
       return NextResponse.json({ error: "alert_id and title are required" }, { status: 400 });
@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
           status: "in_progress",
           severity: severity || "medium",
           assigned_to: assigned_to || "unassigned",
+          latest_action: latest_action || "Menunggu pembaruan status...",
         }
       ])
       .select()

@@ -6,7 +6,7 @@ import { CaseDetailSidebar } from "./CaseDetailSidebar";
 import { Filter, MoreVertical } from "lucide-react";
 import { L2Alert } from "@/types/soc";
 
-export function CasesView({ alerts = [] }: { alerts?: L2Alert[] }) {
+export function CasesView({ alerts = [], onViewCase }: { alerts?: L2Alert[], onViewCase?: (id: string) => void }) {
   const [selectedCaseId, setSelectedCaseId] = useState<string | undefined>();
   const [showFilters, setShowFilters] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
@@ -107,14 +107,22 @@ export function CasesView({ alerts = [] }: { alerts?: L2Alert[] }) {
       {/* Sidebar Overlay/Flex Item */}
       {selectedCaseId && alerts.find(a => a.id === selectedCaseId) && (
         <div className="hidden xl:block ml-4">
-          <CaseDetailSidebar alert={alerts.find(a => a.id === selectedCaseId)!} onClose={() => setSelectedCaseId(undefined)} />
+          <CaseDetailSidebar 
+            alert={alerts.find(a => a.id === selectedCaseId)!} 
+            onClose={() => setSelectedCaseId(undefined)} 
+            onViewCase={onViewCase}
+          />
         </div>
       )}
 
       {/* Mobile Absolute Sidebar */}
       {selectedCaseId && alerts.find(a => a.id === selectedCaseId) && (
         <div className="xl:hidden absolute inset-y-0 right-0 z-50">
-          <CaseDetailSidebar alert={alerts.find(a => a.id === selectedCaseId)!} onClose={() => setSelectedCaseId(undefined)} />
+          <CaseDetailSidebar 
+            alert={alerts.find(a => a.id === selectedCaseId)!} 
+            onClose={() => setSelectedCaseId(undefined)} 
+            onViewCase={onViewCase}
+          />
         </div>
       )}
     </div>

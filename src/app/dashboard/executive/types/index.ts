@@ -96,3 +96,13 @@ export interface Incident {
   endpoint: string;
   status: string;
 }
+
+export interface ActiveIncident {
+  id: string;
+  title: string;
+  severity: string;
+  status: string;
+  assigned_to: string;
+  created_at: string;
+  latest_action: string;
+}

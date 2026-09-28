@@ -185,7 +185,13 @@ export default function SOCL2DashboardPage() {
         <div className="flex flex-col gap-4 h-[calc(100vh-180px)]">
           
           {activeTab === "Cases" ? (
-            <CasesView alerts={alerts} />
+            <CasesView 
+              alerts={alerts} 
+              onViewCase={(id) => {
+                setActiveTab("Investigation");
+                setSelectedAlertId(id);
+              }}
+            />
           ) : activeTab === "Threat Intelligence" ? (
             <div className="h-full -mx-4 sm:-mx-6 -my-4 sm:-my-6 px-4 sm:px-6 py-4 sm:py-6 overflow-y-auto bg-slate-50 dark:bg-slate-950">
               <ThreatIntelligenceView />

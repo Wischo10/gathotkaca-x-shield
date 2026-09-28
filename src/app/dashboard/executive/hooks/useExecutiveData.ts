@@ -11,6 +11,7 @@ import {
   AgentHealth, 
   BoardReport, 
   Incident,
+  ActiveIncident,
   ApiResponse
 } from '../types';
 
@@ -56,6 +57,9 @@ export function useExecutiveData(range: RangeValue) {
   // AI Summary
   const { data: aiSummaryRes, error: aiSummaryErr, isValidating: aiSummaryLoading, mutate: mutateAiSummary } = useSWR<ApiResponse<string[]>>('/api/ai/executive-summary', fetcher);
 
+  // Active Escalated Incidents
+  const { data: activeIncidentsRes, error: activeIncidentsErr, isValidating: activeIncidentsLoading, mutate: mutateActiveIncidents } = useSWR<ApiResponse<ActiveIncident[]>>('/api/executive/active-incidents', fetcher);
+
   // Board Report
   const { data: boardReportRes, error: boardReportErr, isValidating: boardReportLoading, mutate: mutateBoardReport } = useSWR<ApiResponse<BoardReport>>('/api/executive/board-report', fetcher);
 
@@ -73,12 +77,13 @@ export function useExecutiveData(range: RangeValue) {
     mutateIncidents();
     mutateAiSummary();
     mutateBoardReport();
+    mutateActiveIncidents();
   };
 
   const isRefreshing = 
     alertsLoading || alertsPrevLoading || trendLoading || attackMethodsLoading ||
     topVictimsLoading || topRisksLoading || heatmapLoading || casesStatsLoading ||
-    mitreTacticsLoading || agentHealthLoading || incidentsLoading || aiSummaryLoading || boardReportLoading;
+    mitreTacticsLoading || agentHealthLoading || incidentsLoading || aiSummaryLoading || boardReportLoading || activeIncidentsLoading;
 
   return {
     alerts: alertsRes?.status === 'ok' ? alertsRes.data : null,
@@ -92,6 +97,7 @@ export function useExecutiveData(range: RangeValue) {
     mitreTactics: mitreTacticsRes?.status === 'ok' ? mitreTacticsRes.data : null,
     agentHealth: agentHealthRes?.status === 'ok' ? agentHealthRes.data : null,
     incidents: incidentsRes?.status === 'ok' ? incidentsRes.data : null,
+    activeIncidents: activeIncidentsRes?.status === 'ok' ? activeIncidentsRes.data : null,
     aiSummary: aiSummaryRes?.status === 'ok' ? aiSummaryRes.data : null,
     boardReport: boardReportRes?.status === 'ok' ? boardReportRes.data : null,
     

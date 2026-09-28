@@ -13,6 +13,7 @@ interface AlertDetailWorkspaceProps {
 export function AlertDetailWorkspace({ investigationCase, user }: AlertDetailWorkspaceProps) {
   const [isEscalating, setIsEscalating] = useState(false);
   const [isEscalated, setIsEscalated] = useState(false);
+  const [actionTaken, setActionTaken] = useState("");
   const [isRawLogOpen, setIsRawLogOpen] = useState(false);
 
   // BUG FIX: Reset escalation state whenever the user selects a different alert
@@ -21,6 +22,7 @@ export function AlertDetailWorkspace({ investigationCase, user }: AlertDetailWor
   useEffect(() => {
     setIsEscalated(false);
     setIsEscalating(false);
+    setActionTaken("");
   }, [alertId]);
 
   if (!investigationCase) {
@@ -54,7 +56,8 @@ export function AlertDetailWorkspace({ investigationCase, user }: AlertDetailWor
           alert_id: alert.id,
           title: alert.title,
           severity: alert.severity.toLowerCase(),
-          assigned_to: user?.email || "Analyst"
+          assigned_to: user?.email || "Analyst",
+          latest_action: actionTaken || undefined
         })
       });
       if (res.ok) {
@@ -95,6 +98,15 @@ export function AlertDetailWorkspace({ investigationCase, user }: AlertDetailWor
           </div>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
+          {!isEscalated && (
+            <input 
+              type="text" 
+              placeholder="Initial Action Taken..." 
+              value={actionTaken}
+              onChange={(e) => setActionTaken(e.target.value)}
+              className="text-xs border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1.5 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 min-w-[250px] outline-none focus:border-brand-blue"
+            />
+          )}
           <button onClick={() => window.alert("Alert telah diabaikan (Dismiss).")} className="text-xs font-medium border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors px-3 py-1.5 rounded-md">
             Dismiss Alert
           </button>

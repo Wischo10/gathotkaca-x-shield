@@ -21,6 +21,10 @@ import {
 import { Modal } from "@/components/ui/Modal";
 import { RefreshCw, Download, AlertTriangle as AlertTriangleIcon, X } from "lucide-react";
 import Link from "next/link";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
+
+import { ActiveEscalatedIncidents } from "./components/ActiveEscalatedIncidents";
 
 // Dynamic import — react-simple-maps uses SVG/browser APIs, must be client-only
 const WorldHeatmap = dynamic(() => import("@/components/maps/WorldHeatmap"), {
@@ -144,6 +148,7 @@ export default function ExecutiveDashboardPage() {
   const [globalRange, setGlobalRange] = useState<RangeValue>("24h");
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isBannerDismissed, setIsBannerDismissed] = useState(false);
   const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Data state ───────────────────────────────────────────────────────────────
@@ -151,6 +156,7 @@ export default function ExecutiveDashboardPage() {
   const [alertsPrev,    setAlertsPrev]    = useState<any>(null); // previous period for delta
   const [trend,         setTrend]         = useState<any[]>([]);
   const [incidents,     setIncidents]     = useState<any[] | null>(null);
+  const [activeIncidents, setActiveIncidents] = useState<any[] | null>(null);
   const [attackMethods, setAttackMethods] = useState<any[] | null>(null);
   const [topVictims,    setTopVictims]    = useState<any[] | null>(null);
   const [aiSummary,     setAiSummary]     = useState<string[] | null>(null);
@@ -287,6 +293,9 @@ export default function ExecutiveDashboardPage() {
     fetch("/api/soc/recent-incidents")
       .then(r => r.json()).then(r => setIncidents(r.status === "ok" ? r.data : []))
       .catch(() => setIncidents([]));
+    fetch("/api/executive/active-incidents")
+      .then(r => r.json()).then(r => setActiveIncidents(r.status === "ok" ? r.data : []))
+      .catch(() => setActiveIncidents([]));
     fetch("/api/ai/executive-summary")
       .then(r => r.json()).then(r => setAiSummary(r.status === "ok" ? r.data : ["Failed to load AI Summary."]))
       .catch(() => setAiSummary(["Failed to load AI Summary."]));
@@ -306,7 +315,7 @@ export default function ExecutiveDashboardPage() {
 
   // ── Alert Banner threshold (show if critical > 50 in period) ─────────────────
   const criticalCount = alerts?.critical ?? 0;
-  const showAlertBanner = criticalCount >= 50;
+  const showAlertBanner = criticalCount >= 50 && !isBannerDismissed;
 
   const alertStatusData = alerts ? [
     { name: "Critical", value: alerts.critical, color: "#ef4444" },
@@ -325,8 +334,31 @@ export default function ExecutiveDashboardPage() {
   }));
 
   // ── Render ───────────────────────────────────────────────────────────────────
-  const handleExportPDF = () => {
-    window.print();
+  const handleExportPDF = async () => {
+    const element = document.getElementById("executive-dashboard-content");
+    if (!element) {
+      window.print();
+      return;
+    }
+    
+    try {
+      const canvas = await html2canvas(element, { 
+        scale: 2,
+        useCORS: true,
+        backgroundColor: document.documentElement.classList.contains("dark") ? "#020617" : "#f8fafc"
+      });
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF("p", "mm", "a4");
+      
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`Executive_Dashboard_${new Date().toISOString().slice(0,10)}.pdf`);
+    } catch (error) {
+      console.error("Failed to export PDF", error);
+      window.print();
+    }
   };
 
   return (
@@ -356,7 +388,7 @@ export default function ExecutiveDashboardPage() {
           </div>
         }
       />
-      <main className="flex-1 space-y-4 p-4 sm:p-6 bg-slate-50 dark:bg-slate-950">
+      <main id="executive-dashboard-content" className="flex-1 space-y-4 p-4 sm:p-6 bg-slate-50 dark:bg-slate-950">
 
         {/* ── ALERT BANNER (Critical threshold warning) ──────────────────────── */}
         {showAlertBanner && (
@@ -368,7 +400,7 @@ export default function ExecutiveDashboardPage() {
                 {criticalCount.toLocaleString()} critical alerts detected in the selected period. Immediate review required.
               </span>
             </div>
-            <button onClick={() => {}} className="text-red-400 hover:text-red-600 transition-colors flex-shrink-0">
+            <button onClick={() => setIsBannerDismissed(true)} className="text-red-400 hover:text-red-600 transition-colors flex-shrink-0">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -914,6 +946,13 @@ export default function ExecutiveDashboardPage() {
               </div>
             )}
             <div onClick={() => setSelectedFeature("Recent Critical Incidents")} className="mt-3 text-right text-xs text-brand-blue hover:underline cursor-pointer">View all incidents →</div>
+          </Panel>
+        </div>
+
+        {/* ROW 3: Active Escalated Incidents */}
+        <div className="mt-4">
+          <Panel title="Active Escalated Incidents" className="shadow-sm">
+            <ActiveEscalatedIncidents incidents={activeIncidents} />
           </Panel>
         </div>
 

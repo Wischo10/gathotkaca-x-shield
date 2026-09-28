@@ -2,7 +2,7 @@ import { X, ChevronLeft, ChevronRight, ShieldAlert, ChevronDown, Clock, Circle, 
 import { useState, useEffect } from "react";
 import { L2Alert, InvestigationCase } from "@/types/soc";
 
-export function CaseDetailSidebar({ alert, onClose }: { alert: L2Alert, onClose: () => void }) {
+export function CaseDetailSidebar({ alert, onClose, onViewCase }: { alert: L2Alert, onClose: () => void, onViewCase?: (id: string) => void }) {
   const [activeTab, setActiveTab] = useState("Overview");
   const [caseData, setCaseData] = useState<InvestigationCase | null>(null);
   const [loading, setLoading] = useState(false);
@@ -228,7 +228,13 @@ export function CaseDetailSidebar({ alert, onClose }: { alert: L2Alert, onClose:
       {/* Footer */}
       <div className="p-4 border-t border-slate-200 dark:border-slate-800">
         <button 
-          onClick={() => window.alert(`Menampilkan detail kasus: ${alert.id} (Coming Soon)`)}
+          onClick={() => {
+            if (onViewCase) {
+              onViewCase(alert.id);
+            } else {
+              window.alert(`Menampilkan detail kasus: ${alert.id} (Coming Soon)`);
+            }
+          }}
           className="w-full py-2 bg-white dark:bg-slate-900 border border-brand-blue text-brand-blue text-xs font-medium rounded-lg hover:bg-blue-50 dark:hover:bg-brand-blue/10 transition-colors"
         >
           View Case Detail &rarr;

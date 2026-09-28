@@ -33,9 +33,15 @@ export async function getThreatFoxIOCs(): Promise<ThreatFoxIOC[]> {
   }
 }
 
-export async function getAbuseIPDBReports(): Promise<AbuseIPDBReport[]> {
+export async function getAbuseIPDBReports(limit?: number, country?: string): Promise<AbuseIPDBReport[]> {
   try {
-    const response = await fetch("/api/threat-intel/abuseipdb");
+    let url = "/api/threat-intel/abuseipdb";
+    const params = new URLSearchParams();
+    if (limit) params.append("limit", limit.toString());
+    if (country) params.append("country", country);
+    if (params.toString()) url += `?${params.toString()}`;
+
+    const response = await fetch(url);
     if (!response.ok) {
       throw new Error("Failed to fetch AbuseIPDB data");
     }
