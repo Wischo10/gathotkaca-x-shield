@@ -384,7 +384,7 @@ export async function getSocTelemetry(range = "7d"): Promise<SocTelemetry> {
         } } },
         mitre: { terms: { field: "rule.mitre.tactic", size: 20 } },
         top_rules: { terms: { field: "rule.id", size: 10 }, aggs: { representative_description: { top_hits: { size: 1, _source: ["rule.description"] } } } },
-        live_events: { top_hits: { size: 10, sort: [{ "@timestamp": { order: "desc" } }], _source: ["@timestamp", "rule.id", "rule.description", "rule.level", "agent.name", "agent.ip", "data.srcip", "data.dstuser", "data.dstuser", "user"] } },
+        live_events: { top_hits: { size: 10, sort: [{ "@timestamp": { order: "desc" } }], _source: ["@timestamp", "rule.id", "rule.description", "rule.level", "agent.name", "agent.ip", "data.srcip", "data.dstuser", "user", "location", "data.win.system.channel", "data.integration"] } },
         detection_sources: { filters: { filters: mutuallyExclusiveDetectionSourceFilters(), other_bucket: true, other_bucket_key: "unclassified" } },
       },
     }
@@ -449,6 +449,8 @@ function mapLiveEvent(source: Record<string, unknown>): LiveEvent {
   const rule = (source.rule ?? {}) as Record<string, unknown>;
   const agent = (source.agent ?? {}) as Record<string, unknown>;
   const data = (source.data ?? {}) as Record<string, unknown>;
+  const win = objectValue(data.win);
+  const system = objectValue(win.system);
   const level = Number(rule.level);
   return {
     id: `${String(rule.id ?? "-")}-${String(source["@timestamp"] ?? "-")}`,
@@ -458,6 +460,7 @@ function mapLiveEvent(source: Record<string, unknown>): LiveEvent {
     severity: levelToSeverity(Number.isFinite(level) ? level : 0),
     rule: String(rule.id ?? "-"),
     assetOrUser: String(data.srcip ?? data.dstuser ?? (source.user ?? "-")),
+    detectionSource: classifyDetectionSource(stringValue(source.location), stringValue(system.channel), stringValue(data.integration)),
   };
 }
 
