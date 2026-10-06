@@ -16,6 +16,7 @@ import { useApiResult } from "@/hooks/useApiResult";
 import { NIST_FUNCTIONS, type CisoMetricsData } from "@/types/ciso";
 import type { RiskRegisterResponse } from "@/types/risk";
 import type { ThirdPartyRegisterResponse } from "@/types/third-party";
+import { CISO_DEMO_DATA, createDemoVulnerabilityWorkflow } from "@/services/ciso-demo-data-provider";
 
 type MetricIconName = "shield" | "risk" | "incident" | "vulnerability" | "compliance" | "treatment";
 
@@ -66,6 +67,7 @@ interface MetricCardProps {
   sourceLabel?: string;
   freshnessAt?: string | null;
   freshnessLabel?: string;
+  provenance?: "DEMO" | "MIXED";
 }
 
 const MetricCard = ({
@@ -88,6 +90,7 @@ const MetricCard = ({
   sourceLabel,
   freshnessAt,
   freshnessLabel,
+  provenance,
 }: MetricCardProps) => {
   const hasValue = value !== null && value !== undefined;
   const isTrendValid = trendAvailable && trend30d !== null && trend30d !== undefined;
@@ -110,7 +113,8 @@ const MetricCard = ({
           <MetricIcon name={icon} />
         </div>
         <span className="min-w-0 text-sm font-semibold leading-5 text-slate-700 dark:text-slate-200">{title}</span>
-        <span className="ml-auto flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-200 text-[11px] font-semibold text-slate-400 dark:border-slate-700 dark:text-slate-500" title={tooltip || title} aria-label={`About ${title}`}>
+        {provenance && <span className={`ml-auto whitespace-nowrap rounded-full border px-2 py-0.5 text-[9px] font-semibold ${provenance === "DEMO" ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300" : "border-violet-200 bg-violet-50 text-violet-700"}`}>{provenance === "DEMO" ? "DEMO DATA" : "Mixed: Live + Demo"}</span>}
+        <span className={`${provenance ? "" : "ml-auto"} flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-200 text-[11px] font-semibold text-slate-400 dark:border-slate-700 dark:text-slate-500`} title={tooltip || title} aria-label={`About ${title}`}>
           i
         </span>
       </div>
@@ -148,6 +152,12 @@ export default function CISODashboardPage() {
   const risksState = useApiResult<RiskRegisterResponse>("/api/ciso/risks");
   const thirdPartiesState = useApiResult<ThirdPartyRegisterResponse>("/api/ciso/third-parties");
   const metrics = metricsState.phase === "ready" ? metricsState.data : null;
+  const riskDemo = risksState.phase === "ready" && risksState.data.items.length === 0;
+  const vendorDemo = thirdPartiesState.phase === "ready" && thirdPartiesState.data.summary.totalVendors === 0;
+  const activeIncidentDemo = metrics?.activeIncidents.availability?.status === "unavailable"
+    && metrics.activeIncidents.availability.error?.code === "configuration";
+  const complianceDemo = metrics?.complianceScore.value == null
+    && metrics?.complianceScore.source.includes("No frameworks assessed");
   const totalRiskEligible = metrics?.totalRiskScore.eligibleCount ?? 0;
   const totalRegisteredRisks = risksState.phase === "ready" ? risksState.data.items.length : null;
   const thirdPartyDistribution = thirdPartiesState.phase === "ready" ? [
@@ -165,6 +175,9 @@ export default function CISODashboardPage() {
     },
   ] : [];
   const thirdPartyDonutDistribution = thirdPartyDistribution.filter(bucket => bucket.count > 0);
+  const displayedVendorDistribution = vendorDemo ? CISO_DEMO_DATA.vendors.distribution : thirdPartyDistribution;
+  const displayedVendorDonutDistribution = displayedVendorDistribution.filter(bucket => bucket.count > 0);
+  const displayedVendorTotal = vendorDemo ? CISO_DEMO_DATA.vendors.total : thirdPartiesState.phase === "ready" ? thirdPartiesState.data.summary.totalVendors : 0;
   const riskRegisterDistribution = risksState.phase === "ready" ? [
     ...RISK_REGISTER_BUCKETS.map(bucket => ({
       name: bucket.label,
@@ -180,6 +193,14 @@ export default function CISODashboardPage() {
     },
   ] : [];
   const riskRegisterDonutDistribution = riskRegisterDistribution.filter(bucket => bucket.count > 0);
+  const demoRiskDistribution = RISK_REGISTER_BUCKETS.map(bucket => ({
+    name: bucket.label,
+    count: CISO_DEMO_DATA.risks.filter(risk => risk.rating === bucket.rating).length,
+    color: bucket.color,
+  }));
+  const displayedRiskDistribution = riskDemo ? demoRiskDistribution : riskRegisterDistribution;
+  const displayedRiskDonutDistribution = displayedRiskDistribution.filter(bucket => bucket.count > 0);
+  const displayedRiskTotal = riskDemo ? CISO_DEMO_DATA.risks.length : risksState.phase === "ready" ? risksState.data.items.length : 0;
   const topRisks = risksState.phase === "ready" ? rankTopRisks(risksState.data.items) : [];
   const latestRiskUpdate = risksState.phase === "ready"
     ? risksState.data.items.reduce<string | null>((latest, item) => !latest || item.updatedAt > latest ? item.updatedAt : latest, null)
@@ -189,14 +210,22 @@ export default function CISODashboardPage() {
     : null;
   const nistPostureDomains = NIST_FUNCTIONS.map(name => {
     const assessment = metrics?.nistPosture?.domains.find(domain => domain.name === name);
+    const demo = CISO_DEMO_DATA.postureDomains.find(domain => domain.name === name)!;
     return {
-      name, score: assessment?.score ?? null, trend30d: assessment?.trend30d ?? null,
+      name, score: metrics ? assessment?.score ?? demo.score : null, trend30d: metrics ? assessment?.trend30d ?? demo.trend30d : null,
       assessedAt: assessment?.assessedAt, assessedBy: assessment?.assessedBy,
+      isDemo: Boolean(metrics && assessment?.score == null),
     };
   });
-  // Require all six recorded scores; null is never converted to a zero-radius vertex.
-  const radarAvailable = nistPostureDomains.every(domain => domain.score !== null
-    && Number.isFinite(domain.score) && domain.score >= 0 && domain.score <= 100);
+  const postureDemoCount = nistPostureDomains.filter(domain => domain.isDemo).length;
+  const postureProvenance = postureDemoCount === 0 ? undefined : postureDemoCount === nistPostureDomains.length ? "DEMO" as const : "MIXED" as const;
+  const incidentItems = metrics ? [metrics.incidentKpi.mttd, metrics.incidentKpi.mtta, metrics.incidentKpi.mttc, metrics.incidentKpi.mttr] : [];
+  const incidentCanDemo = metrics?.incidentTicketing.provenance.mode === "DEMO";
+  const incidentDemoCount = incidentCanDemo ? incidentItems.filter(item => item.value === null).length : 0;
+  const incidentUsesDemo = incidentDemoCount > 0;
+  const radarAvailable = nistPostureDomains.every(domain => domain.score !== null && Number.isFinite(domain.score) && domain.score >= 0 && domain.score <= 100);
+  const vulnerabilitySla = metrics?.vulnerabilitySlaOverview || metrics?.vulnerabilitySla;
+  const vulnerabilityWorkflowDemo = Boolean(vulnerabilitySla?.dataAvailable && vulnerabilitySla.totalCritical !== null && vulnerabilitySla.inProgress === null);
   const radarPoints = radarAvailable ? nistPostureDomains.map((domain, index) => {
     const angle = (-90 + index * 60) * Math.PI / 180;
     const radius = domain.score! / 100 * 80;
@@ -204,6 +233,7 @@ export default function CISODashboardPage() {
   }).join(" ") : undefined;
   const latestNistAssessment = nistPostureDomains.reduce<string | null>((latest, domain) =>
     domain.assessedAt && (!latest || domain.assessedAt > latest) ? domain.assessedAt : latest, null);
+  const incidentPanelProvenance = metrics?.incidentKpi.provenance;
 
   const formatTimestamp = (isoString?: string | null) => isoString
     ? new Date(isoString).toLocaleString()
@@ -252,6 +282,13 @@ export default function CISODashboardPage() {
   };
 
   const renderIncidentKpi = (item: CisoMetricsData["incidentKpi"]["mttd"] | undefined, kind: "mttd" | "mtta" | "mttc" | "mttr") => {
+    if (incidentCanDemo && item && item.value === null) {
+      const value = CISO_DEMO_DATA.incidentKpis[kind];
+      return <>
+        <div className="text-2xl font-bold leading-tight text-slate-800 dark:text-white">{formatDuration(value)}</div>
+        <div className="text-[10px] font-medium text-amber-600">30-day demo benchmark</div>
+      </>;
+    }
     const presentation = incidentKpiPresentation(item, kind);
     return <>
       <div className="text-lg font-bold leading-tight text-slate-800 dark:text-white">{presentation.value}</div>
@@ -260,14 +297,6 @@ export default function CISODashboardPage() {
       <div className="text-[10px] leading-tight text-slate-400">{presentation.detail}</div>
     </>;
   };
-
-  const renderProviderIncidentKpi = (item: CisoMetricsData["incidentKpi"]["mttd"], label: string) => (
-    <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-2 dark:border-slate-800 dark:bg-slate-900/30" title={item.explanation}>
-      <div className="text-[10px] font-medium text-slate-500">{label}</div>
-      <div className="text-base font-bold text-slate-800 dark:text-white">{formatDuration(item.value)}</div>
-      <div className="text-[10px] text-slate-500">{item.eligibleIncidents ?? 0} eligible lifecycle records</div>
-    </div>
-  );
 
   return (
     <>
@@ -292,10 +321,10 @@ export default function CISODashboardPage() {
           <MetricCard
             title="NIST CSF Assessment Score"
             loading={metricsState.phase === "loading"}
-            value={metrics?.securityPostureScore.value}
-            max={metrics?.securityPostureScore.max}
-            trend30d={metrics?.securityPostureScore.trend30d}
-            trendAvailable={metrics?.securityPostureScore.trendAvailable}
+            value={metrics ? metrics.securityPostureScore.value ?? CISO_DEMO_DATA.kpis.securityPosture.value : null}
+            max={100}
+            trend30d={metrics?.securityPostureScore.value != null ? metrics.securityPostureScore.trend30d : CISO_DEMO_DATA.kpis.securityPosture.trend30d}
+            trendAvailable={metrics?.securityPostureScore.value != null ? metrics.securityPostureScore.trendAvailable : true}
             trendUnit="pp"
             trendColor="blue"
             icon="shield"
@@ -304,19 +333,20 @@ export default function CISODashboardPage() {
             sourceLabel="Manual NIST CSF 2.0 assessments"
             freshnessAt={latestNistAssessment}
             freshnessLabel="Latest assessment"
+            provenance={metrics && metrics.securityPostureScore.value == null ? "DEMO" : undefined}
             detailHref="/dashboard/ciso/security-posture" detailLabel="View posture"
           />
           <MetricCard
             title="Assessed Residual Risk"
             loading={metricsState.phase === "loading"}
-            value={metrics?.totalRiskScore.category}
-            trend30d={metrics?.totalRiskScore.trend30d}
-            trendAvailable={metrics?.totalRiskScore.trendAvailable}
+            value={riskDemo ? CISO_DEMO_DATA.kpis.totalRisk.category : metrics?.totalRiskScore.category}
+            trend30d={riskDemo ? CISO_DEMO_DATA.kpis.totalRisk.trend30d : metrics?.totalRiskScore.trend30d}
+            trendAvailable={riskDemo || metrics?.totalRiskScore.trendAvailable}
             trendUnit="points"
             trendColor="red"
             icon="risk"
             tooltip={metrics ? `${totalRiskEligible} completed risk assessments with a recognized residual-risk rating. Higher is worse. ${metrics.totalRiskScore.details?.explanation || metrics.totalRiskScore.source}` : "Loading assessed residual risk."}
-            context={metrics?.totalRiskScore.value !== null && metrics?.totalRiskScore.value !== undefined
+            context={riskDemo ? `${CISO_DEMO_DATA.kpis.totalRisk.value.toFixed(1)} / 4 · Higher is worse` : metrics?.totalRiskScore.value !== null && metrics?.totalRiskScore.value !== undefined
               ? `${metrics.totalRiskScore.value.toFixed(1)} / 4 · Higher is worse`
               : undefined}
             basis={metrics?.totalRiskScore.category && totalRegisteredRisks !== null
@@ -327,14 +357,15 @@ export default function CISODashboardPage() {
             sourceLabel="PostgreSQL Risk Register"
             freshnessAt={latestRiskUpdate}
             freshnessLabel="Latest register update"
+            provenance={riskDemo ? "DEMO" : undefined}
             detailHref="/dashboard/ciso/risks" detailLabel="View risks"
           />
           <MetricCard
             title="Active Incidents"
             loading={metricsState.phase === "loading"}
-            value={metrics?.activeIncidents.value}
-            trend30d={metrics?.activeIncidents.trend30d}
-            trendAvailable={metrics?.activeIncidents.trendAvailable}
+            value={activeIncidentDemo ? CISO_DEMO_DATA.kpis.activeIncidents.value : metrics?.activeIncidents.value}
+            trend30d={activeIncidentDemo ? CISO_DEMO_DATA.kpis.activeIncidents.trend30d : metrics?.activeIncidents.trend30d}
+            trendAvailable={activeIncidentDemo || metrics?.activeIncidents.trendAvailable}
             trendUnit="incidents"
             trendColor="orange"
             icon="incident"
@@ -342,6 +373,7 @@ export default function CISODashboardPage() {
             sourceLabel="Bitdefender GravityZone"
             freshnessAt={metrics?.activeIncidents.availability?.fetchedAt}
             freshnessLabel={metrics?.activeIncidents.availability?.cached ? "Retrieved (cached result)" : "Retrieved"}
+            provenance={activeIncidentDemo ? "DEMO" : undefined}
             detailHref="/dashboard/ciso/incidents" detailLabel="View incidents"
           />
           <MetricCard
@@ -361,31 +393,32 @@ export default function CISODashboardPage() {
           <MetricCard
             title="Compliance Score"
             loading={metricsState.phase === "loading"}
-            value={metrics?.complianceScore.value}
+            value={complianceDemo ? CISO_DEMO_DATA.kpis.compliance.value : metrics?.complianceScore.value}
             unit={metrics?.complianceScore.unit || "%"}
-            trend30d={metrics?.complianceScore.trend30d}
-            trendAvailable={metrics?.complianceScore.trendAvailable}
+            trend30d={complianceDemo ? CISO_DEMO_DATA.kpis.compliance.trend30d : metrics?.complianceScore.trend30d}
+            trendAvailable={complianceDemo || metrics?.complianceScore.trendAvailable}
             trendUnit="pp"
             trendColor="green"
             icon="compliance"
             tooltip="Equal-weight average across completed formal frameworks. Framework score = Passed / (Passed + Partial + Failed). Incomplete frameworks and MITRE telemetry are excluded."
             basis="Completed formal frameworks · equally weighted"
             sourceLabel="PostgreSQL formal assessments"
+            provenance={complianceDemo ? "DEMO" : undefined}
             detailHref="/dashboard/compliance" detailLabel="View compliance"
           />
           <MetricCard
             title="Risk Treatments Completed"
             loading={metricsState.phase === "loading"}
-            value={metrics?.riskTreatmentProgress.eligibleCount !== undefined
+            value={riskDemo ? `${CISO_DEMO_DATA.kpis.riskTreatment.completed} of ${CISO_DEMO_DATA.kpis.riskTreatment.eligible}` : metrics?.riskTreatmentProgress.eligibleCount !== undefined
               ? `${metrics.riskTreatmentProgress.completedCount ?? 0} of ${metrics.riskTreatmentProgress.eligibleCount}`
               : null}
-            trend30d={metrics?.riskTreatmentProgress.trend30d}
-            trendAvailable={metrics?.riskTreatmentProgress.trendAvailable}
+            trend30d={riskDemo ? CISO_DEMO_DATA.kpis.riskTreatment.trend30d : metrics?.riskTreatmentProgress.trend30d}
+            trendAvailable={riskDemo || metrics?.riskTreatmentProgress.trendAvailable}
             trendUnit="pp"
             trendColor="teal"
             icon="treatment"
             tooltip={metrics?.riskTreatmentProgress.details?.explanation || metrics?.riskTreatmentProgress.source}
-            context={metrics?.riskTreatmentProgress.value !== null && metrics?.riskTreatmentProgress.value !== undefined
+            context={riskDemo ? `${CISO_DEMO_DATA.kpis.riskTreatment.value}% completed · Planned: ${CISO_DEMO_DATA.kpis.riskTreatment.planned} · In Progress: ${CISO_DEMO_DATA.kpis.riskTreatment.inProgress}` : metrics?.riskTreatmentProgress.value !== null && metrics?.riskTreatmentProgress.value !== undefined
               ? `${metrics.riskTreatmentProgress.value}% completed · Planned: ${metrics.riskTreatmentProgress.plannedCount ?? 0} · In Progress: ${metrics.riskTreatmentProgress.inProgressCount ?? 0}`
               : undefined}
             basis="Eligible assessed treatments"
@@ -394,13 +427,14 @@ export default function CISODashboardPage() {
             sourceLabel="PostgreSQL Risk Register"
             freshnessAt={latestRiskUpdate}
             freshnessLabel="Latest register update"
+            provenance={riskDemo ? "DEMO" : undefined}
             detailHref="/dashboard/ciso/risks" detailLabel="View treatments"
           />
         </div>
 
         {/* ROW 2: Analytical Panels */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <Panel title="NIST CSF 2.0 Assessment Overview" action={<span className="text-xs text-slate-400" title={latestNistAssessment ? `Latest recorded assessment: ${formatTimestamp(latestNistAssessment)}` : "No complete recorded assessment"}>Manual assessment · {latestNistAssessment ? `assessed ${new Date(latestNistAssessment).toLocaleDateString()}` : "not assessed"}</span>}>
+          <Panel title="Security Posture Overview" action={!metrics ? <span className="text-[10px] text-slate-400">Loading…</span> : postureProvenance ? <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${postureProvenance === "DEMO" ? "border-amber-200 bg-amber-50 text-amber-700" : "border-violet-200 bg-violet-50 text-violet-700"}`}>{postureProvenance === "DEMO" ? "DEMO DATA" : "Mixed: Live + Demo"}</span> : <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">REAL</span>}>
             <div className="flex h-56 items-center gap-2 overflow-x-auto">
               {/* Neutral scaffold; the data polygon requires all six actual assessments. */}
               <svg viewBox="0 0 280 260" className="h-full min-w-[150px] flex-1" role="img" aria-label={radarAvailable ? "NIST CSF six-function assessment radar, scale 0 to 100" : "NIST CSF six-function radar. Insufficient assessment data; no score polygon rendered."}>
@@ -437,10 +471,8 @@ export default function CISODashboardPage() {
                   {nistPostureDomains.map(domain => (
                     <tr key={domain.name} title={domain.score === null ? metrics?.nistPosture?.explanation || "No recorded function assessment available" : `Assessed ${domain.assessedAt} by ${domain.assessedBy}. Trend is percentage-point change against a recorded assessment 30–35 days ago.`}>
                       <td className="py-2 font-medium text-slate-600 dark:text-slate-300">{domain.name}</td>
-                      <td className="py-2 text-center text-slate-400">{domain.score === null ? "N/A" : `${domain.score}%`}</td>
-                      <td className="py-2 text-right text-slate-400">{domain.trend30d === null
-                        ? domain.score === null ? "Not assessed" : "Insufficient history"
-                        : `${domain.trend30d > 0 ? "+" : ""}${domain.trend30d} pp`}</td>
+                      <td className="py-2 text-center font-semibold text-slate-700 dark:text-slate-200">{domain.score === null ? "N/A" : `${domain.score}%`}</td>
+                      <td className="py-2 text-right text-slate-500">{domain.trend30d === null ? "—" : `${domain.trend30d > 0 ? "+" : ""}${domain.trend30d} pp`}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -450,7 +482,7 @@ export default function CISODashboardPage() {
               <Link href="/dashboard/ciso/security-posture" className="text-brand-blue hover:underline">View full NIST assessment →</Link>
             </div>
           </Panel>
-          <Panel title="Incident Response KPI" action={<div className="flex items-center gap-2">{metrics?.incidentKpi.provenance && <DataProvenanceBadge provenance={metrics.incidentKpi.provenance}/>}<Link href="/dashboard/ciso/incidents" className="text-xs font-medium text-brand-blue hover:underline">View Incidents →</Link></div>}>
+          <Panel title="Incident Response KPI" action={<div className="flex items-center gap-2">{incidentUsesDemo ? <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${incidentDemoCount === incidentItems.length ? "border-amber-200 bg-amber-50 text-amber-700" : "border-violet-200 bg-violet-50 text-violet-700"}`}>{incidentDemoCount === incidentItems.length ? "DEMO DATA" : "Mixed: Live + Demo"}</span> : incidentPanelProvenance && <DataProvenanceBadge provenance={incidentPanelProvenance}/>}<Link href="/dashboard/ciso/incidents" className="text-xs font-medium text-brand-blue hover:underline">View Incidents →</Link></div>}>
             <div className="grid min-h-56 grid-cols-2 gap-4">
               <div 
                 className="flex flex-col justify-center gap-1 border-r border-b border-slate-100 dark:border-slate-800 p-2"
@@ -481,34 +513,12 @@ export default function CISODashboardPage() {
                 {renderIncidentKpi(metrics?.incidentKpi?.mttc, "mttc")}
               </div>
             </div>
-            <SourceFreshness source="Bitdefender GravityZone + PostgreSQL incident lifecycle" className="mt-2 border-t border-slate-100 pt-2 dark:border-slate-800" />
-            {metrics?.incidentTicketing.incidentKpi && (
-              <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-800">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <div>
-                    <div className="text-xs font-semibold text-slate-700 dark:text-slate-200">Independent Ticketing Lifecycle</div>
-                    <div className="text-[10px] text-slate-500">Separate provider dataset; correlation requires an explicit authoritative incident ID.</div>
-                  </div>
-                  <DataProvenanceBadge provenance={metrics.incidentTicketing.provenance}/>
-                </div>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {renderProviderIncidentKpi(metrics.incidentTicketing.incidentKpi.mttd, "MTTD")}
-                  {renderProviderIncidentKpi(metrics.incidentTicketing.incidentKpi.mtta, "MTTA")}
-                  {renderProviderIncidentKpi(metrics.incidentTicketing.incidentKpi.mttc, "MTTC")}
-                  {renderProviderIncidentKpi(metrics.incidentTicketing.incidentKpi.mttr, "MTTR")}
-                </div>
-              </div>
-            )}
-            {metrics?.incidentTicketing.provenance.mode === "NOT_AVAILABLE" && (
-              <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-3 text-[10px] text-slate-500 dark:border-slate-800">
-                <span>Incident/ticketing lifecycle source is not configured or available.</span>
-                <DataProvenanceBadge provenance={metrics.incidentTicketing.provenance}/>
-              </div>
-            )}
+            <div className="mt-2 border-t border-slate-100 pt-2 text-[10px] text-slate-400 dark:border-slate-800">{incidentUsesDemo ? "Demo lifecycle benchmarks are shown until authoritative workflow timestamps are available." : "Calculated from Bitdefender detections and persisted analyst lifecycle events."}</div>
           </Panel>
           <Panel 
-            title="Critical CVE Age Against Configured Thresholds"
+            title="Vulnerability SLA Overview"
             action={
+              vulnerabilityWorkflowDemo ? <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-700">Mixed: Live + Demo</span> :
               (metrics?.vulnerabilitySlaOverview || metrics?.vulnerabilitySla)?.policy?.criticalSlaDays ? (
                 <span 
                   className="text-[10px] text-slate-400 dark:text-slate-500 font-medium cursor-help"
@@ -535,10 +545,17 @@ export default function CISODashboardPage() {
               }
 
               const chartData = [
-                { name: "Overdue", value: sla.overdue ?? 0, fill: "#ef4444" },
-                { name: "Due Soon", value: sla.dueSoon ?? 0, fill: "#f97316" },
-                { name: "Within Configured Threshold", value: sla.compliant ?? 0, fill: "#22c55e" },
-                { name: "Unclassified", value: sla.unclassified ?? 0, fill: "#94a3b8" },
+                ...(vulnerabilityWorkflowDemo ? (() => { const demo=createDemoVulnerabilityWorkflow(sla.totalCritical!); return [
+                  { name: "Overdue", value: demo.overdue, fill: "#ef4444" },
+                  { name: "Due Soon", value: demo.dueSoon, fill: "#f97316" },
+                  { name: "In Progress", value: demo.inProgress, fill: "#3b82f6" },
+                  { name: "Compliant", value: demo.compliant, fill: "#22c55e" },
+                ]; })() : [
+                  { name: "Overdue", value: sla.overdue ?? 0, fill: "#ef4444" },
+                  { name: "Due Soon", value: sla.dueSoon ?? 0, fill: "#f97316" },
+                  { name: "Within Configured Threshold", value: sla.compliant ?? 0, fill: "#22c55e" },
+                  { name: "Unclassified", value: sla.unclassified ?? 0, fill: "#94a3b8" },
+                ]),
               ].filter(d => d.value > 0);
 
               return (
@@ -565,41 +582,7 @@ export default function CISODashboardPage() {
                     </ResponsiveContainer>
                   </div>
                   <div className="w-1/2 flex flex-col gap-2.5 text-xs">
-                    {/* 1. Overdue */}
-                    <div className="flex justify-between items-center pr-2">
-                      <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-red-500"></span> Overdue
-                      </span>
-                      <span className="font-semibold text-slate-700 dark:text-slate-300">
-                        {sla.overdue !== null ? `${sla.overdue} (${sla.overduePct ?? (sla.totalCritical ? Math.round((sla.overdue / sla.totalCritical) * 100) : 0)}%)` : "N/A"}
-                      </span>
-                    </div>
-
-                    {/* 2. Due Soon */}
-                    <div className="flex justify-between items-center pr-2">
-                      <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-orange-500"></span> Due Soon
-                      </span>
-                      <span className="font-semibold text-slate-700 dark:text-slate-300">
-                        {sla.dueSoon !== null ? `${sla.dueSoon} (${sla.dueSoonPct ?? (sla.totalCritical ? Math.round((sla.dueSoon / sla.totalCritical) * 100) : 0)}%)` : "N/A"}
-                      </span>
-                    </div>
-
-                    {/* 4. Within configured threshold */}
-                    <div className="flex justify-between items-center pr-2">
-                      <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-green-500"></span> Within Configured Threshold
-                      </span>
-                      <span className="font-semibold text-slate-700 dark:text-slate-300">
-                        {sla.compliant !== null ? `${sla.compliant} (${sla.compliantPct ?? (sla.totalCritical ? Math.round((sla.compliant / sla.totalCritical) * 100) : 0)}%)` : "N/A"}
-                      </span>
-                    </div>
-                    {sla.unclassified !== null && sla.unclassified > 0 && (
-                      <div className="flex justify-between items-center pr-2" title="Detection age unavailable or incomplete; not counted within the configured threshold">
-                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-400"></span> Unclassified</span>
-                        <span className="font-semibold text-slate-700 dark:text-slate-300">{sla.unclassified} ({sla.unclassifiedPct}%)</span>
-                      </div>
-                    )}
+                    {chartData.map(item=><div key={item.name} className="flex items-center justify-between gap-2 pr-2"><span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{backgroundColor:item.fill}}/>{item.name}</span><span className="font-semibold text-slate-700 dark:text-slate-300">{item.value} ({sla.totalCritical ? Math.round(item.value/sla.totalCritical*100) : 0}%)</span></div>)}
                   </div>
                 </div>
               );
@@ -616,7 +599,7 @@ export default function CISODashboardPage() {
                 </div>
                 <div className="mt-1 flex items-center justify-between text-[11px]" title="Remediation workflow records; separate from unique-CVE age buckets.">
                   <span className="flex items-center gap-1 text-slate-500 dark:text-slate-400"><span className="h-2 w-2 rounded-full bg-yellow-500" />Remediation Instances In Progress</span>
-                  <span className={sla.inProgress === null ? "font-semibold text-slate-400 dark:text-slate-500" : "font-semibold text-slate-700 dark:text-slate-300"}>{sla.inProgress ?? "Unavailable"}</span>
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">{vulnerabilityWorkflowDemo ? createDemoVulnerabilityWorkflow(sla.totalCritical ?? 0).inProgress : sla.inProgress ?? "Unavailable"}</span>
                 </div>
               </>;
             })()}
@@ -630,29 +613,27 @@ export default function CISODashboardPage() {
         </div>
 
         {/* Executive risk, threat intelligence, and compliance summaries */}
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-3">
           <ThreatIntelPanel />
-          <Panel title="Risk Register Summary" className="flex h-64 flex-col">
+          <Panel title="Risk Register Summary" action={riskDemo ? <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">DEMO DATA</span> : undefined} className="flex h-full flex-col">
              {risksState.phase === "ready"
-               ? risksState.data.items.length === 0
-                 ? <PanelEmpty message="No risks have been registered." />
-                 : <div className="grid min-h-0 flex-1 grid-cols-1 items-center gap-3 sm:grid-cols-[45%_55%]">
-                     <div className="relative mx-auto h-[148px] w-[148px]" aria-label={`Risk register distribution for ${risksState.data.items.length} risks`}>
+               ? <div className="grid min-h-0 flex-1 grid-cols-1 items-center gap-3 sm:grid-cols-[45%_55%]">
+                     <div className="relative mx-auto h-[148px] w-[148px]" aria-label={`Risk register distribution for ${displayedRiskTotal} risks`}>
                        <ResponsiveContainer width="100%" height="100%">
                          <PieChart>
-                           <Pie data={riskRegisterDonutDistribution} dataKey="count" nameKey="name" innerRadius={45} outerRadius={68} paddingAngle={2} stroke="none" isAnimationActive={false}>
-                             {riskRegisterDonutDistribution.map(bucket => <Cell key={bucket.name} fill={bucket.color} />)}
+                           <Pie data={displayedRiskDonutDistribution} dataKey="count" nameKey="name" innerRadius={45} outerRadius={68} paddingAngle={2} stroke="none" isAnimationActive={false}>
+                             {displayedRiskDonutDistribution.map(bucket => <Cell key={bucket.name} fill={bucket.color} />)}
                            </Pie>
                          </PieChart>
                        </ResponsiveContainer>
                        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-                         <span className="text-3xl font-bold tabular-nums text-slate-800 dark:text-white">{risksState.data.items.length}</span>
+                         <span className="text-3xl font-bold tabular-nums text-slate-800 dark:text-white">{displayedRiskTotal}</span>
                          <span className="text-[10px] font-medium text-slate-400">Total Risks</span>
                        </div>
                      </div>
                      <ul className="min-w-0 space-y-2 text-xs">
-                       {riskRegisterDistribution.map(bucket => {
-                         const percentage = Math.round(bucket.count / risksState.data.items.length * 100);
+                       {displayedRiskDistribution.map(bucket => {
+                         const percentage = Math.round(bucket.count / displayedRiskTotal * 100);
                          return <li key={bucket.name} className="flex items-center justify-between gap-2">
                            <span className="flex min-w-0 items-center gap-2 text-slate-600 dark:text-slate-300">
                              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: bucket.color }} />
@@ -668,9 +649,10 @@ export default function CISODashboardPage() {
                  : <PanelEmpty message="Risk Register unavailable" />}
              <div className="mt-auto flex items-end justify-between gap-2 border-t border-slate-100 pt-2 text-xs dark:border-slate-800"><SourceFreshness source="PostgreSQL Risk Register" timestamp={latestRiskUpdate} timestampLabel="Latest record update"/><Link href="/dashboard/ciso/risks" className="font-medium text-brand-blue hover:underline">View risk register →</Link></div>
           </Panel>
-          <Panel title="Top Risks" className="h-64 flex flex-col justify-between">
+          <Panel title="Top Risks" action={riskDemo ? <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">DEMO DATA</span> : undefined} className="flex h-full flex-col justify-between">
              {risksState.phase === "loading" ? <PanelEmpty message="Loading assessed risks..." />
                : risksState.phase === "error" ? <PanelEmpty message="Risk Register unavailable" />
+               : riskDemo ? <div className="min-h-0 flex-1 overflow-y-auto"><div className="grid grid-cols-[minmax(0,1fr)_52px_42px_100px] gap-2 border-b pb-2 text-[9px] font-semibold uppercase text-slate-400"><span>Risk</span><span>Score</span><span>Trend</span><span>Owner</span></div>{CISO_DEMO_DATA.risks.slice(0,5).map(risk=><div key={risk.id} className="grid grid-cols-[minmax(0,1fr)_52px_42px_100px] items-center gap-2 border-b border-slate-100 py-2 text-[10px] dark:border-slate-800"><span className="truncate font-medium" title={risk.title}>{risk.title}</span><span className="font-bold">{risk.score}</span><span className={risk.trend>0?"text-red-500":risk.trend<0?"text-emerald-600":"text-slate-400"}>{risk.trend>0?"+":""}{risk.trend}</span><span className="truncate text-slate-500" title={risk.owner}>{risk.owner}</span></div>)}</div>
                : risksState.phase === "empty" ? <PanelEmpty message="No risks have been registered." />
                : topRisks.length === 0 ? <PanelEmpty message="No assessed risks." />
                : <div className="min-h-0 flex-1 overflow-y-auto">
@@ -689,42 +671,45 @@ export default function CISODashboardPage() {
           <Panel
             title="Vendor Risk Assessment Overview"
             className="flex h-full min-h-[320px] flex-col xl:h-[340px]"
-            action={thirdPartiesState.phase === "ready" && thirdPartiesState.data.summary.highestAssessedRisk
+            action={vendorDemo ? <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">DEMO DATA</span> : thirdPartiesState.phase === "ready" && thirdPartiesState.data.summary.highestAssessedRisk
               ? <span className="whitespace-nowrap rounded-full bg-orange-50 px-2 py-1 text-[10px] font-semibold text-orange-700 dark:bg-orange-900/20 dark:text-orange-300" title="Highest risk rating among assessed third parties">Highest assessed: {thirdPartiesState.data.summary.highestAssessedRisk}</span>
               : undefined}
           >
-             {thirdPartiesState.phase === "ready" ? thirdPartiesState.data.summary.totalVendors === 0
-               ? <PanelEmpty message="No third parties have been registered." />
-               : <div className="grid min-h-0 flex-1 grid-cols-1 items-center gap-3 sm:grid-cols-[minmax(0,1fr)_112px_minmax(0,1fr)]">
+             {thirdPartiesState.phase === "ready" ? <div className="grid min-h-0 flex-1 grid-cols-1 items-center gap-3 sm:grid-cols-[minmax(0,1fr)_112px_minmax(0,1fr)]">
                    <dl className="min-w-0 divide-y divide-slate-100 text-[10px] dark:divide-slate-800">
-                     {[
+                     {(vendorDemo ? [
+                       ["Total Vendors", CISO_DEMO_DATA.vendors.total],
+                       ["High Risk Vendors", CISO_DEMO_DATA.vendors.distribution[0].count],
+                       ["Assessment Overdue", CISO_DEMO_DATA.vendors.overdue],
+                       ["Incidents from Vendors", CISO_DEMO_DATA.vendors.incidents],
+                     ] : [
                        ["Total Vendors", thirdPartiesState.data.summary.totalVendors],
                        ["Assessed Vendors", thirdPartiesState.data.summary.assessed],
                        ["Needs Assessment", thirdPartiesState.data.summary.needsAssessment],
                        ["Vendor Risk Assessment Coverage", `${thirdPartiesState.data.summary.assessmentCoveragePct}%`],
-                     ].map(([label, value]) => <div key={label} className="flex items-center justify-between gap-2 py-1.5 first:pt-0 last:pb-0">
+                     ]).map(([label, value]) => <div key={label} className="flex items-center justify-between gap-2 py-1.5 first:pt-0 last:pb-0">
                        <dt className="text-slate-500 dark:text-slate-400">{label}</dt>
                        <dd className="shrink-0 text-xs font-semibold tabular-nums text-slate-800 dark:text-slate-100">{value}</dd>
                      </div>)}
                    </dl>
 
-                   <div className="relative mx-auto h-[112px] w-[112px]" aria-label={`Third-party assessment distribution for ${thirdPartiesState.data.summary.totalVendors} vendors`}>
+                   <div className="relative mx-auto h-[112px] w-[112px]" aria-label={`Third-party assessment distribution for ${displayedVendorTotal} vendors`}>
                      <ResponsiveContainer width="100%" height="100%">
                        <PieChart>
-                         <Pie data={thirdPartyDonutDistribution} dataKey="count" nameKey="name" innerRadius={34} outerRadius={52} paddingAngle={2} stroke="none" isAnimationActive={false}>
-                           {thirdPartyDonutDistribution.map(bucket => <Cell key={bucket.name} fill={bucket.color} />)}
+                         <Pie data={displayedVendorDonutDistribution} dataKey="count" nameKey="name" innerRadius={34} outerRadius={52} paddingAngle={2} stroke="none" isAnimationActive={false}>
+                           {displayedVendorDonutDistribution.map(bucket => <Cell key={bucket.name} fill={bucket.color} />)}
                          </Pie>
                        </PieChart>
                      </ResponsiveContainer>
                      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-                       <span className="text-2xl font-bold tabular-nums text-slate-800 dark:text-white">{thirdPartiesState.data.summary.totalVendors}</span>
+                       <span className="text-2xl font-bold tabular-nums text-slate-800 dark:text-white">{displayedVendorTotal}</span>
                        <span className="text-[9px] font-medium text-slate-400">Total Vendors</span>
                      </div>
                    </div>
 
                    <ul className="min-w-0 space-y-1.5 text-[10px]">
-                     {thirdPartyDistribution.map(bucket => {
-                       const percentage = Math.round(bucket.count / thirdPartiesState.data.summary.totalVendors * 100);
+                     {displayedVendorDistribution.map(bucket => {
+                       const percentage = Math.round(bucket.count / displayedVendorTotal * 100);
                        return <li key={bucket.name} className="flex items-center justify-between gap-1.5">
                          <span className="flex min-w-0 items-center gap-1.5 text-slate-600 dark:text-slate-300">
                            <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: bucket.color }} />

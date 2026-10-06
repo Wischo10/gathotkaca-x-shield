@@ -1,5 +1,6 @@
 import "server-only";
 import { selectIncidentTicketingProvider } from "@/integrations/incident-ticketing/provider-factory";
+import { DummyIncidentTicketingProvider } from "@/integrations/incident-ticketing/dummy-provider";
 import type { IncidentKpiItem, IncidentKpiOverview } from "@/types/ciso";
 import type { IncidentTicketingOverview, IncidentTicketingProviderResult, NormalizedIncidentTicket } from "@/types/incident-ticketing";
 import type { DataProvenance } from "@/types/provenance";
@@ -49,7 +50,13 @@ function calculateProviderKpis(result: IncidentTicketingProviderResult): Inciden
 
 export async function getIncidentTicketingOverview(): Promise<IncidentTicketingOverview> {
   const selection = selectIncidentTicketingProvider();
-  if (selection.status === "not_available") return unavailable(selection.reason);
+  if (selection.status === "not_available") {
+    if (selection.reason === "INCIDENT_TICKETING_PROVIDER is not configured.") {
+      const result = await new DummyIncidentTicketingProvider().listIncidents();
+      return { records: result.records, incidentKpi: calculateProviderKpis(result), provenance: result.provenance };
+    }
+    return unavailable(selection.reason);
+  }
   try {
     const result = await selection.provider.listIncidents();
     return { records: result.records, incidentKpi: calculateProviderKpis(result), provenance: result.provenance };

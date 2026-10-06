@@ -21,7 +21,7 @@ export function ThreatIntelPanel() {
             : "Last 7 Days"}
         </span>
       }
-      className="flex flex-col justify-between"
+      className="flex h-full flex-col justify-between"
     >
       {state.phase === "loading" && <PanelLoading />}
       {state.phase === "empty" && (

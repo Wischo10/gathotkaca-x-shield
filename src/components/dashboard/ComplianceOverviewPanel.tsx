@@ -9,6 +9,7 @@ import type {
   ComplianceFrameworkItem,
   ComplianceOverviewData,
 } from "@/types/compliance";
+import { CISO_DEMO_DATA } from "@/services/ciso-demo-data-provider";
 
 export function ComplianceOverviewPanel() {
   const [selectedFramework, setSelectedFramework] = useState<string>("all");
@@ -16,9 +17,15 @@ export function ComplianceOverviewPanel() {
 
   const frameworks = useMemo(() => {
     if (state.phase !== "ready" || !state.data?.frameworks) return [];
-    if (selectedFramework === "all") return state.data.frameworks;
-    return state.data.frameworks.filter((f) => f.id === selectedFramework);
+    const merged = state.data.frameworks.map(framework => {
+      if (framework.score !== null || framework.metricKind === "telemetry_observation") return framework;
+      const demo = CISO_DEMO_DATA.complianceFrameworks.find(item => item.id === framework.id);
+      return demo ? { ...framework, score: demo.score, trend30d: demo.trend30d, trendStatus: "available" as const, trendUnit: "percentage_points" as const, status: demo.status as ComplianceFrameworkItem["status"], assessmentComplete: true, assessmentProgressStatus: "assessment_complete" as const, scoreIsInterim: false, context: "Deterministic demonstration value; formal assessment integration is pending.", demo: true } : framework;
+    });
+    if (selectedFramework === "all") return merged;
+    return merged.filter((f) => f.id === selectedFramework);
   }, [state, selectedFramework]);
+  const demoCount = frameworks.filter(item => "demo" in item && item.demo).length;
   const latestFormalAssessment = state.phase === "ready"
     ? state.data.frameworks
       .filter(item => item.metricKind !== "telemetry_observation" && item.lastAssessedAt)
@@ -32,6 +39,7 @@ export function ComplianceOverviewPanel() {
       title="Compliance Overview"
       action={
         <div className="flex items-center gap-2">
+          {demoCount > 0 && <span className={`whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-semibold ${demoCount === frameworks.length ? "border-amber-200 bg-amber-50 text-amber-700" : "border-violet-200 bg-violet-50 text-violet-700"}`}>{demoCount === frameworks.length ? "DEMO DATA" : "Mixed: Live + Demo"}</span>}
           <select
             value={selectedFramework}
             onChange={(e) => setSelectedFramework(e.target.value)}
@@ -75,7 +83,7 @@ export function ComplianceOverviewPanel() {
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
               {frameworks.map((item) => (
-                <FrameworkRow key={item.id} item={item} />
+                <FrameworkRow key={item.id} item={item} demo={"demo" in item && item.demo === true} />
               ))}
             </tbody>
           </table>
@@ -99,7 +107,7 @@ export function ComplianceOverviewPanel() {
   );
 }
 
-function FrameworkRow({ item }: { item: ComplianceFrameworkItem }) {
+function FrameworkRow({ item, demo = false }: { item: ComplianceFrameworkItem; demo?: boolean }) {
   const isPendingAssessment = item.metricKind !== "telemetry_observation"
     && (item.assessmentProgressStatus === "not_assessed"
       || (item.assessmentProgressStatus === undefined && item.status === "not_assessed"));
@@ -108,7 +116,7 @@ function FrameworkRow({ item }: { item: ComplianceFrameworkItem }) {
     <tr title={item.context} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors">
       {/* Framework Name */}
       <td className="py-2.5 font-medium text-slate-700 dark:text-slate-200">
-        <div>{item.name}</div>
+        <div className="flex items-center gap-1.5">{item.name}{demo&&<span className="rounded border border-amber-200 bg-amber-50 px-1 py-0.5 text-[8px] font-semibold text-amber-700">DEMO DATA</span>}</div>
         <div className="mt-0.5 text-[10px] font-normal text-slate-400">
           {item.metricKind === "telemetry_observation" ? "Telemetry Observation" : "Formal Assessment"}
           {item.assessedControls !== undefined && item.totalApplicableControls !== undefined
