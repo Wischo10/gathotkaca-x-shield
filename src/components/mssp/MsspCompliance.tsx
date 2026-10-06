@@ -1,76 +1,56 @@
+"use client";
+
 import type { ReactNode } from "react";
+import { Area, AreaChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Panel } from "@/components/ui/Panel";
+import { calculateDemoComplianceScore } from "@/services/mssp-compliance-metrics";
+import type { MsspComplianceDemoData, MsspComplianceStatus } from "@/types/mssp";
 
-const KPI_ITEMS = [
-  { title: "Compliance Score", reason: "Compliance assessment source not configured", icon: "score" },
-  { title: "Compliant Controls", reason: "Control assessment source not configured", icon: "controls" },
-  { title: "Critical Gaps", reason: "Compliance gap source not configured", icon: "gaps" },
-  { title: "At Risk", reason: "Compliance risk model not configured", icon: "risk" },
-  { title: "Frameworks Monitored", reason: "Framework registry not configured", icon: "frameworks" },
-  { title: "Audit Readiness", reason: "Audit readiness source not configured", icon: "audit" },
-] as const;
+const META: Record<MsspComplianceStatus, { label: string; color: string }> = { compliant: { label: "Compliant", color: "#22c55e" }, "partially-compliant": { label: "Partially Compliant", color: "#f59e0b" }, "non-compliant": { label: "Non-Compliant", color: "#ef4444" }, "not-applicable": { label: "Not Applicable", color: "#94a3b8" } };
+const COLORS = ["#2563eb", "#8b5cf6", "#14b8a6", "#f97316"];
+const day = (value: string) => new Date(value).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" });
+const fullDay = (value: string) => new Date(value).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
+const statusCounts = (values: MsspComplianceStatus[]) => Object.fromEntries((Object.keys(META) as MsspComplianceStatus[]).map((status) => [status, values.filter((value) => value === status).length])) as Record<MsspComplianceStatus, number>;
 
-export function MsspCompliance() {
+export function MsspCompliance({ demo }: { demo: MsspComplianceDemoData }) {
+  const statuses = demo.assessments.map((item) => item.status), counts = statusCounts(statuses), applicable = statuses.length - counts["not-applicable"], score = calculateDemoComplianceScore(statuses);
+  const frameworks = demo.frameworks.map((framework) => { const items = demo.assessments.filter((item) => item.frameworkId === framework.id), frameworkCounts = statusCounts(items.map((item) => item.status)); return { ...framework, total: items.length, counts: frameworkCounts, score: calculateDemoComplianceScore(items.map((item) => item.status)) }; });
+  const allClients = demo.clients.map((client, index) => { const value = calculateDemoComplianceScore(demo.assessments.filter((item) => item.clientId === client.id).map((item) => item.status)); return { ...client, complianceScore: value, history: [-2.4, -1.6, -.9, -.4, 0].map((offset, point) => ({ point, value: value + offset + index % 3 * .15 })) }; });
+  // At risk is compliance-only: a demo client whose weighted assessment score is below 70%.
+  const atRisk = allClients.filter((client) => client.complianceScore < 70).length;
+  // Readiness treats compliant/partial assessments and completed activities as ready evidence units.
+  const readiness = (counts.compliant + counts["partially-compliant"] + demo.activities.filter((item) => item.status === "Completed").length) / (applicable + demo.activities.length) * 100;
+  const kpis = [
+    ["Compliance Score", `${score.toFixed(1)}%`, "Weighted demo assessments", demo.scoreTrend.map((item) => item.score)],
+    ["Compliant Controls", `${counts.compliant.toLocaleString()} / ${applicable.toLocaleString()}`, "Compliant / applicable", [counts.compliant - 8, counts.compliant - 5, counts.compliant - 3, counts.compliant - 1, counts.compliant]],
+    ["Critical Gaps", demo.gaps.filter((item) => item.riskLevel === "Critical").length, "Demo compliance gaps", [4, 4, 3, 3, 2]],
+    ["At Risk", atRisk, "Clients below 70% demo score", [atRisk + 3, atRisk + 2, atRisk + 2, atRisk + 1, atRisk]],
+    ["Frameworks Monitored", demo.frameworks.length, "Demo framework registry", [3, 3, 3, 4, 4]],
+    ["Audit Readiness", `${readiness.toFixed(1)}%`, "Demo evidence readiness", [readiness - 3, readiness - 2, readiness - 1.2, readiness - .5, readiness]],
+  ] as const;
   return <div className="space-y-4">
-    <header className="flex flex-wrap items-start justify-between gap-3">
-      <div><h1 className="text-xl font-semibold text-slate-800 dark:text-white">Compliance</h1><p className="mt-1 text-sm text-slate-500">Compliance posture, control assessment, audit, and evidence visibility.</p></div>
-      <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-900">Compliance assessment source not configured</span>
-    </header>
-
-    <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">{KPI_ITEMS.map((item) => <ComplianceKpiCard key={item.title} {...item} />)}</section>
-
-    <section className="grid auto-rows-fr gap-4 xl:grid-cols-12">
-      <div className="xl:col-span-5"><UnavailablePanel title="Compliance Score Trend" reason="Compliance assessment history not configured" /></div>
-      <div className="xl:col-span-3"><UnavailablePanel title="Compliance Score by Framework" reason="Framework assessment data not configured" /></div>
-      <div className="xl:col-span-4"><UnavailablePanel title="Compliance Score by Client" reason="Client compliance mapping not configured" /></div>
-    </section>
-
-    <section className="grid auto-rows-fr gap-4 xl:grid-cols-12">
-      <div className="min-w-0 xl:col-span-5"><FrameworkSummaryTable /></div>
-      <div className="min-w-0 xl:col-span-3"><ComplianceGapsTable /></div>
-      <div className="xl:col-span-4"><UnavailablePanel title="Compliance Status Distribution" reason="Control assessment status not configured" /></div>
-    </section>
-
-    <section className="grid auto-rows-fr gap-4 xl:grid-cols-12">
-      <div className="min-w-0 xl:col-span-4"><ComplianceTable title="Upcoming Audits" columns={["Client", "Audit Type", "Framework", "Scheduled Date", "Status"]} reason="Audit schedule not configured" /></div>
-      <div className="min-w-0 xl:col-span-4"><ComplianceTable title="Compliance Activities" columns={["Activity", "Client", "Framework", "Due Date", "Status"]} reason="Compliance activity source not configured" /></div>
-      <div className="min-w-0 xl:col-span-4"><ComplianceTable title="Compliance Documents" columns={["Document Name", "Framework", "Last Updated", "Type"]} reason="Compliance document registry not configured" /></div>
-    </section>
+    <header className="flex flex-wrap items-start justify-between gap-3"><div><div className="flex items-center gap-2"><h1 className="text-xl font-semibold text-slate-800 dark:text-white">Demo Compliance Posture</h1><DemoBadge /></div><p className="mt-1 text-sm text-slate-500">Illustrative assessment data only — not certification or actual organizational compliance results.</p></div><p className="max-w-md text-right text-[10px] leading-4 text-slate-400">Deterministic preview · No Wazuh or real security telemetry contributes to these scores</p></header>
+    <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">{kpis.map(([title, value, detail, history]) => <Kpi key={title} title={title} value={value} detail={detail} history={[...history]} />)}</section>
+    <section className="grid items-stretch gap-4 xl:grid-cols-12"><Box span="xl:col-span-5" title="Compliance Score Trend"><Trend data={demo.scoreTrend} /></Box><Box span="xl:col-span-3" title="Compliance Score by Framework"><FrameworkDonut rows={frameworks} score={score} /></Box><Box span="xl:col-span-4" title="Compliance Score by Client"><ClientTable rows={allClients.sort((a, b) => b.complianceScore - a.complianceScore).slice(0, 8)} /></Box></section>
+    <section className="grid items-stretch gap-4 xl:grid-cols-12"><Box span="xl:col-span-5" title="Compliance Framework Summary"><FrameworkTable rows={frameworks} clients={demo.clients.length} /></Box><Box span="xl:col-span-3" title="Top Compliance Gaps"><Gaps demo={demo} /></Box><Box span="xl:col-span-4" title="Compliance Status Distribution"><StatusDonut counts={counts} total={statuses.length} /></Box></section>
+    <section className="grid items-stretch gap-4 xl:grid-cols-12"><Box span="xl:col-span-4" title="Upcoming Audits"><Audits demo={demo} /></Box><Box span="xl:col-span-4" title="Compliance Activities"><Activities demo={demo} /></Box><Box span="xl:col-span-4" title="Compliance Documents"><Documents demo={demo} /></Box></section>
   </div>;
 }
 
-function ComplianceKpiCard({ title, reason, icon }: { title: string; reason: string; icon: IconName }) {
-  return <article className="flex min-h-32 flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/30 dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
-    <div className="flex items-start justify-between gap-3"><div className="flex min-w-0 items-center gap-2"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400" aria-hidden="true"><ComplianceIcon name={icon} /></span><p className="text-xs font-semibold leading-4 text-slate-500">{title}</p></div><NotAvailableBadge /></div>
-    <p className="mt-3 text-2xl font-bold text-slate-800 dark:text-white">N/A</p><p className="mt-auto pt-2 text-[10px] leading-4 text-slate-400">{reason}</p>
-  </article>;
-}
-
-function FrameworkSummaryTable() {
-  return <ComplianceTable title="Compliance Framework Summary" columns={["Framework", "Controls", "Compliant", "Partially Compliant", "Non-Compliant", "Compliance Score", "Trend"]} reason="Framework assessment data is not configured." wide />;
-}
-
-function ComplianceGapsTable() {
-  return <ComplianceTable title="Top Compliance Gaps" columns={["Gap", "Framework", "Clients Affected", "Risk Level"]} reason="Compliance findings source not configured" />;
-}
-
-function ComplianceTable({ title, columns, reason, wide = false }: { title: string; columns: string[]; reason: string; wide?: boolean }) {
-  return <Panel title={title} action={<NotAvailableBadge />}><div className="overflow-x-auto"><table className={`w-full text-left text-[10px] ${wide ? "min-w-[760px]" : "min-w-[480px]"}`}><thead className="border-b border-slate-200 bg-slate-50/80 text-slate-400 dark:border-slate-800 dark:bg-slate-950/40"><tr>{columns.map((heading) => <th key={heading} className="whitespace-nowrap px-3 py-2.5 font-semibold">{heading}</th>)}</tr></thead><tbody><tr><td colSpan={columns.length}><UnavailableState reason={reason} /></td></tr></tbody></table></div></Panel>;
-}
-
-function UnavailablePanel({ title, reason }: { title: string; reason: string }) { return <Panel title={title} action={<NotAvailableBadge />}><UnavailableState reason={reason} /></Panel>; }
-function UnavailableState({ reason }: { reason: string }) { return <div className="flex min-h-52 flex-col items-center justify-center px-4 text-center"><p className="text-2xl font-semibold text-slate-300 dark:text-slate-600">N/A</p><p className="mt-2 max-w-sm text-xs leading-5 text-slate-400">{reason}</p></div>; }
-function NotAvailableBadge() { return <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800">Not Available</span>; }
-
-type IconName = (typeof KPI_ITEMS)[number]["icon"];
-function ComplianceIcon({ name }: { name: IconName }) {
-  const paths: Record<IconName, ReactNode> = {
-    score: <><circle cx="12" cy="12" r="9" /><path d="M7 15a6 6 0 0 1 10 0M12 12l3-3" /></>,
-    controls: <><path d="M6 3h12v18H6z" /><path d="m9 8 1.5 1.5L14 6M9 14h6M9 17h4" /></>,
-    gaps: <><path d="M12 3 2.8 20h18.4L12 3Z" /><path d="M12 9v4M12 17h.01" /></>,
-    risk: <><circle cx="12" cy="12" r="9" /><path d="M12 7v6M12 17h.01" /></>,
-    frameworks: <><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" /></>,
-    audit: <><path d="M7 3h10v4H7zM5 7h14v14H5z" /><path d="m9 14 2 2 4-5" /></>,
-  };
-  return <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
-}
+function DemoBadge() { return <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">Demo Data</span>; }
+function Box({ span, title, children }: { span: string; title: string; children: ReactNode }) { return <div className={`min-w-0 ${span}`}><Panel title={title} action={<DemoBadge />}>{children}</Panel></div>; }
+function Kpi({ title, value, detail, history }: { title: string; value: string | number; detail: string; history: number[] }) { const delta = history.at(-1)! - history[0]; return <article className="min-h-28 overflow-hidden rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900"><div className="flex items-center justify-between gap-2"><p className="truncate text-[11px] font-semibold text-slate-500">{title}</p><DemoBadge /></div><div className="mt-2 grid grid-cols-[1fr_4.5rem] items-end gap-1"><div><p className="text-xl font-bold leading-none text-slate-800 dark:text-white">{typeof value === "number" ? value.toLocaleString() : value}</p><p className={`mt-1 text-[9px] font-medium ${delta >= 0 ? "text-emerald-600" : "text-rose-500"}`}>{delta >= 0 ? "↑" : "↓"} {Math.abs(delta).toFixed(1)} <span className="font-normal text-slate-400">demo trend</span></p><p className="mt-0.5 truncate text-[8px] text-slate-400">{detail}</p></div><div className="h-10"><ResponsiveContainer><LineChart data={history.map((point, index) => ({ index, point }))}><Line dataKey="point" stroke="#f59e0b" strokeWidth={1.8} dot={false} /></LineChart></ResponsiveContainer></div></div></article>; }
+function Trend({ data }: { data: MsspComplianceDemoData["scoreTrend"] }) { return <div className="h-52"><ResponsiveContainer><AreaChart data={data.map((item) => ({ ...item, label: day(item.date) }))} margin={{ top: 8, right: 8, left: -20 }}><defs><linearGradient id="demo-compliance" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#2563eb" stopOpacity={.25} /><stop offset="1" stopColor="#2563eb" stopOpacity={.02} /></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="label" tick={{ fontSize: 8 }} /><YAxis domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 8 }} /><Tooltip formatter={(v) => [`${Number(v).toFixed(1)}%`, "Demo score"]} /><Area dataKey="score" type="monotone" stroke="#2563eb" fill="url(#demo-compliance)" strokeWidth={2} /></AreaChart></ResponsiveContainer></div>; }
+function FrameworkDonut({ rows, score }: { rows: Array<{ id: string; name: string; score: number }>; score: number }) { return <div className="grid h-52 grid-cols-[8rem_1fr] items-center gap-2"><Donut rows={rows.map((row, index) => ({ name: row.name, value: row.score, color: COLORS[index] }))} center={`${score.toFixed(1)}%`} label="demo score" /><div className="space-y-2">{rows.map((row, index) => <div key={row.id} className="flex items-center gap-1.5 text-[9px]"><i className="h-1.5 w-1.5 rounded-full" style={{ background: COLORS[index] }} /><span className="truncate text-slate-500">{row.name}</span><strong className="ml-auto">{row.score.toFixed(1)}%</strong></div>)}</div></div>; }
+function Donut({ rows, center, label }: { rows: Array<{ name: string; value: number; color: string }>; center: string; label: string }) { return <div className="relative h-36"><ResponsiveContainer><PieChart><Pie data={rows} dataKey="value" nameKey="name" innerRadius={44} outerRadius={64} strokeWidth={0}>{rows.map((row) => <Cell key={row.name} fill={row.color} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer><div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"><strong className="text-xl text-slate-800 dark:text-white">{center}</strong><span className="text-[8px] text-slate-400">{label}</span></div></div>; }
+function ClientTable({ rows }: { rows: Array<{ id: string; name: string; complianceScore: number; history: Array<{ point: number; value: number }> }> }) { return <Table heads={["Client", "Compliance Score", "Trend"]}>{rows.map((row) => <tr key={row.id}><Td title={row.name}>{row.name}</Td><Td><strong>{row.complianceScore.toFixed(1)}%</strong></Td><Td><div className="h-6 w-16"><ResponsiveContainer><LineChart data={row.history}><Line dataKey="value" stroke="#22c55e" dot={false} strokeWidth={1.5} /></LineChart></ResponsiveContainer></div></Td></tr>)}</Table>; }
+function FrameworkTable({ rows, clients }: { rows: Array<{ id: string; name: string; totalControls: number; total: number; counts: Record<MsspComplianceStatus, number>; score: number }>; clients: number }) { return <Table width="700px" heads={["Framework", "Controls", "Compliant", "Partially Compliant", "Non-Compliant", "Compliance Score", "Trend"]}>{rows.map((row) => <tr key={row.id}><Td>{row.name}</Td><Td>{row.total - row.counts["not-applicable"]} / {row.totalControls * clients}</Td><Td>{row.counts.compliant}</Td><Td>{row.counts["partially-compliant"]}</Td><Td>{row.counts["non-compliant"]}</Td><Td><strong>{row.score.toFixed(1)}%</strong></Td><Td><span className="text-emerald-600">↑ {(row.score % 2 + .4).toFixed(1)}%</span></Td></tr>)}</Table>; }
+function Gaps({ demo }: { demo: MsspComplianceDemoData }) { return <Table width="430px" heads={["Gap", "Framework", "Clients Affected", "Risk Level"]}>{demo.gaps.map((row) => <tr key={row.id}><Td title={row.title}>{row.title}</Td><Td>{demo.frameworks.find((item) => item.id === row.frameworkId)?.name}</Td><Td>{row.affectedClientIds.length}</Td><Td><Risk risk={row.riskLevel} /></Td></tr>)}</Table>; }
+function StatusDonut({ counts, total }: { counts: Record<MsspComplianceStatus, number>; total: number }) { const rows = (Object.keys(META) as MsspComplianceStatus[]).map((status) => ({ status, ...META[status], value: counts[status] })); return <div className="grid h-52 grid-cols-[9rem_1fr] items-center gap-3"><Donut rows={rows.map((row) => ({ name: row.label, value: row.value, color: row.color }))} center={total.toLocaleString()} label="Total Controls" /><div className="space-y-2">{rows.map((row) => <div key={row.status} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-1.5 text-[9px]"><i className="h-1.5 w-1.5 rounded-full" style={{ background: row.color }} /><span className="truncate text-slate-500">{row.label}</span><strong>{row.value}</strong><span className="w-9 text-right text-slate-400">{(row.value / total * 100).toFixed(1)}%</span></div>)}</div></div>; }
+function Audits({ demo }: { demo: MsspComplianceDemoData }) { return <Table width="520px" heads={["Client", "Audit Type", "Framework", "Scheduled Date", "Status"]}>{demo.audits.map((row) => <tr key={row.id}><Td>{demo.clients.find((c) => c.id === row.clientId)?.name}</Td><Td>{row.auditType}</Td><Td>{demo.frameworks.find((f) => f.id === row.frameworkId)?.name}</Td><Td>{fullDay(row.scheduledDate)}</Td><Td><Badge>{row.status}</Badge></Td></tr>)}</Table>; }
+function Activities({ demo }: { demo: MsspComplianceDemoData }) { return <Table width="560px" heads={["Activity", "Client", "Framework", "Due Date", "Status"]}>{demo.activities.map((row) => <tr key={row.id}><Td title={row.activity}>{row.activity}</Td><Td>{demo.clients.find((c) => c.id === row.clientId)?.name}</Td><Td>{demo.frameworks.find((f) => f.id === row.frameworkId)?.name}</Td><Td>{fullDay(row.dueDate)}</Td><Td><Badge>{row.status}</Badge></Td></tr>)}</Table>; }
+function Documents({ demo }: { demo: MsspComplianceDemoData }) { return <><Table width="480px" heads={["Document Name", "Framework", "Last Updated", "Type"]}>{demo.documents.map((row) => <tr key={row.id}><Td title={row.documentName}>{row.documentName}</Td><Td>{demo.frameworks.find((f) => f.id === row.frameworkId)?.name}</Td><Td>{fullDay(row.lastUpdated)}</Td><Td><Badge>{row.type}</Badge></Td></tr>)}</Table><p className="px-3 pb-2 text-[8px] text-slate-400">Metadata preview only · No files or downloads</p></>; }
+function Table({ heads, children, width = "100%" }: { heads: string[]; children: ReactNode; width?: string }) { return <div className="overflow-x-auto"><table className="w-full table-fixed text-left text-[9px]" style={{ minWidth: width }}><thead className="border-b border-slate-200 bg-slate-50/80 text-slate-400 dark:border-slate-800 dark:bg-slate-950/40"><tr>{heads.map((head) => <th key={head} className="px-2 py-2 font-semibold">{head}</th>)}</tr></thead><tbody className="divide-y divide-slate-100 text-slate-600 dark:divide-slate-800 dark:text-slate-300">{children}</tbody></table></div>; }
+function Td({ children, title }: { children: ReactNode; title?: string }) { return <td className="truncate px-2 py-2" title={title}>{children}</td>; }
+function Badge({ children }: { children: ReactNode }) { return <span className="whitespace-nowrap rounded-full bg-slate-100 px-1.5 py-0.5 text-[8px] font-semibold dark:bg-slate-800">{children}</span>; }
+function Risk({ risk }: { risk: string }) { const color = risk === "Critical" ? "bg-red-100 text-red-700" : risk === "High" ? "bg-orange-100 text-orange-700" : risk === "Medium" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"; return <span className={`rounded-full px-1.5 py-0.5 text-[8px] font-semibold ${color}`}>{risk}</span>; }

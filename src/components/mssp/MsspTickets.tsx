@@ -1,94 +1,60 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useState, type ReactNode } from "react";
+import { Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Panel } from "@/components/ui/Panel";
-import type { DemoAlertStatus, Severity, SocWorkflowDemo } from "@/types/soc";
+import type { MsspDemoTicket, MsspDemoTicketPriority, MsspDemoTicketStatus, MsspTicketsDemoData } from "@/types/mssp";
 
-const STATUS_COLORS: Record<DemoAlertStatus, string> = {
-  New: "#3b82f6", "In Progress": "#f97316", Investigating: "#eab308", Resolved: "#22c55e", Closed: "#64748b",
-};
+const STATUSES: MsspDemoTicketStatus[] = ["Open", "In Progress", "Waiting", "Resolved", "Closed"];
+const PRIORITIES: MsspDemoTicketPriority[] = ["Critical", "High", "Medium", "Low", "Informational"];
+const STATUS_COLORS = ["#3b82f6", "#f97316", "#eab308", "#22c55e", "#64748b"];
+const PRIORITY_COLORS = ["#dc2626", "#f97316", "#eab308", "#22c55e", "#3b82f6"];
+const PAGE_SIZE = 10;
+const average = (values: number[]) => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+const hours = (minutes: number) => `${(minutes / 60).toFixed(1)}h`;
+const dateTime = (value: string) => new Date(value).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
 
-export function MsspTickets({ demo }: { demo: SocWorkflowDemo | null }) {
-  const inProgress = demo?.alertStatuses.find((item) => item.status === "In Progress")?.count;
-  const resolved = demo?.alertStatuses.find((item) => item.status === "Resolved")?.count;
-  const resolvedRecords = demo?.records.filter((record) => record.status === "Resolved" || record.status === "Closed") ?? [];
-  const averageResolution = resolvedRecords.length ? average(resolvedRecords.map((record) => minutesBetween(record.detectedAt, record.resolvedAt))) : null;
-
+export function MsspTickets({ demo }: { demo: MsspTicketsDemoData }) {
+  const [page, setPage] = useState(1);
+  const tickets = [...demo.tickets].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  const countStatus = (status: MsspDemoTicketStatus) => tickets.filter((ticket) => ticket.status === status).length;
+  const slaMet = tickets.filter((ticket) => ticket.slaStatus === "Met").length, breached = tickets.length - slaMet, slaPercent = slaMet / tickets.length * 100;
+  const kpis = [
+    ["Total Tickets", tickets.length, [tickets.length - 7, tickets.length - 6, tickets.length - 4, tickets.length - 2, tickets.length]],
+    ["Open Tickets", countStatus("Open"), [countStatus("Open") + 3, countStatus("Open") + 2, countStatus("Open") + 1, countStatus("Open") + 1, countStatus("Open")]],
+    ["In Progress Tickets", countStatus("In Progress"), [countStatus("In Progress") - 2, countStatus("In Progress") - 1, countStatus("In Progress"), countStatus("In Progress") + 1, countStatus("In Progress")]],
+    ["Resolved Tickets", countStatus("Resolved"), [countStatus("Resolved") - 4, countStatus("Resolved") - 3, countStatus("Resolved") - 2, countStatus("Resolved") - 1, countStatus("Resolved")]],
+    ["SLA Met", `${slaPercent.toFixed(1)}%`, [slaPercent - 2.2, slaPercent - 1.6, slaPercent - 1, slaPercent - .4, slaPercent]],
+    ["SLA Breached", breached, [breached + 3, breached + 2, breached + 1, breached + 1, breached]],
+  ] as const;
+  const priorityRows = PRIORITIES.map((name, index) => ({ name, value: tickets.filter((ticket) => ticket.priority === name).length, color: PRIORITY_COLORS[index] }));
+  const statusRows = STATUSES.map((name, index) => ({ name, value: countStatus(name), color: STATUS_COLORS[index] }));
+  const categories = [...new Set(tickets.map((ticket) => ticket.category))].map((category, index) => ({ category, count: tickets.filter((ticket) => ticket.category === category).length, trend: ((index * 7) % 9) - 3 })).sort((a, b) => b.count - a.count);
+  const timeline = Array.from({ length: 7 }, (_, index) => { const end = Date.parse(demo.snapshotAt) - (6 - index) * 86_400_000; const active = tickets.filter((ticket) => Date.parse(ticket.createdAt) <= end); return { date: new Date(end).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" }), Open: active.filter((ticket) => ticket.status === "Open").length, "In Progress": active.filter((ticket) => ticket.status === "In Progress").length, Resolved: active.filter((ticket) => ticket.status === "Resolved").length, Closed: active.filter((ticket) => ticket.status === "Closed").length }; });
+  const pages = Math.ceil(tickets.length / PAGE_SIZE), current = Math.min(page, pages), start = (current - 1) * PAGE_SIZE, visible = tickets.slice(start, start + PAGE_SIZE);
   return <div className="space-y-4">
-    <header className="flex flex-wrap items-start justify-between gap-3">
-      <div><h1 className="text-xl font-semibold text-slate-800 dark:text-white">Tickets</h1><p className="mt-1 text-sm text-slate-500">Ticket workflow, service performance, and resolution visibility.</p></div>
-      <span className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-wide ${demo ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40" : "border-slate-200 bg-white text-slate-500 dark:border-slate-800 dark:bg-slate-900"}`}>{demo ? "Demo Ticketing Provider" : "Service Desk integration not configured"}</span>
-    </header>
-    {demo && <p className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs text-amber-700 dark:border-amber-900 dark:bg-amber-950/30">Temporary demo ticket data · Service Desk integration is not currently configured.</p>}
-
-    <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
-      <TicketKpiCard title="Total Tickets" value={demo?.records.length} demo={Boolean(demo)} reason="Ticketing provider not configured" icon="total" />
-      <TicketKpiCard title="Open Tickets" reason="Ticket workflow status not available" icon="open" />
-      <TicketKpiCard title="In Progress Tickets" value={inProgress} demo={Boolean(demo)} reason="Ticket workflow status not available" icon="progress" />
-      <TicketKpiCard title="Resolved Tickets" value={resolved} demo={Boolean(demo)} reason="Ticket workflow status not available" icon="resolved" />
-      <TicketKpiCard title="SLA Met" reason="Ticket SLA source not configured" icon="slaMet" />
-      <TicketKpiCard title="SLA Breached" reason="Ticket SLA source not configured" icon="slaBreached" />
-    </section>
-
-    <section className="grid auto-rows-fr gap-4 xl:grid-cols-12">
-      <div className="xl:col-span-5"><UnavailablePanel title="Tickets Over Time" reason="Ticket history not configured" /></div>
-      <div className="xl:col-span-3"><UnavailablePanel title="Tickets by Priority" reason="Ticket priority source not configured" /></div>
-      <div className="xl:col-span-4"><UnavailablePanel title="Top Ticket Categories" reason="Ticket category source not configured" /></div>
-    </section>
-
-    <section className="grid auto-rows-fr gap-4 xl:grid-cols-12">
-      <div className="min-w-0 xl:col-span-6"><RecentTicketsPanel demo={demo} /></div>
-      <div className="xl:col-span-3"><TicketsByStatusPanel demo={demo} /></div>
-      <div className="xl:col-span-3"><UnavailablePanel title="SLA Performance" reason="Ticket SLA source not configured" /></div>
-    </section>
-
-    <section className="grid auto-rows-fr gap-4 xl:grid-cols-12">
-      <div className="xl:col-span-3"><UnavailablePanel title="Tickets by Client" reason="Client-to-ticket mapping not configured" /></div>
-      <div className="xl:col-span-4"><UnavailablePanel title="Tickets by Assignee" reason="Ticket assignment source not configured" /></div>
-      <div className="xl:col-span-5"><ResolutionPanel demo={Boolean(demo)} averageMinutes={averageResolution} /></div>
-    </section>
+    <header className="flex flex-wrap items-start justify-between gap-3"><div><div className="flex items-center gap-2"><h1 className="text-xl font-semibold text-slate-800 dark:text-white">Tickets</h1><DemoBadge /></div><p className="mt-1 text-sm text-slate-500">Demo ticket workflow · Service Desk integration pending</p></div><p className="text-[10px] text-slate-400">Read-only deterministic preview · No external Service Desk connection</p></header>
+    <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">{kpis.map(([title, value, history]) => <Kpi key={title} title={title} value={value} history={[...history]} />)}</section>
+    <section className="grid items-stretch gap-4 xl:grid-cols-12"><Box span="xl:col-span-5" title="Tickets Over Time"><Timeline rows={timeline} /></Box><Box span="xl:col-span-3" title="Tickets by Priority"><Donut rows={priorityRows} total={tickets.length} /></Box><Box span="xl:col-span-4" title="Top Ticket Categories"><CategoryTable rows={categories} total={tickets.length} /></Box></section>
+    <section className="grid items-stretch gap-4 xl:grid-cols-12"><Box span="xl:col-span-6" title="Recent Tickets"><Recent tickets={visible} demo={demo} start={start} total={tickets.length} page={current} pages={pages} onPage={setPage} /></Box><Box span="xl:col-span-3" title="Tickets by Status"><Donut rows={statusRows} total={tickets.length} /></Box><Box span="xl:col-span-3" title="SLA Performance"><Sla met={slaMet} breached={breached} total={tickets.length} /></Box></section>
+    <section className="grid items-stretch gap-4 xl:grid-cols-12"><Box span="xl:col-span-3" title="Tickets by Client"><Aggregate rows={clientAggregation(tickets, demo)} /></Box><Box span="xl:col-span-4" title="Tickets by Assignee"><Aggregate rows={teamAggregation(tickets)} /></Box><Box span="xl:col-span-5" title="Average Resolution Time"><Resolution tickets={tickets} /></Box></section>
   </div>;
 }
 
-type IconName = "total" | "open" | "progress" | "resolved" | "slaMet" | "slaBreached";
-function TicketKpiCard({ title, value, demo = false, reason, icon }: { title: string; value?: number; demo?: boolean; reason: string; icon: IconName }) {
-  const available = demo && value !== undefined;
-  return <article className="flex min-h-32 flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/30 dark:border-slate-800 dark:bg-slate-900 dark:shadow-none"><div className="flex items-start justify-between gap-3"><div className="flex min-w-0 items-center gap-2"><TicketIcon name={icon} /><p className="text-xs font-semibold leading-4 text-slate-500">{title}</p></div><StateBadge demo={available} /></div><p className="mt-3 text-2xl font-bold text-slate-800 dark:text-white">{available ? value.toLocaleString() : "N/A"}</p><p className="mt-auto pt-2 text-[10px] leading-4 text-slate-400">{available ? "Demo Ticketing Provider" : reason}</p></article>;
-}
-
-function RecentTicketsPanel({ demo }: { demo: SocWorkflowDemo | null }) {
-  return <Panel title="Recent Tickets" action={<StateBadge demo={Boolean(demo)} />}>
-    <div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left text-[10px]"><thead className="border-b border-slate-200 bg-slate-50/80 text-slate-400 dark:border-slate-800 dark:bg-slate-950/40"><tr>{["Ticket ID", "Severity", "Status", "Detected At", "Resolved At"].map((heading) => <th key={heading} className="whitespace-nowrap px-3 py-2.5 font-semibold">{heading}</th>)}</tr></thead><tbody>{demo ? demo.records.slice(0, 5).map((record) => <tr key={record.id} className="border-b border-slate-100 dark:border-slate-800"><td className="px-3 py-2 font-medium text-slate-700 dark:text-slate-200">{record.id}</td><td className="px-3 py-2 capitalize">{record.severity}</td><td className="px-3 py-2"><span style={{ color: STATUS_COLORS[record.status] }}>{record.status}</span></td><td className="whitespace-nowrap px-3 py-2 text-slate-500">{formatUtc(record.detectedAt)}</td><td className="whitespace-nowrap px-3 py-2 text-slate-500">{record.status === "Resolved" || record.status === "Closed" ? formatUtc(record.resolvedAt) : "N/A"}</td></tr>) : <tr><td colSpan={5}><Unavailable reason="Ticketing provider not configured" /></td></tr>}</tbody></table>{demo && <SourceNote text="Latest 5 fixtures · Demo Ticketing Provider" />}</div>
-  </Panel>;
-}
-
-function TicketsByStatusPanel({ demo }: { demo: SocWorkflowDemo | null }) {
-  const max = Math.max(1, ...(demo?.alertStatuses.map((item) => item.count) ?? []));
-  return <Panel title="Tickets by Status" action={<StateBadge demo={Boolean(demo)} />}>{!demo ? <Unavailable reason="Ticket workflow status not available" /> : <div className="flex min-h-52 flex-col justify-center space-y-3">{demo.alertStatuses.map((item) => <div key={item.status}><div className="mb-1 flex justify-between text-[10px]"><span className="font-medium text-slate-600 dark:text-slate-300">{item.status}</span><span className="text-slate-400">{item.count}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"><div className="h-full rounded-full" style={{ width: `${item.count / max * 100}%`, backgroundColor: STATUS_COLORS[item.status] }} /></div></div>)}<SourceNote text="Demo workflow status aggregation" /></div>}</Panel>;
-}
-
-function ResolutionPanel({ demo, averageMinutes }: { demo: boolean; averageMinutes: number | null }) {
-  const available = demo && averageMinutes !== null;
-  return <Panel title="Average Resolution Time" action={<StateBadge demo={available} />}>{available ? <div className="flex min-h-52 flex-col items-center justify-center text-center"><p className="text-3xl font-bold text-slate-800 dark:text-white">{formatDuration(averageMinutes)}</p><p className="mt-2 text-xs text-slate-400">Resolved and Closed demo records only</p><div className="mt-5 grid w-full max-w-md grid-cols-3 gap-2 text-[10px]"><ResolutionSubmetric label="High Priority" /><ResolutionSubmetric label="Medium Priority" /><ResolutionSubmetric label="Low Priority" /></div><SourceNote text="Demo Ticketing Provider · detected-to-resolved interval" /></div> : <Unavailable reason="Ticket resolution lifecycle not available" />}</Panel>;
-}
-function ResolutionSubmetric({ label }: { label: string }) { return <div className="rounded-lg bg-slate-50 p-2 dark:bg-slate-800/60"><p className="text-slate-400">{label}</p><p className="mt-1 font-semibold text-slate-500">N/A</p></div>; }
-
-function UnavailablePanel({ title, reason }: { title: string; reason: string }) { return <Panel title={title} action={<StateBadge demo={false} />}><Unavailable reason={reason} /></Panel>; }
-function Unavailable({ reason }: { reason: string }) { return <div className="flex min-h-52 flex-col items-center justify-center px-4 text-center"><p className="text-2xl font-semibold text-slate-300 dark:text-slate-600">N/A</p><p className="mt-2 max-w-sm text-xs leading-5 text-slate-400">{reason}</p></div>; }
-function StateBadge({ demo }: { demo: boolean }) { return <span className={`shrink-0 rounded-full px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wide ${demo ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300" : "bg-slate-100 text-slate-500 dark:bg-slate-800"}`}>{demo ? "Demo Data" : "Not Available"}</span>; }
-function SourceNote({ text }: { text: string }) { return <p className="mt-3 border-t border-slate-100 pt-2 text-[9px] text-slate-400 dark:border-slate-800">{text}</p>; }
-
-function TicketIcon({ name }: { name: IconName }) {
-  const paths: Record<IconName, ReactNode> = {
-    total: <><path d="M4 6h16v5a2 2 0 0 0 0 4v5H4v-5a2 2 0 0 0 0-4z" /><path d="M12 7v2M12 15v2" /></>,
-    open: <><path d="M5 8h14v12H5zM8 8V5h8v3" /><path d="M9 13h6" /></>,
-    progress: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
-    resolved: <><circle cx="12" cy="12" r="9" /><path d="m8.5 12 2.2 2.2 4.8-5" /></>,
-    slaMet: <><path d="M6 3h12v18H6z" /><path d="m9 12 2 2 4-5" /></>,
-    slaBreached: <><path d="M6 3h12v18H6z" /><path d="m9 10 6 6M15 10l-6 6" /></>,
-  };
-  return <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400" aria-hidden="true"><svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg></span>;
-}
-
-function minutesBetween(start: string, end: string) { return (Date.parse(end) - Date.parse(start)) / 60_000; }
-function average(values: number[]) { return values.reduce((sum, value) => sum + value, 0) / values.length; }
-function formatDuration(minutes: number) { const hours = Math.floor(minutes / 60); const remainder = Math.round(minutes % 60); return hours ? `${hours}h ${remainder}m` : `${remainder}m`; }
-function formatUtc(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? "N/A" : date.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "UTC" }); }
+function DemoBadge() { return <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">Demo Data</span>; }
+function Box({ span, title, children }: { span: string; title: string; children: ReactNode }) { return <div className={`min-w-0 ${span}`}><Panel title={title} action={<DemoBadge />}>{children}</Panel></div>; }
+function Kpi({ title, value, history }: { title: string; value: string | number; history: number[] }) { const delta = history.at(-1)! - history[0]; return <article className="min-h-28 rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900"><div className="flex justify-between gap-2"><p className="truncate text-[11px] font-semibold text-slate-500">{title}</p><DemoBadge /></div><div className="mt-2 grid grid-cols-[1fr_4.5rem] items-end"><div><p className="text-xl font-bold text-slate-800 dark:text-white">{value}</p><p className={`text-[9px] ${delta >= 0 ? "text-emerald-600" : "text-rose-500"}`}>{delta >= 0 ? "↑" : "↓"} {Math.abs(delta).toFixed(1)} <span className="text-slate-400">demo trend</span></p></div><div className="h-10"><ResponsiveContainer><LineChart data={history.map((point, i) => ({ i, point }))}><Line dataKey="point" stroke="#f59e0b" dot={false} strokeWidth={1.8} /></LineChart></ResponsiveContainer></div></div></article>; }
+function Timeline({ rows }: { rows: Array<Record<string, string | number>> }) { return <div className="h-52"><ResponsiveContainer><LineChart data={rows} margin={{ top: 8, right: 8, left: -28 }}><XAxis dataKey="date" tick={{ fontSize: 8 }} /><YAxis allowDecimals={false} tick={{ fontSize: 8 }} /><Tooltip />{["Open", "In Progress", "Resolved", "Closed"].map((key, index) => <Line key={key} dataKey={key} stroke={STATUS_COLORS[[0, 1, 3, 4][index]]} dot={false} strokeWidth={1.8} />)}</LineChart></ResponsiveContainer></div>; }
+function Donut({ rows, total }: { rows: Array<{ name: string; value: number; color: string }>; total: number }) { return <div className="grid h-52 grid-cols-[8.5rem_1fr] items-center gap-2"><div className="relative h-36"><ResponsiveContainer><PieChart><Pie data={rows} dataKey="value" innerRadius={44} outerRadius={64} strokeWidth={0}>{rows.map((row) => <Cell key={row.name} fill={row.color} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer><div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"><strong className="text-xl">{total}</strong><span className="text-[8px] text-slate-400">Total Tickets</span></div></div><div className="space-y-1.5">{rows.map((row) => <div key={row.name} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-1 text-[9px]"><i className="h-1.5 w-1.5 rounded-full" style={{ background: row.color }} /><span className="truncate text-slate-500">{row.name}</span><strong>{row.value}</strong><span className="w-8 text-right text-slate-400">{(row.value / total * 100).toFixed(0)}%</span></div>)}</div></div>; }
+function CategoryTable({ rows, total }: { rows: Array<{ category: string; count: number; trend: number }>; total: number }) { return <Table heads={["Category", "Tickets", "% of Total", "Trend"]}>{rows.map((row) => <tr key={row.category}><Td>{row.category}</Td><Td>{row.count}</Td><Td>{(row.count / total * 100).toFixed(1)}%</Td><Td><span className={row.trend >= 0 ? "text-emerald-600" : "text-rose-500"}>{row.trend >= 0 ? "↑" : "↓"} {Math.abs(row.trend)}%</span></Td></tr>)}</Table>; }
+function Recent({ tickets, demo, start, total, page, pages, onPage }: { tickets: MsspDemoTicket[]; demo: MsspTicketsDemoData; start: number; total: number; page: number; pages: number; onPage: (page: number) => void }) { return <><Table width="760px" heads={["Ticket ID", "Client", "Subject", "Priority", "Status", "Assigned To", "Created At"]}>{tickets.map((ticket) => <tr key={ticket.id}><Td>{ticket.id}</Td><Td>{demo.clients.find((client) => client.id === ticket.clientId)?.name}</Td><Td title={ticket.subject}>{ticket.subject}</Td><Td><Tag value={ticket.priority} /></Td><Td><Tag value={ticket.status} /></Td><Td>{ticket.assignedTeam}</Td><Td>{dateTime(ticket.createdAt)}</Td></tr>)}</Table><div className="flex items-center justify-between px-2 py-2 text-[9px] text-slate-400"><span>Showing {start + 1}-{Math.min(start + PAGE_SIZE, total)} of {total} tickets</span><div className="flex gap-1"><button disabled={page === 1} onClick={() => onPage(page - 1)} className="rounded border px-2 py-1 disabled:opacity-40">Previous</button><button disabled={page === pages} onClick={() => onPage(page + 1)} className="rounded border px-2 py-1 disabled:opacity-40">Next</button></div></div></>; }
+function Sla({ met, breached, total }: { met: number; breached: number; total: number }) { const metPct = met / total * 100; return <div className="flex h-52 flex-col items-center justify-center"><div className="relative h-32 w-40 overflow-hidden"><div className="absolute left-2 top-4 h-32 w-32 rounded-full border-[16px] border-slate-100 dark:border-slate-800" /><div className="absolute inset-x-0 top-14 text-center"><strong className="text-2xl">{metPct.toFixed(1)}%</strong><p className="text-[8px] text-slate-400">SLA Met</p></div></div><div className="grid w-full grid-cols-2 gap-2 text-center text-[9px]"><div><strong className="text-emerald-600">{metPct.toFixed(1)}%</strong><p className="text-slate-400">Met ({met})</p></div><div><strong className="text-rose-500">{(breached / total * 100).toFixed(1)}%</strong><p className="text-slate-400">Breached ({breached})</p></div></div></div>; }
+type AggregateRow = { name: string; open: number; progress: number; resolved: number; total: number };
+function clientAggregation(tickets: MsspDemoTicket[], demo: MsspTicketsDemoData) { return demo.clients.map((client) => aggregate(client.name, tickets.filter((ticket) => ticket.clientId === client.id))).sort((a, b) => b.total - a.total).slice(0, 7); }
+function teamAggregation(tickets: MsspDemoTicket[]) { return [...new Set(tickets.map((ticket) => ticket.assignedTeam))].map((team) => aggregate(team, tickets.filter((ticket) => ticket.assignedTeam === team))).sort((a, b) => b.total - a.total); }
+function aggregate(name: string, tickets: MsspDemoTicket[]): AggregateRow { return { name, open: tickets.filter((ticket) => ticket.status === "Open").length, progress: tickets.filter((ticket) => ticket.status === "In Progress").length, resolved: tickets.filter((ticket) => ticket.status === "Resolved").length, total: tickets.length }; }
+function Aggregate({ rows }: { rows: AggregateRow[] }) { return <Table heads={["Name", "Open", "In Progress", "Resolved", "Total"]}>{rows.map((row) => <tr key={row.name}><Td title={row.name}>{row.name}</Td><Td>{row.open}</Td><Td>{row.progress}</Td><Td>{row.resolved}</Td><Td><strong>{row.total}</strong></Td></tr>)}</Table>; }
+function Resolution({ tickets }: { tickets: MsspDemoTicket[] }) { const resolved = tickets.filter((ticket) => ticket.resolvedAt); const duration = (items: MsspDemoTicket[]) => average(items.map((ticket) => (Date.parse(ticket.resolvedAt!) - Date.parse(ticket.createdAt)) / 60_000)); const cards = [["Overall", duration(resolved)], ["Critical / High", duration(resolved.filter((ticket) => ticket.priority === "Critical" || ticket.priority === "High"))], ["Medium Priority", duration(resolved.filter((ticket) => ticket.priority === "Medium"))], ["Low Priority", duration(resolved.filter((ticket) => ticket.priority === "Low" || ticket.priority === "Informational"))]] as const; return <div className="grid min-h-44 grid-cols-2 gap-3 p-2">{cards.map(([label, value], index) => <div key={label} className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800/60"><p className="text-[9px] text-slate-400">{label}</p><p className="mt-1 text-xl font-bold">{hours(value)}</p><p className="mt-1 text-[8px] text-emerald-600">↓ {(1.2 + index * .4).toFixed(1)}% demo trend</p></div>)}</div>; }
+function Table({ heads, children, width = "100%" }: { heads: string[]; children: ReactNode; width?: string }) { return <div className="overflow-x-auto"><table className="w-full table-fixed text-left text-[9px]" style={{ minWidth: width }}><thead className="border-b bg-slate-50/80 text-slate-400 dark:bg-slate-950/40"><tr>{heads.map((head) => <th key={head} className="px-2 py-2 font-semibold">{head}</th>)}</tr></thead><tbody className="divide-y divide-slate-100 dark:divide-slate-800">{children}</tbody></table></div>; }
+function Td({ children, title }: { children: ReactNode; title?: string }) { return <td title={title} className="truncate px-2 py-2 text-slate-600 dark:text-slate-300">{children}</td>; }
+function Tag({ value }: { value: string }) { return <span className="whitespace-nowrap rounded-full bg-slate-100 px-1.5 py-0.5 text-[8px] font-semibold dark:bg-slate-800">{value}</span>; }

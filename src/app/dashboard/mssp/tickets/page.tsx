@@ -1,8 +1,6 @@
 import { MsspTickets } from "@/components/mssp/MsspTickets";
-import { getIncidentTicketingDemo } from "@/services/incident-ticketing-provider";
-
-export const dynamic = "force-dynamic";
+import { getMsspTicketsDemo } from "@/services/mssp-demo-provider";
 
 export default function TicketsPage() {
-  return <MsspTickets demo={getIncidentTicketingDemo()} />;
+  return <MsspTickets demo={getMsspTicketsDemo()} />;
 }
