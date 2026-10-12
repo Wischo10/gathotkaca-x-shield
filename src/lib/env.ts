@@ -69,9 +69,7 @@ export const env = {
     virusTotalApiKey: () => optional("VIRUSTOTAL_API_KEY"),
     abuseIpDbApiKey: () => optional("ABUSEIPDB_API_KEY"),
   },
-  incidentTicketing: {
-    provider: () => optional("INCIDENT_TICKETING_PROVIDER"),
-  },
+
   database: {
     url: () => optional("DATABASE_URL"),
   },

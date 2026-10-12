@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Gathotkaca X-Shield — Implementation (Milestone 1: SOC Dashboard)
 
 Scope of this milestone: a working, secure, end-to-end vertical slice —
@@ -176,9 +175,7 @@ Open `http://localhost:3000` — it redirects to `/dashboard/soc`.
 **Before relying on this in production:** run `npm run build` to catch
 any TypeScript/aggregation-shape mismatches against your real Wazuh
 Indexer response, and confirm the field names noted in Open Question 3.
-=======
-# gathotkaca-x-shield
->>>>>>> 052414e2057a469e6f1ea451870ab60fced62b4a
+
 
 ### NIST CSF assessment workflow
 

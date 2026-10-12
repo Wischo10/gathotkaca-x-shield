@@ -1,10 +1,117 @@
+export const NIST_FUNCTIONS = ["Govern", "Identify", "Protect", "Detect", "Respond", "Recover"] as const;
+
+export interface NistFunctionAssessment {
+  name: typeof NIST_FUNCTIONS[number];
+  score: number | null;
+  assessedAt: string | null;
+  assessedBy: string | null;
+  source: string | null;
+  evidence: string | null;
+  notes: string | null;
+  trend30d: number | null; // Percentage-point change, not relative percent change.
+  previousScore: number | null;
+  previousAssessedAt: string | null;
+}
+
+export interface NistPostureAssessment {
+  status: "available" | "unavailable";
+  domains: NistFunctionAssessment[];
+  overallScore: number | null;
+  explanation: string;
+}
+
+export interface PostureComponent {
+  key: string;
+  name: string;
+  rawValue: number | null;
+  rawUnit?: string;
+  normalizedScore: number | null;
+  weight: number;
+  contribution: number | null;
+  source: string;
+  policyNote?: string;
+}
+
+export interface MetricCardValue {
+  availability?: {
+    status: "available" | "unavailable";
+    checkedAt: string;
+    fetchedAt: string | null;
+    cached: boolean;
+    error?: { code: string; message: string };
+  };
+  value: number | null;
+  category?: string;
+  eligibleCount?: number;
+  completedCount?: number;
+  plannedCount?: number;
+  inProgressCount?: number;
+  max?: number;
+  trend30d: number | null;
+  trendAvailable: boolean;
+  unit?: string;
+  source: string;
+  components?: PostureComponent[];
+  details?: {
+    current?: number | null;
+    previous30d?: number | null;
+    explanation?: string;
+    criticalAffectedAssets?: number;
+    totalAssets?: number;
+    criticalFindings?: number;
+    uniqueCriticalCVEs?: number;
+    agentsActive?: number;
+    agentsDisconnected?: number;
+    agentsNeverConnected?: number;
+    agentsPending?: number;
+    agentsTotal?: number;
+  };
+}
+
+export interface VulnerabilitySlaCategory {
+  count: number;
+  percentage: number;
+}
+
+export interface VulnerabilitySlaPolicyConfig {
+  criticalSlaDays: number | null;
+  dueSoonThresholdDays: number | null;
+  thresholds?: Record<string, number>;
+  dueSoonThresholdPct?: number;
+  policyNote?: string;
+}
+
+export interface VulnerabilitySlaOverview {
+  available: boolean;
+  dataAvailable: boolean;
+  total: number | null;
+  totalCritical: number | null;
+  overdue: number | null;
+  overduePct?: number | null;
+  dueSoon: number | null;
+  dueSoonPct?: number | null;
+  inProgress: number | null;
+  inProgressPct?: number | null;
+  compliant: number | null;
+  compliantPct?: number | null;
+  unclassified: number | null;
+  unclassifiedPct: number | null;
+  ageField: "vulnerability.detected_at";
+  asOf: string;
+  scope: string;
+  policy: VulnerabilitySlaPolicyConfig;
+  source: string;
+  explanation: string;
+}
+
 export type IncidentLifecycleEventType =
   | "detected"
   | "acknowledged"
   | "response_started"
   | "response_completed"
   | "contained"
-  | "closed";
+  | "closed"
+  | "resolved";
 
 export interface RiskCategory {
   id: string;
@@ -47,6 +154,7 @@ export interface IncidentKpiItem {
   calculationMethod?: string;
   timestampFieldsUsed?: string;
   explanation?: string;
+  provenance?: any;
 }
 
 export interface IncidentKpiOverview {
@@ -57,6 +165,24 @@ export interface IncidentKpiOverview {
   mttc: IncidentKpiItem;
   dataAvailable: boolean;
   explanation: string;
+  provenance?: any;
+}
+
+export interface CisoMetricsData {
+  nistPosture: NistPostureAssessment;
+  securityPostureScore: MetricCardValue;
+  totalRiskScore: MetricCardValue;
+  activeIncidents: MetricCardValue;
+  criticalVulnerabilities: MetricCardValue;
+  complianceScore: MetricCardValue;
+  riskTreatmentProgress: MetricCardValue;
+  vulnerabilitySla: VulnerabilitySlaOverview;
+  vulnerabilitySlaOverview?: VulnerabilitySlaOverview;
+  incidentKpi: IncidentKpiOverview;
+  incidentTicketing?: any;
+  assetManagement?: any;
+  cards?: any[];
+  updatedAt: string;
 }
 
 export interface BitdefenderIncidentListItem {
@@ -73,8 +199,9 @@ export interface BitdefenderIncidentListItem {
   acknowledgedAt?: string | null;
   respondedAt?: string | null;
   containedAt?: string | null;
+  resolvedAt?: string | null;
   latestEvent?: IncidentLifecycleEventType | null;
-  lifecycleStatus: "detected" | "acknowledged" | "responding" | "contained" | "unhandled";
+  lifecycleStatus: "detected" | "acknowledged" | "responding" | "contained" | "unhandled" | "resolved";
 }
 
 export interface IncidentListResponse {
