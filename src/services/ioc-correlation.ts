@@ -167,6 +167,17 @@ export async function getTopIocDetections(): Promise<TopIocDetection[]> {
   }));
 }
 
+/** Read-only count of current confirmed malicious IP correlations. */
+export async function getCurrentConfirmedIocCount(): Promise<number> {
+  const result = await getDb().query<{ count: string | number }>(
+    `SELECT COUNT(*)::int AS count FROM ioc_correlations
+     WHERE indicator_type = 'ip' AND ti_provider = 'abuseipdb'
+       AND correlation_status = 'confirmed_malicious'
+       AND wazuh_last_observed_at >= NOW() - INTERVAL '7 days'`
+  );
+  return Number(result.rows[0]?.count ?? 0);
+}
+
 export interface CountryBackfillResult {
   candidates: number;
   providerRequests: number;

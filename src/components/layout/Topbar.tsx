@@ -6,10 +6,14 @@ export function Topbar({
   title,
   subtitle,
   onMenuClick,
+  businessUnitFilterLabel = "All Business Units",
+  businessUnitFilterDisabled = false,
 }: {
   title: string;
   subtitle: string;
   onMenuClick: () => void;
+  businessUnitFilterLabel?: string;
+  businessUnitFilterDisabled?: boolean;
 }) {
   const router = useRouter();
 
@@ -41,11 +45,12 @@ export function Topbar({
 
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <select
-          className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+          className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-slate-600 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:disabled:bg-slate-800"
           defaultValue="all"
-          aria-label="Business unit filter"
+          disabled={businessUnitFilterDisabled}
+          aria-label={businessUnitFilterDisabled ? "Tenant filter unavailable" : "Business unit filter"}
         >
-          <option value="all">All Business Units</option>
+          <option value="all">{businessUnitFilterLabel}</option>
         </select>
         <span className="rounded-md border border-slate-200 px-2 py-1.5 text-slate-600 dark:border-slate-700 dark:text-slate-300">
           Last 7 days

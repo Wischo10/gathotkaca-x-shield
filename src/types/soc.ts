@@ -133,6 +133,7 @@ export interface LiveEvent {
   severity: Severity;
   rule: string;
   assetOrUser: string;
+  detectionSource: string | null;
 }
 
 /** Allowlisted investigation record returned by the SOC API; never raw _source. */
