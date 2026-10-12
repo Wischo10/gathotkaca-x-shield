@@ -2,7 +2,7 @@
 
 import { Panel } from "@/components/ui/Panel";
 import { Topbar } from "@/components/layout/Topbar";
-import { useSidebarToggle } from "@/app/dashboard/layout";
+import { useSidebarToggle } from "@/context/sidebar-context";
 import {
   BarChart,
   Bar,

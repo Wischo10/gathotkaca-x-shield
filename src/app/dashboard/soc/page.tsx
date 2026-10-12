@@ -1,6 +1,6 @@
 "use client";
 import { Topbar } from "@/components/layout/Topbar";
-import { useSidebarToggle } from "@/app/dashboard/layout";
+import { useSidebarToggle } from "@/context/sidebar-context";
 import { Panel } from "@/components/ui/Panel";
 
 export default function SocDashboardPage() {
