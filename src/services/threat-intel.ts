@@ -1,0 +1,389 @@
+import "server-only";
+import { env } from "@/lib/env";
+import { fetchJson } from "@/lib/http";
+import type {
+  ThreatIntelligenceOverviewData,
+  ThreatCategoryItem,
+  ProviderHealth,
+} from "@/types/threat-intel";
+
+interface ThreatFoxIOC {
+  id: string;
+  ioc: string;
+  threat_type: string;
+  threat_type_desc?: string;
+  ioc_type: string;
+  ioc_type_desc?: string;
+  malware?: string;
+  malware_printable?: string;
+  confidence_level?: number;
+  first_seen?: string;
+  tags?: string[] | null;
+}
+
+interface ThreatFoxResponse {
+  query_status: string;
+  data?: ThreatFoxIOC[];
+}
+
+interface AbuseIpDbResponse {
+  data?: {
+    ipAddress?: string;
+    abuseConfidenceScore?: number;
+    totalReports?: number;
+  };
+}
+
+interface VirusTotalResponse {
+  data?: {
+    id?: string;
+    type?: string;
+    attributes?: {
+      last_analysis_stats?: {
+        malicious: number;
+        suspicious: number;
+        undetected: number;
+        harmless: number;
+      };
+    };
+  };
+}
+
+// In-memory cache to strictly avoid exhausting API rate limits
+interface CacheEntry {
+  data: ThreatIntelligenceOverviewData;
+  timestamp: number;
+}
+
+let cachedData: CacheEntry | null = null;
+export const THREAT_INTEL_CACHE_TTL_MS = 5 * 60 * 1000;
+
+type ExecutiveIocType = "Domains / URLs" | "IP Addresses" | "Hashes" | "Other";
+
+function classifyIocType(value: string | null | undefined): ExecutiveIocType {
+  const normalized = value?.trim().toLowerCase() ?? "";
+  if (normalized === "domain" || normalized === "url") return "Domains / URLs";
+  if (normalized === "ip" || normalized === "ip:port") return "IP Addresses";
+  if (normalized.includes("hash")) return "Hashes";
+  return "Other";
+}
+
+export async function getThreatIntelligenceOverview(): Promise<ThreatIntelligenceOverviewData> {
+  const now = Date.now();
+  if (
+    cachedData &&
+    now - cachedData.timestamp <= THREAT_INTEL_CACHE_TTL_MS
+  ) {
+    return { ...cachedData.data, availability: "cached" };
+  }
+
+  const threatFoxKey = env.threatIntel.threatFoxApiKey();
+  const abuseIpDbKey = env.threatIntel.abuseIpDbApiKey();
+  const virusTotalKey = env.threatIntel.virusTotalApiKey();
+
+  const providerHealth: Record<string, ProviderHealth> = {
+    threatFox: { name: "ThreatFox (abuse.ch)", status: "error", detail: "Not reachable" },
+    abuseIpDb: { name: "AbuseIPDB", status: "error", detail: "Not reachable" },
+    virusTotal: { name: "VirusTotal", status: "error", detail: "Not reachable" },
+  };
+
+  let iocs: ThreatFoxIOC[] = [];
+  let threatFoxAvailable = false;
+
+  // 1. Fetch ThreatFox (Primary Feed)
+  try {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (threatFoxKey) {
+      headers["Auth-Key"] = threatFoxKey;
+    }
+
+    const response = await fetchJson<ThreatFoxResponse>("https://threatfox-api.abuse.ch/api/v1/", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ query: "get_iocs", days: 7 }),
+      cache: "no-store",
+      timeoutMs: 25000,
+    });
+
+    if (response.query_status === "ok" && Array.isArray(response.data)) {
+      iocs = response.data;
+      threatFoxAvailable = true;
+      providerHealth.threatFox = {
+        name: "ThreatFox",
+        status: "ok",
+        detail: `${iocs.length} IOCs loaded (7d)`,
+      };
+    } else {
+      providerHealth.threatFox = {
+        name: "ThreatFox",
+        status: "degraded",
+        detail: response.query_status || "No data returned",
+      };
+    }
+  } catch {
+    providerHealth.threatFox = {
+      name: "ThreatFox",
+      status: "error",
+      detail: "Failed to connect to ThreatFox API",
+    };
+  }
+
+  // 2. Perform Real Aggregations
+  const totalIocs = iocs.length;
+  let c2BotnetCount = 0;
+  let highConfidenceCount = 0;
+  let maliciousIpsCount = 0;
+  let maliciousHashesCount = 0;
+  let maliciousDomainsCount = 0;
+  let otherIocsCount = 0;
+
+  const malwareCounts: Record<string, number> = {};
+  const threatTypeCounts: Record<string, number> = {};
+  const iocTypeCounts: Record<ExecutiveIocType, number> = {
+    "Domains / URLs": 0,
+    "IP Addresses": 0,
+    Hashes: 0,
+    Other: 0,
+  };
+
+  const sampleIps: string[] = [];
+  const sampleHashes: string[] = [];
+
+  // Trend window calculation: 3.5 days current vs 3.5 days prior
+  const halfWindowMs = 3.5 * 24 * 60 * 60 * 1000;
+  const fullWindowMs = 7 * 24 * 60 * 60 * 1000;
+  let currentPeriodIocs = 0;
+  let prevPeriodIocs = 0;
+  let currentPeriodC2 = 0;
+  let prevPeriodC2 = 0;
+
+  for (const item of iocs) {
+    // Each accepted ThreatFox IOC contributes to exactly one executive type bucket.
+    const executiveIocType = classifyIocType(item.ioc_type);
+    iocTypeCounts[executiveIocType]++;
+    if (executiveIocType === "IP Addresses") {
+      maliciousIpsCount++;
+      const cleanIp = item.ioc.split(":")[0];
+      if (cleanIp && sampleIps.length < 3 && !sampleIps.includes(cleanIp)) {
+        sampleIps.push(cleanIp);
+      }
+    } else if (executiveIocType === "Hashes") {
+      maliciousHashesCount++;
+      if (sampleHashes.length < 2) {
+        sampleHashes.push(item.ioc);
+      }
+    } else if (executiveIocType === "Domains / URLs") {
+      maliciousDomainsCount++;
+    } else {
+      otherIocsCount++;
+    }
+
+    // Threat Type classification
+    if (item.threat_type === "botnet_cc") {
+      c2BotnetCount++;
+      threatTypeCounts["Botnet / C2 Server"] = (threatTypeCounts["Botnet / C2 Server"] || 0) + 1;
+    } else if (item.threat_type === "payload_delivery") {
+      threatTypeCounts["Payload Delivery"] = (threatTypeCounts["Payload Delivery"] || 0) + 1;
+    } else if (item.threat_type === "payload") {
+      threatTypeCounts["Malware Payload"] = (threatTypeCounts["Malware Payload"] || 0) + 1;
+    } else {
+      const label = item.threat_type_desc || item.threat_type || "Other Threat";
+      threatTypeCounts[label] = (threatTypeCounts[label] || 0) + 1;
+    }
+
+    // Malware family classification
+    const malwareName = item.malware_printable?.trim();
+    if (malwareName && malwareName !== "Unknown malware" && malwareName !== "Unknown") {
+      malwareCounts[malwareName] = (malwareCounts[malwareName] || 0) + 1;
+    }
+
+    // High confidence
+    if ((item.confidence_level ?? 0) >= 75) {
+      highConfidenceCount++;
+    }
+
+    // Trend timestamp evaluation
+    if (item.first_seen) {
+      const ts = new Date(item.first_seen.replace(" UTC", "Z").replace(" ", "T")).getTime();
+      const age = now - ts;
+      if (age <= halfWindowMs) {
+        currentPeriodIocs++;
+        if (item.threat_type === "botnet_cc") currentPeriodC2++;
+      } else if (age <= fullWindowMs) {
+        prevPeriodIocs++;
+        if (item.threat_type === "botnet_cc") prevPeriodC2++;
+      }
+    }
+  }
+
+  // Trend calculations
+  let totalIocsTrendPct: number | null = null;
+  if (prevPeriodIocs > 0) {
+    totalIocsTrendPct = Math.round(((currentPeriodIocs - prevPeriodIocs) / prevPeriodIocs) * 100);
+  }
+
+  let c2TrendPct: number | null = null;
+  if (prevPeriodC2 > 0) {
+    c2TrendPct = Math.round(((currentPeriodC2 - prevPeriodC2) / prevPeriodC2) * 100);
+  }
+
+  const malwareCampaignsCount = Object.keys(malwareCounts).length;
+
+  // Format Top Malware Breakdown
+  const topMalware: ThreatCategoryItem[] = Object.entries(malwareCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([name, count]) => ({
+      name,
+      count,
+      percentage: totalIocs > 0 ? Math.round((count / totalIocs) * 100) : 0,
+    }));
+
+  // Format Top Threat Types Breakdown
+  const topThreatTypes: ThreatCategoryItem[] = Object.entries(threatTypeCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([name, count]) => ({
+      name,
+      count,
+      percentage: totalIocs > 0 ? Math.round((count / totalIocs) * 100) : 0,
+    }));
+
+  // Format IOC Type Distribution
+  const iocTypeDistribution: ThreatCategoryItem[] = Object.entries(iocTypeCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, count]) => ({
+      name,
+      count,
+      percentage: totalIocs > 0 ? Math.round((count / totalIocs) * 100) : 0,
+    }));
+
+  // 3. AbuseIPDB Enrichment (Sample check to verify provider connectivity & health)
+  if (abuseIpDbKey && sampleIps.length > 0) {
+    try {
+      const ipToCheck = sampleIps[0];
+      const abuseRes = await fetchJson<AbuseIpDbResponse>(
+        `https://api.abuseipdb.com/api/v2/check?ipAddress=${encodeURIComponent(ipToCheck)}&maxAgeInDays=90`,
+        {
+          headers: {
+            Key: abuseIpDbKey,
+            Accept: "application/json",
+          },
+          timeoutMs: 6000,
+        }
+      );
+      if (abuseRes.data) {
+        providerHealth.abuseIpDb = {
+          name: "AbuseIPDB",
+          status: "ok",
+          detail: `Enrichment Active (Checked IP ${abuseRes.data.ipAddress})`,
+        };
+      }
+    } catch {
+      providerHealth.abuseIpDb = {
+        name: "AbuseIPDB",
+        status: "degraded",
+        detail: "Enrichment request timed out or throttled",
+      };
+    }
+  } else if (!abuseIpDbKey) {
+    providerHealth.abuseIpDb = {
+      name: "AbuseIPDB",
+      status: "degraded",
+      detail: "API key not configured",
+    };
+  } else {
+    providerHealth.abuseIpDb = {
+      name: "AbuseIPDB",
+      status: "degraded",
+      detail: "Not validated — no eligible IP IOC",
+    };
+  }
+
+  // 4. VirusTotal Enrichment (Targeted single sample check to protect the 4 req/min limit)
+  if (virusTotalKey && sampleIps.length > 0) {
+    try {
+      const ipToCheck = sampleIps[0];
+      const vtRes = await fetchJson<VirusTotalResponse>(
+        `https://www.virustotal.com/api/v3/ip_addresses/${encodeURIComponent(ipToCheck)}`,
+        {
+          headers: {
+            "x-apikey": virusTotalKey,
+            Accept: "application/json",
+          },
+          timeoutMs: 6000,
+        }
+      );
+      if (vtRes.data?.attributes?.last_analysis_stats) {
+        providerHealth.virusTotal = {
+          name: "VirusTotal",
+          status: "ok",
+          detail: "Validation Active (Sample checked)",
+        };
+      }
+    } catch {
+      providerHealth.virusTotal = {
+        name: "VirusTotal",
+        status: "degraded",
+        detail: "Validation request timed out or rate-limited",
+      };
+    }
+  } else if (!virusTotalKey) {
+    providerHealth.virusTotal = {
+      name: "VirusTotal",
+      status: "degraded",
+      detail: "API key not configured",
+    };
+  } else {
+    providerHealth.virusTotal = {
+      name: "VirusTotal",
+      status: "degraded",
+      detail: "Not validated — no eligible IP IOC",
+    };
+  }
+
+  const observedAt = threatFoxAvailable ? new Date().toISOString() : null;
+  const result: ThreatIntelligenceOverviewData = {
+    period: "7d",
+    availability: threatFoxAvailable ? "available" : "unavailable",
+    observedAt,
+    updatedAt: observedAt ?? new Date().toISOString(),
+    kpis: threatFoxAvailable ? {
+      totalIocs,
+      totalIocsTrendPct,
+      c2BotnetCount,
+      c2TrendPct,
+      malwareCampaignsCount,
+      highConfidenceCount,
+      maliciousIpsCount,
+      maliciousHashesCount,
+      maliciousDomainsCount,
+      otherIocsCount,
+    } : null,
+    topMalware: threatFoxAvailable ? topMalware : [],
+    topThreatTypes: threatFoxAvailable ? topThreatTypes : [],
+    iocTypeDistribution: threatFoxAvailable ? iocTypeDistribution : [],
+    observedIocs: threatFoxAvailable ? iocs.slice(0, 100).map(item => ({
+      id: item.id, indicator: item.ioc, iocType: item.ioc_type,
+      provider: "ThreatFox" as const, confidence: item.confidence_level ?? null,
+      observedAt: item.first_seen ? new Date(item.first_seen.replace(" UTC", "Z").replace(" ", "T")).toISOString() : null,
+      malware: item.malware_printable?.trim() || null,
+    })) : [],
+    providers: {
+      threatFox: providerHealth.threatFox,
+      abuseIpDb: providerHealth.abuseIpDb,
+      virusTotal: providerHealth.virusTotal,
+    },
+  };
+
+  // Cache successful collections, including genuine empty responses. Failures
+  // never replace the last successful entry and expired entries are never read.
+  if (threatFoxAvailable) {
+    cachedData = {
+      data: result,
+      timestamp: now,
+    };
+  }
+
+  return result;
+}

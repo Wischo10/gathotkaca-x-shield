@@ -16,6 +16,8 @@ import {
   IncidentListResponse,
 } from "@/types/ciso";
 
+export const INCIDENT_VERIFICATION_FRESHNESS_MS = 24 * 60 * 60 * 1000;
+
 // ============================================================================
 // Bitdefender API Helpers
 // ============================================================================
@@ -703,6 +705,7 @@ export interface PersistedIncidentSeverityMetrics {
   medium: number;
   low: number;
   lastVerifiedAt: string | null;
+  availability: "available" | "stale" | "unavailable";
 }
 
 /** SELECT-only incident severity read model; it never calls Bitdefender. */
@@ -735,6 +738,9 @@ export async function getPersistedIncidentSeverityMetrics(windowDays = 7): Promi
   `, [windowDays]);
   const row = res.rows[0] as Record<string, string | Date | null> | undefined;
   const lastVerified = row?.last_verified_at;
+  const lastVerifiedAt = lastVerified ? new Date(lastVerified).toISOString() : null;
+  const isFresh = lastVerifiedAt !== null
+    && Date.now() - Date.parse(lastVerifiedAt) <= INCIDENT_VERIFICATION_FRESHNESS_MS;
   return {
     totalIncidents: Number(row?.total_incidents ?? 0),
     classifiedIncidents: Number(row?.classified_incidents ?? 0),
@@ -743,8 +749,40 @@ export async function getPersistedIncidentSeverityMetrics(windowDays = 7): Promi
     high: Number(row?.high ?? 0),
     medium: Number(row?.medium ?? 0),
     low: Number(row?.low ?? 0),
-    lastVerifiedAt: lastVerified ? new Date(lastVerified).toISOString() : null,
+    lastVerifiedAt,
+    availability: lastVerifiedAt === null ? "unavailable" : isFresh ? "available" : "stale",
   };
+}
+
+/** Bounded SELECT-only incident investigation read model; never calls Bitdefender. */
+export async function getPersistedIncidentDetails(windowDays = 7, limit = 25): Promise<import("@/types/soc").SocIncidentRecord[]> {
+  const boundedLimit = Math.min(Math.max(Math.trunc(limit), 1), 50);
+  const result = await getDb().query<{
+    incident_id: string; severity: string | null; detected_at: Date | string;
+    acknowledged_at: Date | string | null; response_started_at: Date | string | null;
+    contained_at: Date | string | null; resolved_at: Date | string | null; last_verified_at: Date | string;
+  }>(`
+    SELECT incident_id,
+      MAX(NULLIF(metadata->>'bitdefenderSeverity', '')) FILTER (WHERE event_type = 'detected') AS severity,
+      MIN(event_timestamp) FILTER (WHERE event_type = 'detected') AS detected_at,
+      MIN(event_timestamp) FILTER (WHERE event_type = 'acknowledged') AS acknowledged_at,
+      MIN(event_timestamp) FILTER (WHERE event_type = 'response_started') AS response_started_at,
+      MIN(event_timestamp) FILTER (WHERE event_type = 'contained') AS contained_at,
+      MIN(event_timestamp) FILTER (WHERE event_type = 'resolved') AS resolved_at,
+      MAX(created_at) AS last_verified_at
+    FROM incident_lifecycle_events
+    WHERE incident_id IN (
+      SELECT DISTINCT incident_id FROM incident_lifecycle_events
+      WHERE event_type = 'detected' AND source = 'bitdefender_sensor'
+        AND event_timestamp >= NOW() - ($1 * INTERVAL '1 day') AND event_timestamp <= NOW()
+        AND metadata->>'bitdefenderIncidentId' = incident_id AND ${OPERATIONAL_LIFECYCLE_SQL}
+    ) AND ${OPERATIONAL_LIFECYCLE_SQL}
+    GROUP BY incident_id
+    ORDER BY detected_at DESC
+    LIMIT $2
+  `, [windowDays, boundedLimit]);
+  const iso = (value: Date | string | null) => value === null ? null : new Date(value).toISOString();
+  return result.rows.map((row) => ({ incidentId: row.incident_id, severity: row.severity, detectedAt: iso(row.detected_at)!, acknowledgedAt: iso(row.acknowledged_at), responseStartedAt: iso(row.response_started_at), containedAt: iso(row.contained_at), resolvedAt: iso(row.resolved_at), source: "bitdefender_sensor", lastVerifiedAt: iso(row.last_verified_at)! }));
 }
 
 /**

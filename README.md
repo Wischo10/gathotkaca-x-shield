@@ -179,3 +179,27 @@ Indexer response, and confirm the field names noted in Open Question 3.
 =======
 # gathotkaca-x-shield
 >>>>>>> 052414e2057a469e6f1ea451870ab60fced62b4a
+
+### NIST CSF assessment workflow
+
+The existing development login behavior is retained while PostgreSQL is unavailable.
+NIST assessments remain unavailable: all six scores are N/A and authenticated
+assessment requests return 503 when `DATABASE_URL` is absent. No assessment file
+fallback is used. The detail page displays "Assessment data source not configured"
+and disables submission. Future activation requires the approved PostgreSQL
+connection and real database-backed assessor authentication; the assessment API
+still requires an active `admin` or `ciso` record in `users`.
+
+Migrations are manual. After confirming which migrations are already applied,
+apply missing migrations 001 (users), 002 (compliance), and 004 (function assessments)
+in order. For each required migration use `psql` with `-v ON_ERROR_STOP=1 -1 -f`
+against the configured database. Migration 004 must not be rerun: it adds columns
+and constraints without creating assessment records. No migration runs at startup.
+
+The form is at `/dashboard/ciso/security-posture`; its API is
+`/api/ciso/security-posture/assessments` (authorized GET and POST). POST accepts
+`function`, a numeric `score` between 0 and 100 with at most two decimal places,
+and optional string `evidence` and `notes` (maximum 10000 characters each).
+Unknown fields are rejected. The server assigns the current assessment timestamp,
+the verified user's ID, and `manual_assessment` source. Each submission appends a
+new row. No scores or historical records are generated automatically.

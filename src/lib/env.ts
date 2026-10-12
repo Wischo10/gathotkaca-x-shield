@@ -45,6 +45,21 @@ export const env = {
     apiUrl: () => required("BITDEFENDER_API_URL"),
     apiKey: () => required("BITDEFENDER_API_KEY"),
   },
+  incidentTicketing: {
+    provider: () => optional("INCIDENT_TICKETING_PROVIDER"),
+  },
+  assetManagement: {
+    provider: () => optional("ASSET_MANAGEMENT_PROVIDER"),
+  },
+  vulnerabilityRemediation: {
+    provider: () => optional("VULNERABILITY_REMEDIATION_PROVIDER"),
+  },
+  iam: {
+    provider: () => optional("IAM_PROVIDER"),
+  },
+  pdpOrganizational: {
+    provider: () => optional("PDP_ORGANIZATIONAL_PROVIDER"),
+  },
   ollama: {
     url: () => required("OLLAMA_URL"),
     model: () => required("OLLAMA_MODEL"),
@@ -54,8 +69,11 @@ export const env = {
     virusTotalApiKey: () => optional("VIRUSTOTAL_API_KEY"),
     abuseIpDbApiKey: () => optional("ABUSEIPDB_API_KEY"),
   },
+  incidentTicketing: {
+    provider: () => optional("INCIDENT_TICKETING_PROVIDER"),
+  },
   database: {
-    url: () => required("DATABASE_URL"),
+    url: () => optional("DATABASE_URL"),
   },
   jwtSecret: () => required("JWT_SECRET"),
 };
