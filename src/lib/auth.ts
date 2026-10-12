@@ -1,6 +1,7 @@
 import "server-only";
 import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
+import type { NextRequest } from "next/server";
 import { getDb } from "@/lib/db";
 import { env } from "@/lib/env";
 
@@ -92,6 +93,14 @@ export async function verifySessionToken(
   } catch {
     return null;
   }
+}
+
+/** Resolve the existing signed session cookie for route-level authorization. */
+export async function getSessionFromRequest(
+  request: NextRequest
+): Promise<SessionUser | null> {
+  const token = request.cookies.get(SESSION_COOKIE)?.value;
+  return token ? verifySessionToken(token) : null;
 }
 
 export { SESSION_COOKIE, SESSION_TTL_SECONDS };
