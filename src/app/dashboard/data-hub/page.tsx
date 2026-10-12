@@ -1,71 +1,24 @@
 "use client";
+import { useState } from "react";
 import { Topbar } from "@/components/layout/Topbar";
 import { useSidebarToggle } from "@/components/layout/SidebarToggle";
 import { Panel } from "@/components/ui/Panel";
+import { securityDataDemo as demo } from "@/services/security-data-demo-provider";
+import { DataSource, DataSourceStatus, IntegrationAlertSeverity } from "@/types/security-data";
+import { SecurityDataNavigation } from "@/components/security-data/SecurityDataNavigation";
+import { Area,AreaChart,CartesianGrid,Cell,Legend,Line,LineChart,Pie,PieChart,ResponsiveContainer,Tooltip,XAxis,YAxis } from "recharts";
 
-export default function DataHubDashboardPage() {
-  const openSidebar = useSidebarToggle();
-  return (
-    <>
-      <Topbar title="Security Data & Integration Hub" subtitle="Integrate, normalize, and monitor security data across all sources for unified visibility and intelligence" onMenuClick={openSidebar} />
-      <main className="flex-1 flex flex-col p-4 sm:p-6 bg-slate-50 dark:bg-slate-950">
-        
-        <div className="flex border-b border-slate-200 dark:border-slate-800 mb-4 overflow-x-auto gap-4">
-          {["Data Overview", "Data Sources", "Integrations", "Data Quality", "Use Cases & Analytics", "Data Explorer", "Settings"].map((tab, i) => (
-            <button key={tab} className={`pb-2 text-sm font-medium whitespace-nowrap flex items-center gap-2 ${i === 0 ? "border-b-2 border-brand-blue text-brand-blue" : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"}`}>
-               {tab}
-            </button>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 mb-4">
-           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl flex flex-col gap-1">
-             <div className="text-xs text-slate-500 font-semibold flex items-center gap-1"><span className="text-blue-500 text-lg">🗄️</span> Total Data Sources</div>
-             <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">28</div>
-           </div>
-           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl flex flex-col gap-1">
-             <div className="text-xs text-slate-500 font-semibold flex items-center gap-1"><span className="text-blue-500 text-lg">🔗</span> Active Integrations</div>
-             <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">26</div>
-           </div>
-           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl flex flex-col gap-1">
-             <div className="text-xs text-slate-500 font-semibold flex items-center gap-1"><span className="text-green-500 text-lg">📥</span> Events Ingested</div>
-             <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">18.4 M</div>
-           </div>
-           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl flex flex-col gap-1">
-             <div className="text-xs text-slate-500 font-semibold flex items-center gap-1"><span className="text-purple-500 text-lg">📊</span> Normalized Events</div>
-             <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">16.2 M</div>
-           </div>
-           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl flex flex-col gap-1">
-             <div className="text-xs text-slate-500 font-semibold flex items-center gap-1"><span className="text-red-500 text-lg">⚡</span> Correlation Rules</div>
-             <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">152</div>
-           </div>
-           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl flex flex-col gap-1">
-             <div className="text-xs text-slate-500 font-semibold flex items-center gap-1"><span className="text-slate-500 text-lg">⏱️</span> Data Retention</div>
-             <div className="text-2xl font-bold text-slate-800 dark:text-slate-200">365 Days</div>
-           </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-          <Panel title="Events Ingested Over Time" className="h-64 flex flex-col justify-between">
-             <div className="flex-1 flex items-center justify-center text-slate-400">[Stacked Area Chart]</div>
-          </Panel>
-          <Panel title="Events by Type (Top 10)" className="h-64 flex flex-col justify-between">
-             <div className="flex-1 flex items-center justify-center text-slate-400">[Donut Chart Placeholder]</div>
-          </Panel>
-          <Panel title="Data Sources by Category" className="h-64 flex flex-col justify-between">
-             <div className="flex-1 flex items-center justify-center text-slate-400">[Donut Chart Placeholder]</div>
-          </Panel>
-        </div>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <Panel title="Data Sources Status" className="lg:col-span-2 flex-1">
-             <div className="flex items-center justify-center h-40 text-slate-400">[Data Sources Table]</div>
-          </Panel>
-          <Panel title="Integration Health" className="flex-1">
-             <div className="flex items-center justify-center h-40 text-slate-400">[Health Status Widget]</div>
-          </Panel>
-        </div>
-      </main>
-    </>
-  );
-}
+const COLORS=["#2563eb","#06b6d4","#8b5cf6","#f59e0b","#10b981","#64748b","#ec4899","#f97316","#14b8a6","#94a3b8"];
+const SERIES=[["firewall","Firewall",COLORS[0]],["endpoint","Endpoint",COLORS[1]],["identity","Identity",COLORS[2]],["cloud","Cloud",COLORS[3]],["application","Application",COLORS[4]],["other","Others",COLORS[5]]] as const;
+const compact=(n:number)=>n>=1e6?`${(n/1e6).toFixed(1)}M`:n>=1e3?`${(n/1e3).toFixed(1)}K`:n.toLocaleString();
+const dt=(v:string,withTime=false)=>new Intl.DateTimeFormat("en",withTime?{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit",timeZone:"Asia/Jakarta"}:{month:"short",day:"numeric",timeZone:"Asia/Jakarta"}).format(new Date(v));
+function DemoBadge(){return <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9px] font-bold tracking-wide text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">DEMO DATA</span>}
+function Kpi({icon,label,value,trend,history}:{icon:string;label:string;value:string;trend:string;history:readonly number[]}){return <article className="min-h-28 rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900"><div className="flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950">{icon}</span><p className="truncate text-[11px] font-semibold text-slate-500">{label}</p></div><div className="mt-2 grid grid-cols-[1fr_4.5rem] items-end"><div><p className="text-xl font-bold text-slate-800 dark:text-white">{value}</p><p className="text-[9px] text-emerald-600">↑ {trend} <span className="text-slate-400">demo trend</span></p></div><div className="h-9"><ResponsiveContainer><LineChart data={history.map((point,index)=>({point,index}))}><Line dataKey="point" stroke="#2563eb" strokeWidth={1.8} dot={false} isAnimationActive={false}/></LineChart></ResponsiveContainer></div></div></article>}
+function Timeline(){const rows=demo.dailyIngestion.map(r=>({...r,label:dt(r.date)}));return <div className="flex h-64 flex-col"><div className="min-h-0 flex-1"><ResponsiveContainer><AreaChart data={rows} margin={{top:4,right:5,left:-18}}><CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={.35}/><XAxis dataKey="label" tick={{fontSize:8}} tickLine={false} axisLine={false}/><YAxis tick={{fontSize:8}} tickFormatter={compact} tickLine={false} axisLine={false}/><Tooltip formatter={(v,n)=>[Number(v).toLocaleString(),String(n)]}/><Legend iconType="circle" iconSize={6} wrapperStyle={{fontSize:8}}/>{SERIES.map(([key,name,color])=><Area key={key} dataKey={key} name={name} stackId="e" stroke={color} fill={color} fillOpacity={.72} isAnimationActive={false}/>)}</AreaChart></ResponsiveContainer></div><p className="pt-1 text-center text-[8px] text-slate-400">7-day demo ingestion · reconciles to {compact(demo.totals.events7d)}</p></div>}
+function Donut({rows,total,center,label}:{rows:readonly {name:string;value:number}[];total:number;center:string;label:string}){return <div className="grid min-h-64 grid-cols-[8.5rem_1fr] items-center gap-2"><div className="relative h-40"><ResponsiveContainer><PieChart><Pie data={[...rows]} dataKey="value" nameKey="name" innerRadius={43} outerRadius={63} strokeWidth={0} isAnimationActive={false}>{rows.map((r,i)=><Cell key={r.name} fill={COLORS[i]}/>)}</Pie><Tooltip formatter={v=>Number(v).toLocaleString()}/></PieChart></ResponsiveContainer><div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"><b className="text-lg text-slate-800 dark:text-white">{center}</b><span className="text-[8px] text-slate-400">{label}</span></div></div><div className="space-y-1.5">{rows.map((r,i)=><div key={r.name} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-1 text-[9px]"><i className="h-1.5 w-1.5 rounded-full" style={{background:COLORS[i]}}/><span className="truncate text-slate-500" title={r.name}>{r.name}</span><b>{compact(r.value)}</b><span className="w-8 text-right text-slate-400">{(r.value/total*100).toFixed(0)}%</span></div>)}</div></div>}
+const statusStyle:Record<DataSourceStatus,string>={Active:"bg-emerald-50 text-emerald-700",Warning:"bg-amber-50 text-amber-700",Error:"bg-red-50 text-red-700",Inactive:"bg-slate-100 text-slate-500"};
+function SourceTable(){const [page,setPage]=useState(1),[selected,setSelected]=useState<DataSource|null>(null),size=8,start=(page-1)*size,pages=Math.ceil(demo.sources.length/size),rows=demo.sources.slice(start,start+size);return <><div className="overflow-x-auto"><table className="w-full min-w-[850px] text-left text-[10px]"><thead><tr className="border-y bg-slate-50 text-[9px] uppercase text-slate-400 dark:bg-slate-950">{["Data Source","Category","Connector","Status","Last Ingested","Events (7 Days)","Data Quality","Retention","Actions"].map(h=><th key={h} className="px-2 py-2">{h}</th>)}</tr></thead><tbody>{rows.map(s=><tr key={s.id} className="border-b border-slate-100 text-slate-600 dark:border-slate-800 dark:text-slate-300"><td className="px-2 py-2.5"><b className="text-slate-700 dark:text-slate-200">{s.name}</b><p className="text-[8px] text-slate-400">{s.id}</p></td><td className="whitespace-nowrap px-2">{s.category}</td><td className="px-2">{s.connector}</td><td className="px-2"><span className={`rounded-full px-2 py-1 text-[9px] font-semibold ${statusStyle[s.status]}`}>{s.status}</span></td><td className="whitespace-nowrap px-2">{dt(s.lastIngestedAt,true)}</td><td className="px-2 font-semibold">{compact(s.events7d)}</td><td className="px-2"><div className="flex items-center gap-2"><div className="h-1.5 w-14 rounded-full bg-slate-100"><div className="h-full rounded-full bg-blue-500" style={{width:`${s.dataQualityScore}%`}}/></div>{s.dataQualityScore}%</div></td><td className="whitespace-nowrap px-2">{s.retentionDays} days</td><td className="px-2"><button onClick={()=>setSelected(s)} className="rounded border px-2 py-1 text-blue-600">View</button></td></tr>)}</tbody></table></div><div className="mt-3 flex flex-wrap justify-between gap-2 border-t pt-3 text-[10px] text-slate-500"><span>Showing {start+1}-{Math.min(start+size,demo.sources.length)} of {demo.sources.length} data sources</span><div className="flex gap-1"><button disabled={page===1} onClick={()=>setPage(p=>p-1)} className="rounded border px-2 py-1 disabled:opacity-40">Previous</button>{Array.from({length:pages},(_,i)=>i+1).map(n=><button key={n} onClick={()=>setPage(n)} className={`h-6 w-6 rounded ${page===n?"bg-blue-600 text-white":"border"}`}>{n}</button>)}<button disabled={page===pages} onClick={()=>setPage(p=>p+1)} className="rounded border px-2 py-1 disabled:opacity-40">Next</button></div></div>{selected&&<div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4" onMouseDown={e=>{if(e.target===e.currentTarget)setSelected(null)}}><div className="w-full max-w-md rounded-xl bg-white p-5 dark:bg-slate-900"><div className="flex justify-between"><div><DemoBadge/><h3 className="mt-2 font-semibold">{selected.name}</h3><p className="text-xs text-slate-400">{selected.id}</p></div><button onClick={()=>setSelected(null)} aria-label="Close">×</button></div><dl className="mt-4 grid grid-cols-2 gap-3 text-xs">{[["Category",selected.category],["Connector",selected.connector],["Status",selected.status],["Events (7D)",selected.events7d.toLocaleString()],["Normalized",selected.normalizedEvents7d.toLocaleString()],["Data quality",`${selected.dataQualityScore}%`],["Retention",`${selected.retentionDays} days`],["Health weight",`${selected.integrationHealth}%`]].map(([a,b])=><div key={a} className="rounded-lg bg-slate-50 p-2 dark:bg-slate-800"><dt className="text-[9px] uppercase text-slate-400">{a}</dt><dd className="font-semibold">{b}</dd></div>)}</dl></div></div>}</>}
+function Gauge(){const score=demo.integrationHealth,status=score>=90?"Healthy":score>=70?"Degraded":"Critical",color=score>=90?"#10b981":score>=70?"#f59e0b":"#ef4444";return <div><div className="relative mx-auto h-32 max-w-64"><ResponsiveContainer><PieChart><Pie data={[{value:score},{value:100-score}]} dataKey="value" startAngle={180} endAngle={0} cx="50%" cy="82%" innerRadius={58} outerRadius={78} strokeWidth={0} isAnimationActive={false}><Cell fill={color}/><Cell fill="#e2e8f0"/></Pie></PieChart></ResponsiveContainer><div className="absolute inset-x-0 bottom-0 text-center"><b className="text-3xl">{score}%</b><p className="text-xs font-semibold" style={{color}}>{status}</p></div></div><div className="mt-3 grid grid-cols-4 gap-1">{demo.statuses.map((s,i)=><div key={s.status} className="rounded-lg bg-slate-50 p-2 text-center dark:bg-slate-800"><b style={{color:["#10b981","#f59e0b","#ef4444","#94a3b8"][i]}}>{s.count}</b><p className="text-[8px] text-slate-400">{s.status}</p></div>)}</div><p className="mt-3 text-center text-[8px] text-slate-400">Average weight · Active 100 · Warning 65 · Error 20 · Inactive 0</p></div>}
+const alertStyle:Record<IntegrationAlertSeverity,string>={Critical:"bg-red-50 text-red-600",Warning:"bg-amber-50 text-amber-600",Info:"bg-blue-50 text-blue-600",Success:"bg-emerald-50 text-emerald-600"},alertIcon:Record<IntegrationAlertSeverity,string>={Critical:"!",Warning:"△",Info:"i",Success:"✓"};
+function Alerts(){return <div className="divide-y dark:divide-slate-800">{demo.recentAlerts.map(a=><div key={a.id} className="flex gap-2 py-2 first:pt-0"><span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${alertStyle[a.severity]}`}>{alertIcon[a.severity]}</span><div><p className="text-[10px] font-medium leading-4">{a.title}</p><p className="text-[8px] text-slate-400">{a.severity} · {dt(a.occurredAt,true)}</p></div></div>)}</div>}
+export default function Page(){const open=useSidebarToggle(),t=demo.totals,kpis=[["▣","Total Data Sources",String(t.sources),"7.7%",demo.kpiHistories.totalSources],["⌁","Active Integrations",String(t.activeIntegrations),"10.0%",demo.kpiHistories.activeIntegrations],["↓","Events Ingested (7 Days)",compact(t.events7d),"6.8%",demo.kpiHistories.eventsIngested],["≋","Normalized Events (7 Days)",compact(t.normalizedEvents7d),"7.4%",demo.kpiHistories.normalizedEvents],["⚡","Correlation Rules",String(demo.correlationRuleCount),"2.2%",demo.kpiHistories.correlationRules],["◷","Data Retention",`${demo.retentionDays} Days`,"0.0%",demo.kpiHistories.retention]] as const;return <><Topbar title="Security Data & Integration Hub" subtitle="Integrate, normalize, and monitor security data across all sources for unified visibility and intelligence" onMenuClick={open} businessUnitFilterDisabled/><main className="flex flex-1 flex-col bg-slate-50 p-4 dark:bg-slate-950 sm:p-6"><nav className="mb-4 flex items-end justify-between border-b"><SecurityDataNavigation/><div className="mb-2 ml-3"><DemoBadge/></div></nav><div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">{kpis.map(([a,b,c,d,e])=><Kpi key={b} icon={a} label={b} value={c} trend={d} history={e}/>)}</div><div className="mb-4 grid items-stretch gap-4 lg:grid-cols-3"><Panel title="Events Ingested Over Time" action={<DemoBadge/>}><Timeline/></Panel><Panel title="Events by Type (Top 10)" action={<DemoBadge/>}><Donut rows={demo.eventTypes.map(x=>({name:x.type,value:x.count}))} total={t.events7d} center={compact(t.events7d)} label="7D Events"/></Panel><Panel title="Data Sources by Category" action={<DemoBadge/>}><Donut rows={demo.categories.map(x=>({name:x.category,value:x.count}))} total={t.sources} center={String(t.sources)} label="Total Sources"/></Panel></div><div className="grid items-start gap-4 xl:grid-cols-4"><Panel title="Data Sources Status" action={<DemoBadge/>} className="xl:col-span-3"><SourceTable/></Panel><aside className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1"><Panel title="Integration Health" action={<DemoBadge/>}><Gauge/></Panel><Panel title="Recent Alerts" action={<DemoBadge/>}><Alerts/></Panel></aside></div></main></>}
