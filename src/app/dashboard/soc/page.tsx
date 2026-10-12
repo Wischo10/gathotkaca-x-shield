@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Topbar } from "@/components/layout/Topbar";
 import { useSidebarToggle } from "@/app/dashboard/SidebarContext";
 import { Panel } from "@/components/ui/Panel";
@@ -150,7 +152,7 @@ export default function SocDashboardPage() {
                 ) : (
                   <div className="flex flex-col gap-2 pt-2">
                     {incidents.slice(0, 5).map((inc: any, idx: number) => (
-                      <div key={idx} className="flex justify-between items-center text-xs p-2 rounded bg-slate-100 dark:bg-slate-800">
+                      <Link key={idx} href="/dashboard/soc-l2" className="flex justify-between items-center text-xs p-2 rounded bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
                         <span className="truncate font-medium text-slate-700 dark:text-slate-300 w-3/4">{inc.name}</span>
                         <span className={`px-1.5 py-0.5 rounded text-[9px] ${
                           inc.status === 'Investigating' ? 'bg-blue-100 text-blue-700' : 
@@ -160,11 +162,12 @@ export default function SocDashboardPage() {
                         }`}>
                           {inc.status}
                         </span>
-                      </div>
+                      </Link>
                     ))}
                   </div>
                 )}
              </div>
+             <Link href="/dashboard/soc-l2" className="mt-2 block text-right text-xs text-brand-blue hover:underline">View all in SOC L2 →</Link>
           </Panel>
           <Panel title="MITRE ATT&CK Tactic Distribution" className="lg:col-span-2">
              <div className="w-full h-[220px] relative">
@@ -205,6 +208,7 @@ export default function SocDashboardPage() {
                   </ResponsiveContainer>
                 )}
              </div>
+             <Link href="/dashboard/compliance" className="mt-2 block text-right text-xs text-brand-blue hover:underline">View Compliance Dashboard →</Link>
           </Panel>
         </div>
       </main>

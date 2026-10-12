@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getLiveEvents } from "@/services/wazuh-indexer";
+import { supabase } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,15 @@ export async function GET(request: Request) {
 
     const events = await getLiveEvents(500, severities);
     
+    // Get cases to join statuses
+    const { data: cases } = await supabase.from("soc_cases").select("alert_id, status");
+    const caseStatusMap = new Map();
+    if (cases) {
+      cases.forEach(c => {
+        caseStatusMap.set(c.alert_id, c.status === "in_progress" ? "In Progress" : c.status);
+      });
+    }
+    
     // Map LiveEvents to L2Alerts
     const alerts = events.map(e => ({
       id: e.id,
@@ -19,7 +29,7 @@ export async function GET(request: Request) {
       severity: e.severity,
       source: "Wazuh Indexer",
       asset: e.assetOrUser,
-      status: "New",
+      status: caseStatusMap.get(e.id) || "New",
       firstSeen: e.time,
       lastSeen: e.time,
       totalEvents: 1,

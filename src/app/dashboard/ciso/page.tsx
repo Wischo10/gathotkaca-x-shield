@@ -13,6 +13,7 @@ import { TopRisksPanel } from "@/components/ciso/TopRisksPanel";
 import { ComplianceOverviewPanel } from "@/components/ciso/ComplianceOverviewPanel";
 import { ThirdPartyRiskPanel } from "@/components/ciso/ThirdPartyRiskPanel";
 import { AiCisoBriefingPanel } from "@/components/ciso/AiCisoBriefingPanel";
+import Link from "next/link";
 
 export default function CISODashboardPage() {
   const openSidebar = useSidebarToggle();
@@ -35,6 +36,13 @@ export default function CISODashboardPage() {
         title="CISO Dashboard"
         subtitle="Deep dive into security risk, performance, and compliance"
         onMenuClick={openSidebar}
+        action={
+          <div className="flex items-center gap-2">
+            <Link href="/dashboard/soc" className="text-xs px-3 py-1.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">SOC Dashboard</Link>
+            <Link href="/dashboard/vulnerability" className="text-xs px-3 py-1.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">Vulnerability</Link>
+            <Link href="/dashboard/compliance" className="text-xs px-3 py-1.5 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">Compliance</Link>
+          </div>
+        }
       />
       <main className="flex-1 space-y-4 p-4 sm:p-6 bg-slate-50 dark:bg-slate-950">
         {/* ROW 1: Metrics (6 KPI Cards with Mini Sparklines) */}

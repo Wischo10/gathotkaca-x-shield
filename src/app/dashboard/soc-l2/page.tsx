@@ -23,7 +23,6 @@ export default function SOCL2DashboardPage() {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [allNotes, setAllNotes] = useState<Record<string, Note[]>>({});
   const [activeTab, setActiveTab] = useState<string>("Alert Queue");
-  const [severityFilter, setSeverityFilter] = useState<string[]>([]);
 
   const tabItems = [
     { name: "Alert Queue", icon: Bell },
@@ -34,10 +33,8 @@ export default function SOCL2DashboardPage() {
     { name: "Reports", icon: Download }
   ];
 
-  useEffect(() => {
-    // Load alerts based on severity filter
-    const query = severityFilter.length > 0 ? `?severities=${severityFilter.join(',')}` : '';
-    fetch(`/api/soc/l2-alerts${query}`)
+  const fetchAlerts = () => {
+    fetch(`/api/soc/l2-alerts?_t=${Date.now()}`, { cache: 'no-store' })
       .then(res => res.json())
       .then(data => {
         if (data.status === "ok") {
@@ -45,7 +42,12 @@ export default function SOCL2DashboardPage() {
         }
       })
       .catch(console.error);
-  }, [severityFilter]);
+  };
+
+  useEffect(() => {
+    // Load all alerts without server-side filtering (filtering happens in subcomponents)
+    fetchAlerts();
+  }, []);
 
   useEffect(() => {
     // Load user session on mount
@@ -211,11 +213,8 @@ export default function SOCL2DashboardPage() {
                 <div className="xl:col-span-1 h-full overflow-hidden">
                   {activeTab === "Alert Queue" ? (
                     <AlertQueue 
-                      alerts={alerts} 
                       selectedAlertId={selectedAlertId} 
                       onSelectAlert={setSelectedAlertId} 
-                      severityFilter={severityFilter}
-                      onSeverityFilterChange={setSeverityFilter}
                     />
                   ) : activeTab === "Investigation" ? (
                     <InvestigationList 
@@ -235,12 +234,24 @@ export default function SOCL2DashboardPage() {
                     <AlertDetailWorkspace 
                       investigationCase={investigationCase} 
                       user={user}
+                      onEscalated={() => {
+                        setAlerts(prev => prev.map(a => 
+                          a.id === selectedAlertId ? { ...a, status: "In Progress" } : a
+                        ));
+                        setActiveTab("Investigation");
+                        fetchAlerts();
+                      }}
                     />
-                  ) : (
+                  ) : activeTab === "Investigation" ? (
                     <InvestigationWorkspace 
                       investigationCase={investigationCase} 
                       user={user}
+                      onViewCasesTab={() => setActiveTab("Cases")}
                     />
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-slate-400 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+                      Content for {activeTab} goes here.
+                    </div>
                   )}
                 </div>
               </div>

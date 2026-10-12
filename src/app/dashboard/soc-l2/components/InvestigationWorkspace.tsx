@@ -1,22 +1,79 @@
 import { Panel } from "@/components/ui/Panel";
 import { InvestigationCase } from "@/types/soc";
 import { SessionUser } from "@/lib/auth";
-import { useState } from "react";
-import { UserPlus, ShieldAlert, ChevronDown, Circle, FileEdit, Check, ExternalLink } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ShieldAlert, ChevronDown, FileEdit, Check, ExternalLink } from "lucide-react";
 import { CaseSummary } from "./CaseSummary";
 import { RelatedEntities } from "./RelatedEntities";
 import { IOCs } from "./IOCs";
 import { EvidenceList } from "./EvidenceList";
 import { ResponseActions } from "./ResponseActions";
 import { Modal } from "@/components/ui/Modal";
-import { useEffect } from "react";
 
+// --- Types & Interfaces ---
+
+/**
+ * Props for the Investigation Workspace component.
+ */
 interface InvestigationWorkspaceProps {
   investigationCase: InvestigationCase | null;
   user: SessionUser | null;
+  onViewCasesTab?: () => void;
 }
 
-export function InvestigationWorkspace({ investigationCase, user }: InvestigationWorkspaceProps) {
+// --- Sub-components ---
+
+/**
+ * Displays the timeline of events associated with the investigation.
+ */
+function TimelineTab({ investigationCase }: { investigationCase: InvestigationCase }) {
+  return (
+    <div className="grid grid-cols-1 gap-4">
+      <div className="xl:col-span-1">
+        <Panel title="Investigation Timeline" action={<a href="#" className="text-brand-blue font-medium text-xs hover:underline">Expand All</a>} className="h-full">
+          <div className="flex-1 relative border-l border-slate-200 dark:border-slate-800 ml-3 pl-5 space-y-6 mt-4">
+            {investigationCase.timeline.map((event, i) => (
+              <div key={event.id || i} className="relative">
+                <div className={`absolute w-3.5 h-3.5 bg-white dark:bg-slate-900 border-2 border-blue-500 rounded-full -left-[27px] top-1`}>
+                  <div className={`w-1.5 h-1.5 bg-blue-500 rounded-full absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2`}></div>
+                </div>
+                <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4">
+                  <span className="text-[10px] font-medium text-slate-600 dark:text-slate-400 w-[70px] shrink-0 mt-0.5 whitespace-pre-line leading-tight">
+                    {new Date(event.time).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }).replace(',', '\n')}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-start gap-2 mb-1">
+                      <p className="text-xs font-semibold text-slate-900 dark:text-white">
+                        {event.description}
+                      </p>
+                      <span className="text-[10px] text-slate-400 whitespace-nowrap shrink-0">Source: Wazuh</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <span className="text-[10px] text-slate-500">System Event</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="text-center mt-6">
+            <button className="text-xs font-medium text-brand-blue hover:text-brand-blue/80 inline-flex items-center gap-1">
+              Load more events <ChevronDown className="w-3 h-3" />
+            </button>
+          </div>
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
+// --- Main Component ---
+
+/**
+ * Main workspace for SOC L2 analysts to investigate and respond to security alerts.
+ * Features tabs for Overview, Timeline, Entities, IOCs, Evidence, and Response.
+ */
+export function InvestigationWorkspace({ investigationCase, user, onViewCasesTab }: InvestigationWorkspaceProps) {
   const [activeTab, setActiveTab] = useState<string>("Timeline");
   
   const [localStatus, setLocalStatus] = useState("");
@@ -26,21 +83,36 @@ export function InvestigationWorkspace({ investigationCase, user }: Investigatio
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
   const [noteText, setNoteText] = useState("");
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  
+  // Loading states
   const [isCreatingCase, setIsCreatingCase] = useState(false);
   const [isSavingNote, setIsSavingNote] = useState(false);
   const [isEscalating, setIsEscalating] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
 
+  // Sync state with incoming props
   useEffect(() => {
     if (investigationCase) {
-      setLocalStatus(investigationCase.alert.status || "In Progress");
+      setLocalStatus(investigationCase.alert.status || "New");
       setIsEscalated(false);
       setActionTaken("");
       setHasCase(false);
+      
+      // Check if case exists in DB
+      fetch(`/api/soc/cases?alert_id=${investigationCase.alert.id}&_t=${Date.now()}`, { cache: 'no-store' })
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === "ok" && data.data) {
+            setHasCase(true);
+            setLocalStatus(data.data.status === "in_progress" ? "In Progress" : data.data.status);
+          }
+        })
+        .catch(console.error);
     }
-  }, [investigationCase?.alert?.id]);
+  }, [investigationCase]);
 
+  // Early return if no case is selected
   if (!investigationCase) {
     return (
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col h-full min-h-[400px]">
@@ -53,6 +125,7 @@ export function InvestigationWorkspace({ investigationCase, user }: Investigatio
 
   const { alert } = investigationCase;
 
+  /** Handles creation of a formal investigation case from the current alert */
   const handleCreateCase = async () => {
     if (hasCase) return;
     setIsCreatingCase(true);
@@ -69,6 +142,7 @@ export function InvestigationWorkspace({ investigationCase, user }: Investigatio
       });
       if (res.ok) {
         setHasCase(true);
+        setLocalStatus("In Progress");
         window.alert("Success: Investigation case created in database!");
       } else {
         window.alert("Failed to create case.");
@@ -80,6 +154,7 @@ export function InvestigationWorkspace({ investigationCase, user }: Investigatio
     }
   };
 
+  /** Handles escalating the case to SOC L3 or Incident Response teams */
   const handleEscalate = async () => {
     setIsEscalating(true);
     try {
@@ -107,17 +182,29 @@ export function InvestigationWorkspace({ investigationCase, user }: Investigatio
     }
   };
 
-  const handleStatusUpdate = (s: string) => {
+  /** Updates the local status state and database */
+  const handleStatusUpdate = async (s: string) => {
     if (s === localStatus) return;
     setStatusMenuOpen(false);
     setIsUpdatingStatus(true);
-    // Simulate API call to Wazuh/SOAR
-    setTimeout(() => {
+    try {
+      if (hasCase) {
+        await fetch("/api/soc/cases", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ alert_id: alert.id, status: s })
+        });
+      }
       setLocalStatus(s);
+    } catch (error) {
+      console.error(error);
+      window.alert("Failed to update status");
+    } finally {
       setIsUpdatingStatus(false);
-    }, 800);
+    }
   };
 
+  /** Saves an investigation note to the database */
   const handleSaveNote = async () => {
     if (!noteText.trim()) return;
     setIsSavingNote(true);
@@ -154,6 +241,7 @@ export function InvestigationWorkspace({ investigationCase, user }: Investigatio
     { name: "Evidence", count: 0 }, 
     { name: "Response" }
   ];
+
   return (
     <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col shadow-sm h-full">
       {/* Header */}
@@ -176,30 +264,12 @@ export function InvestigationWorkspace({ investigationCase, user }: Investigatio
             </p>
           </div>
         </div>
+        
+        {/* Actions Menu */}
         <div className="flex items-center gap-3 flex-wrap relative">
           
-          <div className="relative">
-            <button 
-              onClick={() => setStatusMenuOpen(!statusMenuOpen)}
-              disabled={isUpdatingStatus}
-              className={`flex items-center gap-1.5 text-xs font-medium border px-3 py-1.5 rounded-md ${isUpdatingStatus ? 'opacity-50 cursor-wait bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700' : 'bg-orange-50 text-orange-700 dark:bg-orange-500/10 dark:text-orange-400 border-orange-200 dark:border-orange-900/50'}`}
-            >
-              {isUpdatingStatus ? "Updating..." : localStatus} <ChevronDown className="w-3 h-3" />
-            </button>
-            {statusMenuOpen && (
-              <div className="absolute top-full left-0 mt-1 w-36 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg py-1 z-10">
-                {["New", "In Progress", "Resolved", "Closed"].map(s => (
-                  <button
-                    key={s}
-                    onClick={() => handleStatusUpdate(s)}
-                    className="w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex justify-between items-center"
-                  >
-                    {s}
-                    {localStatus === s && <Check className="w-3 h-3 text-brand-blue" />}
-                  </button>
-                ))}
-              </div>
-            )}
+          <div className={`flex items-center gap-1.5 text-xs font-medium border px-3 py-1.5 rounded-md ${isUpdatingStatus ? 'opacity-50 bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700' : 'bg-slate-50 text-slate-700 dark:bg-slate-800/50 dark:text-slate-300 border-slate-200 dark:border-slate-700'}`}>
+            {isUpdatingStatus ? "Updating..." : localStatus}
           </div>
 
           {!isEscalated && (
@@ -211,6 +281,7 @@ export function InvestigationWorkspace({ investigationCase, user }: Investigatio
               className="text-xs border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1.5 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 min-w-[200px] outline-none focus:border-brand-blue"
             />
           )}
+          
           <button 
             onClick={handleEscalate}
             disabled={isEscalating || isEscalated}
@@ -233,13 +304,13 @@ export function InvestigationWorkspace({ investigationCase, user }: Investigatio
             {moreMenuOpen && (
               <div className="absolute top-full right-0 mt-1 w-40 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg py-1 z-10">
                 <button
-                  onClick={() => { setMoreMenuOpen(false); window.alert("Exporting to PDF..."); }}
+                  onClick={() => { setMoreMenuOpen(false); window.alert("[DUMMY DATA] Fitur Export to PDF belum diimplementasi ke backend."); }}
                   className="w-full text-left px-4 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
                 >
                   Export to PDF
                 </button>
                 <button
-                  onClick={() => { setMoreMenuOpen(false); window.alert("Sending email to team..."); }}
+                  onClick={() => { setMoreMenuOpen(false); window.alert("[DUMMY DATA] Fitur Send via Email belum terhubung ke SMTP server."); }}
                   className="w-full text-left px-4 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
                 >
                   Send via Email
@@ -251,7 +322,7 @@ export function InvestigationWorkspace({ investigationCase, user }: Investigatio
           <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
           
           <button 
-            onClick={handleCreateCase}
+            onClick={hasCase ? onViewCasesTab : handleCreateCase}
             disabled={isCreatingCase}
             className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5 ${
               hasCase 
@@ -271,7 +342,7 @@ export function InvestigationWorkspace({ investigationCase, user }: Investigatio
         </div>
       </div>
       
-      {/* Tabs */}
+      {/* Navigation Tabs */}
       <div className="flex gap-6 border-b border-slate-200 dark:border-slate-800 px-6 overflow-x-auto">
         {tabs.map(tab => (
           <button 
@@ -293,7 +364,7 @@ export function InvestigationWorkspace({ investigationCase, user }: Investigatio
         ))}
       </div>
       
-      {/* Content Area */}
+      {/* Content Area Rendering Based on Selected Tab */}
       <div className="p-4 bg-slate-50/50 dark:bg-slate-950/50 flex-1 overflow-y-auto">
         {activeTab === "Overview" && (
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -310,45 +381,7 @@ export function InvestigationWorkspace({ investigationCase, user }: Investigatio
         )}
 
         {activeTab === "Timeline" && (
-          <div className="grid grid-cols-1 gap-4">
-            
-            {/* Timeline Column */}
-            <div className="xl:col-span-1">
-              <Panel title="Investigation Timeline" action={<a href="#" className="text-brand-blue font-medium text-xs hover:underline">Expand All</a>} className="h-full">
-                <div className="flex-1 relative border-l border-slate-200 dark:border-slate-800 ml-3 pl-5 space-y-6 mt-4">
-                  {investigationCase.timeline.map((event, i) => (
-                    <div key={event.id || i} className="relative">
-                      <div className={`absolute w-3.5 h-3.5 bg-white dark:bg-slate-900 border-2 border-blue-500 rounded-full -left-[27px] top-1`}>
-                        <div className={`w-1.5 h-1.5 bg-blue-500 rounded-full absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2`}></div>
-                      </div>
-                      <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4">
-                        <span className="text-[10px] font-medium text-slate-600 dark:text-slate-400 w-[70px] shrink-0 mt-0.5 whitespace-pre-line leading-tight">
-                          {new Date(event.time).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }).replace(',', '\n')}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-start gap-2 mb-1">
-                            <p className="text-xs font-semibold text-slate-900 dark:text-white">
-                              {event.description}
-                            </p>
-                            <span className="text-[10px] text-slate-400 whitespace-nowrap shrink-0">Source: Wazuh</span>
-                          </div>
-                          <div className="flex gap-2">
-                            <span className="text-[10px] text-slate-500">System Event</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="text-center mt-6">
-                  <button className="text-xs font-medium text-brand-blue hover:text-brand-blue/80 inline-flex items-center gap-1">
-                    Load more events <ChevronDown className="w-3 h-3" />
-                  </button>
-                </div>
-              </Panel>
-            </div>
-
-          </div>
+          <TimelineTab investigationCase={investigationCase} />
         )}
         
         {activeTab === "Entities" && (
@@ -376,7 +409,7 @@ export function InvestigationWorkspace({ investigationCase, user }: Investigatio
         )}
       </div>
       
-      {/* Note Modal */}
+      {/* Add Note Modal */}
       <Modal isOpen={isNoteModalOpen} onClose={() => setIsNoteModalOpen(false)} title="Add Investigation Note">
         <div className="flex flex-col gap-4">
           <textarea

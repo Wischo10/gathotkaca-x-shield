@@ -26,7 +26,7 @@ export async function GET(request: Request) {
       severity: event.severity,
       source: "Wazuh Indexer",
       asset: event.assetOrUser,
-      status: "In Progress",
+      status: "New",
       firstSeen: event.time,
       lastSeen: event.time,
       totalEvents: 1,

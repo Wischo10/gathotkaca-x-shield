@@ -80,6 +80,7 @@ export function CaseNote({ investigationCase, user, savedNotes, onAddNote }: Cas
                 {n.author === "System" ? (
                   <span className="text-xs font-semibold text-slate-500">SYS</span>
                 ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img src="https://api.dicebear.com/7.x/notionists/svg?seed=Fandi&backgroundColor=transparent" alt="avatar" className="w-full h-full object-cover" />
                 )}
               </div>

@@ -8,9 +8,10 @@ import { Modal } from "@/components/ui/Modal";
 interface AlertDetailWorkspaceProps {
   investigationCase: InvestigationCase | null;
   user: SessionUser | null;
+  onEscalated?: () => void;
 }
 
-export function AlertDetailWorkspace({ investigationCase, user }: AlertDetailWorkspaceProps) {
+export function AlertDetailWorkspace({ investigationCase, user, onEscalated }: AlertDetailWorkspaceProps) {
   const [isEscalating, setIsEscalating] = useState(false);
   const [isEscalated, setIsEscalated] = useState(false);
   const [actionTaken, setActionTaken] = useState("");
@@ -62,9 +63,13 @@ export function AlertDetailWorkspace({ investigationCase, user }: AlertDetailWor
       });
       if (res.ok) {
         setIsEscalated(true);
+        if (onEscalated) {
+          onEscalated();
+        }
       } else {
         const errData = await res.json().catch(() => ({}));
-        window.alert(`Gagal mengekskalasi tiket! Pesan error: ${errData.message || 'Internal Server Error'}\n\nApakah Anda sudah membuat tabel soc_cases di Supabase?`);
+        console.error("API Error Response:", errData);
+        window.alert(`Gagal mengekskalasi tiket! Pesan error: ${errData.message || 'Internal Server Error'}\n\nDetail: ${errData.detail || 'Tidak ada detail'}\n\nApakah Anda sudah membuat tabel soc_cases di Supabase?`);
         console.error("Failed to escalate", errData);
       }
     } catch (error) {

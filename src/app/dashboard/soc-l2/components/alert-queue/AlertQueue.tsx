@@ -1,30 +1,53 @@
 import { Panel } from "@/components/ui/Panel";
 import { L2Alert } from "@/types/soc";
-import { AlertTriangle, Filter, Search, ShieldAlert, ArrowUpRight, Clock, Plus, ChevronLeft, ChevronRight, MoreVertical } from "lucide-react";
+import { Filter, MoreVertical } from "lucide-react";
 import { Pagination } from "@/components/ui/Pagination";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface AlertQueueProps {
-  alerts: L2Alert[];
   selectedAlertId?: string;
   onSelectAlert: (id: string) => void;
-  severityFilter: string[];
-  onSeverityFilterChange: (filters: string[]) => void;
 }
 
-export function AlertQueue({ alerts, selectedAlertId, onSelectAlert, severityFilter, onSeverityFilterChange }: AlertQueueProps) {
+export function AlertQueue({ selectedAlertId, onSelectAlert }: AlertQueueProps) {
+  const [alerts, setAlerts] = useState<L2Alert[]>([]);
+  const [severityFilter, setSeverityFilter] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState("All");
   const [showFilters, setShowFilters] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   
-  // 1. Filter alerts based on active tab ONLY. 
-  // Severity filtering is now done on the server, so 'alerts' already reflects it.
+  // 1. Fetch live data independently with server-side filtering
+  useEffect(() => {
+    const sevs = severityFilter.join(',');
+    const url = `/api/soc/l2-alerts${sevs ? `?severities=${sevs}` : ''}`;
+    
+    fetch(url)
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === "ok") {
+          setAlerts(data.data);
+        }
+      })
+      .catch(console.error);
+  }, [severityFilter]);
+
+  // Tabs show accurate counts based on the server-fetched alerts
+  const tabs = [
+    { name: "All", count: alerts.length.toString(), active: activeTab === "All" },
+    { name: "New", count: alerts.filter(a => a.status === "New").length.toString(), active: activeTab === "New" },
+    { name: "In Progress", count: alerts.filter(a => a.status === "In Progress").length.toString(), active: activeTab === "In Progress" },
+    { name: "Investigating", count: alerts.filter(a => (a.status as string) === "Investigating").length.toString(), active: activeTab === "Investigating" },
+    { name: "Resolved", count: alerts.filter(a => (a.status as string) === "Resolved").length.toString(), active: activeTab === "Resolved" },
+    { name: "Closed", count: alerts.filter(a => a.status === "Closed").length.toString(), active: activeTab === "Closed" },
+  ];
+
+  // 2. Then filter by active tab locally
   const filteredAlerts = alerts.filter(a => {
     if (activeTab === "All") return true;
     return a.status === activeTab;
   });
 
-  // 2. Pagination on filtered alerts
+  // 3. Pagination on filtered alerts
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const totalPages = Math.max(1, Math.ceil(filteredAlerts.length / itemsPerPage));
@@ -45,15 +68,6 @@ export function AlertQueue({ alerts, selectedAlertId, onSelectAlert, severityFil
         return "bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400";
     }
   };
-
-  const tabs = [
-    { name: "All", count: alerts.length.toString(), active: activeTab === "All" },
-    { name: "New", count: alerts.filter(a => a.status === "New").length.toString(), active: activeTab === "New" },
-    { name: "In Progress", count: alerts.filter(a => a.status === "In Progress").length.toString(), active: activeTab === "In Progress" },
-    { name: "Investigating", count: alerts.filter(a => (a.status as string) === "Investigating").length.toString(), active: activeTab === "Investigating" },
-    { name: "Resolved", count: alerts.filter(a => (a.status as string) === "Resolved").length.toString(), active: activeTab === "Resolved" },
-    { name: "Closed", count: alerts.filter(a => a.status === "Closed").length.toString(), active: activeTab === "Closed" },
-  ];
 
   return (
     <Panel 
@@ -81,9 +95,9 @@ export function AlertQueue({ alerts, selectedAlertId, onSelectAlert, severityFil
                       checked={severityFilter.includes(sev)}
                       onChange={(e) => {
                         if (e.target.checked) {
-                          onSeverityFilterChange([...severityFilter, sev]);
+                          setSeverityFilter([...severityFilter, sev]);
                         } else {
-                          onSeverityFilterChange(severityFilter.filter(s => s !== sev));
+                          setSeverityFilter(severityFilter.filter(s => s !== sev));
                         }
                         setCurrentPage(1);
                       }}
@@ -105,13 +119,13 @@ export function AlertQueue({ alerts, selectedAlertId, onSelectAlert, severityFil
           {showMoreMenu && (
             <div className="absolute top-10 right-0 w-40 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50 py-1">
               <button 
-                onClick={() => { window.alert("Mengekspor data ke CSV..."); setShowMoreMenu(false); }}
+                onClick={() => { window.alert("[DUMMY DATA] Fitur Export ke CSV belum terhubung ke API backend live."); setShowMoreMenu(false); }}
                 className="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
               >
                 Export to CSV
               </button>
               <button 
-                onClick={() => { window.alert("Menyegarkan antrean..."); setShowMoreMenu(false); }}
+                onClick={() => { window.alert("[DUMMY DATA] Fitur Refresh Queue belum terhubung ke API backend live."); setShowMoreMenu(false); }}
                 className="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
               >
                 Refresh Queue
@@ -158,7 +172,13 @@ export function AlertQueue({ alerts, selectedAlertId, onSelectAlert, severityFil
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
-            {displayedAlerts.map((alert) => {
+            {displayedAlerts.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="py-12 text-center text-slate-500 dark:text-slate-400">
+                  Tidak ada alert yang sesuai dengan filter yang dipilih.
+                </td>
+              </tr>
+            ) : displayedAlerts.map((alert) => {
               const ageMinutes = Math.floor((new Date().getTime() - new Date(alert.firstSeen).getTime()) / 60000);
               return (
               <tr 

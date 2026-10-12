@@ -17,13 +17,11 @@ export function InvestigationList({ alerts, selectedAlertId, onSelectAlert }: In
   const [severityFilter, setSeverityFilter] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // 1. Filter alerts based on active tab, severity, and search query
-  const filteredAlerts = alerts.filter(a => {
-    let tabMatch = true;
-    if (activeTab !== "All") {
-      tabMatch = a.status === activeTab;
-    }
-    
+  // 1. Filter alerts based on severity and search query first, so tabs show accurate counts
+  const baseFilteredAlerts = alerts.filter(a => {
+    // Only show alerts that have been escalated (status is no longer 'New')
+    if (a.status === "New") return false;
+
     let sevMatch = true;
     if (severityFilter.length > 0) {
       sevMatch = severityFilter.includes(a.severity.toLowerCase());
@@ -34,15 +32,30 @@ export function InvestigationList({ alerts, selectedAlertId, onSelectAlert }: In
       const q = searchQuery.toLowerCase();
       searchMatch = a.title.toLowerCase().includes(q) || a.asset.toLowerCase().includes(q) || a.source.toLowerCase().includes(q);
     }
+    
+    return sevMatch && searchMatch;
+  });
 
-    return tabMatch && sevMatch && searchMatch;
+  const tabs = [
+    { name: "All", count: baseFilteredAlerts.length.toString(), active: activeTab === "All" },
+    { name: "In Progress", count: baseFilteredAlerts.filter(a => a.status === "In Progress").length.toString(), active: activeTab === "In Progress" },
+    { name: "On Hold", count: baseFilteredAlerts.filter(a => a.status === "On Hold").length.toString(), active: activeTab === "On Hold" },
+    { name: "Closed", count: baseFilteredAlerts.filter(a => a.status === "Closed").length.toString(), active: activeTab === "Closed" },
+  ];
+
+  // 2. Then filter by active tab
+  const filteredAlerts = baseFilteredAlerts.filter(a => {
+    if (activeTab === "All") return true;
+    return a.status === activeTab;
   });
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  
   const totalPages = Math.max(1, Math.ceil(filteredAlerts.length / itemsPerPage));
   const validPage = Math.min(currentPage, totalPages);
   const displayedAlerts = filteredAlerts.slice((validPage - 1) * itemsPerPage, validPage * itemsPerPage);
+
   const getSeverityBadge = (severity: string) => {
     switch (severity.toLowerCase()) {
       case "critical":
@@ -57,7 +70,7 @@ export function InvestigationList({ alerts, selectedAlertId, onSelectAlert }: In
   };
 
   const getStatusBadge = (status?: string) => {
-    const s = status?.toLowerCase() || "in progress";
+    const s = status?.toLowerCase() || "new";
     if (s.includes("progress") || s.includes("investigating")) {
       return "text-orange-600 bg-orange-50 dark:text-orange-400 dark:bg-orange-500/10";
     }
@@ -72,13 +85,6 @@ export function InvestigationList({ alerts, selectedAlertId, onSelectAlert }: In
     if (t.includes("attack") || t.includes("injection") || t.includes("sql")) return <Activity className="w-5 h-5 text-purple-500" />;
     return <ShieldAlert className="w-5 h-5 text-blue-500" />;
   };
-
-  const tabs = [
-    { name: "All", count: alerts.length.toString(), active: activeTab === "All" },
-    { name: "In Progress", count: alerts.filter(a => a.status === "In Progress").length.toString(), active: activeTab === "In Progress" },
-    { name: "On Hold", count: alerts.filter(a => a.status === "On Hold").length.toString(), active: activeTab === "On Hold" },
-    { name: "Closed", count: alerts.filter(a => a.status === "Closed").length.toString(), active: activeTab === "Closed" },
-  ];
 
   return (
     <Panel 
@@ -130,13 +136,13 @@ export function InvestigationList({ alerts, selectedAlertId, onSelectAlert }: In
           {showMoreMenu && (
             <div className="absolute top-10 right-0 w-40 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50 py-1">
               <button 
-                onClick={() => { window.alert("Mengekspor daftar investigasi ke CSV..."); setShowMoreMenu(false); }}
+                onClick={() => { window.alert("[DUMMY DATA] Mengekspor daftar investigasi ke CSV belum terhubung API."); setShowMoreMenu(false); }}
                 className="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
               >
                 Export to CSV
               </button>
               <button 
-                onClick={() => { window.alert("Menyegarkan daftar..."); setShowMoreMenu(false); }}
+                onClick={() => { window.alert("[DUMMY DATA] Fitur Refresh List belum terhubung ke API."); setShowMoreMenu(false); }}
                 className="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
               >
                 Refresh List
@@ -189,7 +195,11 @@ export function InvestigationList({ alerts, selectedAlertId, onSelectAlert }: In
       </div>
 
       <div className="flex-1 overflow-y-auto space-y-1 px-3 pb-3">
-        {displayedAlerts.map((alert) => {
+        {displayedAlerts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full pt-12 text-slate-500 dark:text-slate-400">
+            <p className="text-sm">Tidak ada investigasi yang sesuai dengan filter.</p>
+          </div>
+        ) : displayedAlerts.map((alert) => {
           const isSelected = selectedAlertId === alert.id;
           return (
             <div 
@@ -225,7 +235,7 @@ export function InvestigationList({ alerts, selectedAlertId, onSelectAlert }: In
                       {alert.severity}
                     </span>
                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium capitalize ${getStatusBadge(alert.status)}`}>
-                      {alert.status || "In Progress"}
+                      {alert.status || "New"}
                     </span>
                   </div>
                 </div>

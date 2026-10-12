@@ -1,6 +1,6 @@
 import { Search, ChevronLeft, ChevronRight, ChevronDown, ListFilter, LayoutGrid } from "lucide-react";
 import { Pagination } from "@/components/ui/Pagination";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import { L2Alert } from "@/types/soc";
 
@@ -9,14 +9,58 @@ export function CasesTable({ onSelectCase, selectedCaseId, alerts = [] }: { onSe
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  const [dbCases, setDbCases] = useState<L2Alert[]>([]);
+  const [currentUser, setCurrentUser] = useState<string>("");
+  const [selectedCheckboxIds, setSelectedCheckboxIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === "ok") setCurrentUser(data.data.user.email);
+      }).catch(console.error);
+
+    fetch("/api/soc/cases")
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === "ok") {
+          const mapped: L2Alert[] = data.data.map((c: any) => ({
+             id: c.alert_id,
+             title: c.title,
+             severity: c.severity,
+             assignee: c.assigned_to,
+             status: c.status === "in_progress" ? "In Progress" : c.status,
+             firstSeen: c.created_at,
+             lastSeen: c.created_at,
+             source: "DB",
+             description: c.title,
+             asset: "Unknown",
+             totalEvents: 1
+          }));
+          setDbCases(mapped);
+        }
+      })
+      .catch(console.error);
+  }, []);
+
+  const mergedAlerts = [...dbCases];
+  alerts.forEach(a => {
+    if (!mergedAlerts.find(d => d.id === a.id)) mergedAlerts.push(a);
+  });
+
+  const filteredAlerts = mergedAlerts.filter(a => {
+    if (activeTab === "My Cases") return a.assignee === "Me" || (currentUser && a.assignee === currentUser);
+    if (activeTab === "Unassigned") return !a.assignee || a.assignee === "unassigned" || a.assignee === "Unassigned";
+    if (activeTab === "SLA Breach") return false; // mock
+    return true; // "All Cases"
+  });
+
   const tabs = [
-    { name: "All Cases", count: alerts.length },
-    { name: "My Cases", count: alerts.filter(a => a.assignee === "Me").length },
-    { name: "Unassigned", count: alerts.filter(a => !a.assignee).length },
+    { name: "All Cases", count: mergedAlerts.length },
+    { name: "My Cases", count: mergedAlerts.filter(a => a.assignee === "Me" || (currentUser && a.assignee === currentUser)).length },
+    { name: "Unassigned", count: mergedAlerts.filter(a => !a.assignee || a.assignee === "unassigned" || a.assignee === "Unassigned").length },
     { name: "SLA Breach", count: 0 },
   ];
-
-
 
   const getSeverityBadge = (severity: string) => {
     switch (severity.toLowerCase()) {
@@ -42,13 +86,6 @@ export function CasesTable({ onSelectCase, selectedCaseId, alerts = [] }: { onSe
     return "text-red-500";
   };
 
-  const filteredAlerts = alerts.filter(a => {
-    if (activeTab === "My Cases") return a.assignee === "Me";
-    if (activeTab === "Unassigned") return !a.assignee;
-    if (activeTab === "SLA Breach") return false; // mock
-    return true; // "All Cases"
-  });
-
   const totalPages = Math.max(1, Math.ceil(filteredAlerts.length / itemsPerPage));
   const displayedAlerts = filteredAlerts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
@@ -56,6 +93,23 @@ export function CasesTable({ onSelectCase, selectedCaseId, alerts = [] }: { onSe
   const handleTabChange = (tabName: string) => {
     setActiveTab(tabName);
     setCurrentPage(1);
+    setSelectedCheckboxIds([]); // Reset selection when tab changes
+  };
+
+  const isAllSelected = displayedAlerts.length > 0 && selectedCheckboxIds.length === displayedAlerts.length;
+  
+  const handleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedCheckboxIds([]);
+    } else {
+      setSelectedCheckboxIds(displayedAlerts.map(a => a.id));
+    }
+  };
+
+  const toggleCheckbox = (id: string) => {
+    setSelectedCheckboxIds(prev => 
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
   };
 
   return (
@@ -103,7 +157,14 @@ export function CasesTable({ onSelectCase, selectedCaseId, alerts = [] }: { onSe
         <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
           <thead className="text-xs uppercase text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50">
             <tr>
-              <th className="py-3 px-4 font-medium w-8"><input type="checkbox" className="rounded border-slate-300" /></th>
+              <th className="py-3 px-4 font-medium w-8">
+                <input 
+                  type="checkbox" 
+                  className="rounded border-slate-300 text-brand-blue focus:ring-brand-blue cursor-pointer" 
+                  checked={isAllSelected}
+                  onChange={handleSelectAll}
+                />
+              </th>
               <th className="py-3 px-4 font-medium">Case ID</th>
               <th className="py-3 px-4 font-medium">Title</th>
               <th className="py-3 px-4 font-medium">Status</th>
@@ -149,7 +210,12 @@ export function CasesTable({ onSelectCase, selectedCaseId, alerts = [] }: { onSe
                 className={`cursor-pointer transition-colors ${selectedCaseId === c.id ? "bg-blue-50 dark:bg-blue-900/10" : "hover:bg-slate-50 dark:hover:bg-slate-800/50"}`}
               >
                 <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
-                  <input type="checkbox" className="rounded border-slate-300" />
+                  <input 
+                    type="checkbox" 
+                    className="rounded border-slate-300 text-brand-blue focus:ring-brand-blue cursor-pointer"
+                    checked={selectedCheckboxIds.includes(c.id)}
+                    onChange={() => toggleCheckbox(c.id)}
+                  />
                 </td>
                 <td className="py-3 px-4 font-medium text-slate-900 dark:text-white whitespace-nowrap">{c.id ? c.id.substring(0, 8) : "N/A"}</td>
                 <td className="py-3 px-4 font-medium text-slate-900 dark:text-white min-w-[200px]">{title}</td>

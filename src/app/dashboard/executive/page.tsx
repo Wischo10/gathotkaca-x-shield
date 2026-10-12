@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { Panel } from "@/components/ui/Panel";
 import { Topbar } from "@/components/layout/Topbar";
@@ -143,6 +144,7 @@ function MetricCard({
 // ─── Page ──────────────────────────────────────────────────────────────────────
 export default function ExecutiveDashboardPage() {
   const openSidebar = useSidebarToggle();
+  const router = useRouter();
 
   // ── Global range filter ──────────────────────────────────────────────────
   const [globalRange, setGlobalRange] = useState<RangeValue>("24h");
@@ -923,9 +925,14 @@ export default function ExecutiveDashboardPage() {
                   </thead>
                   <tbody>
                     {incidents.map((inc: any, i: number) => (
-                      <tr key={i} className="border-b border-slate-50 dark:border-slate-800/50">
+                      <tr
+                        key={i}
+                        onClick={() => router.push('/dashboard/soc-l2')}
+                        className="border-b border-slate-50 dark:border-slate-800/50 cursor-pointer hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors"
+                        title="Open in SOC L2 Console"
+                      >
                         <td className="py-2.5 whitespace-nowrap">{new Date(inc.creationTime).toLocaleString('en-US', { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
-                        <td className="py-2.5 font-medium text-slate-800 dark:text-slate-200">{inc.name}</td>
+                        <td className="py-2.5 font-medium text-slate-800 dark:text-slate-200 hover:text-brand-blue">{inc.name}</td>
                         <td className="py-2.5">{inc.endpoint}</td>
                         <td className="py-2.5">
                           <span className={`px-2 py-0.5 rounded-full border text-[10px] ${
@@ -945,7 +952,7 @@ export default function ExecutiveDashboardPage() {
                 </table>
               </div>
             )}
-            <div onClick={() => setSelectedFeature("Recent Critical Incidents")} className="mt-3 text-right text-xs text-brand-blue hover:underline cursor-pointer">View all incidents →</div>
+            <Link href="/dashboard/soc-l2" className="mt-3 block text-right text-xs text-brand-blue hover:underline">View all incidents in SOC L2 →</Link>
           </Panel>
         </div>
 
