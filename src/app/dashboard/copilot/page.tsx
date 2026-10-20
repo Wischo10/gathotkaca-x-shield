@@ -13,10 +13,8 @@ import { AiRecommendedNextStepsCard } from "@/components/copilot/AiRecommendedNe
 import { AiAssistantCard } from "@/components/copilot/AiAssistantCard";
 import { IncidentSummarizationWorkspace } from "@/components/copilot/IncidentSummarizationWorkspace";
 import { IocAnalysisWorkspace } from "@/components/copilot/IocAnalysisWorkspace";
-import {
-  InvestigationAssistantWorkspace,
-  RecommendationsWorkspace,
-} from "@/components/copilot/CopilotTabWorkspaces";
+import { InvestigationAssistantWorkspace } from "@/components/copilot/InvestigationAssistantWorkspace";
+import { RecommendationsWorkspace } from "@/components/copilot/RecommendationsWorkspace";
 import { AI_KPI_CARDS } from "@/services/ai-copilot-demo-provider";
 
 const COPILOT_TABS = [
@@ -30,9 +28,42 @@ const COPILOT_TABS = [
 
 type CopilotTab = (typeof COPILOT_TABS)[number];
 
+function getTabIcon(tab: CopilotTab) {
+  switch (tab) {
+    case "AI Alert Analysis":
+      return <span className="text-purple-500 text-sm">✨</span>;
+    case "Incident Summarization":
+      return (
+        <svg className="w-3.5 h-3.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      );
+    case "IOC Analysis":
+      return (
+        <svg className="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+        </svg>
+      );
+    case "Investigation Assistant":
+      return (
+        <svg className="w-3.5 h-3.5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+      );
+    case "Recommendation":
+      return (
+        <svg className="w-3.5 h-3.5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+        </svg>
+      );
+    case "AI Assistant":
+      return <span className="text-blue-500 text-sm">🤖</span>;
+  }
+}
+
 export default function CopilotPage() {
   const openSidebar = useSidebarToggle();
-  const [activeTab, setActiveTab] = useState<CopilotTab>("AI Alert Analysis");
+  const [activeTab, setActiveTab] = useState<CopilotTab>("Recommendation");
   const [isChatModalOpen, setIsChatModalOpen] = useState(false);
 
   return (
@@ -46,23 +77,21 @@ export default function CopilotPage() {
       {/* Main Workspace Container */}
       <main className="flex-1 flex flex-col p-4 sm:p-6 bg-slate-50 dark:bg-slate-950 overflow-y-auto">
         {/* Top Tab Navigation */}
-        <div className="flex border-b border-slate-200 dark:border-slate-800 mb-5 overflow-x-auto gap-1 sm:gap-2 no-scrollbar">
+        <div className="flex border-b border-slate-200 dark:border-slate-800 mb-5 overflow-x-auto lg:overflow-x-visible gap-2 sm:gap-3 md:gap-4 lg:gap-5 no-scrollbar">
           {COPILOT_TABS.map((tab) => {
             const isActive = activeTab === tab;
             return (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`pb-3 px-3 text-xs sm:text-sm font-medium whitespace-nowrap flex items-center gap-1.5 transition-colors relative ${
+                className={`pb-3 px-2 sm:px-2.5 text-xs sm:text-sm font-medium whitespace-nowrap inline-flex items-center gap-1.5 transition-colors relative shrink-0 ${
                   isActive
                     ? "text-blue-600 dark:text-blue-400 font-semibold"
                     : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-300"
                 }`}
               >
-                {tab === "AI Alert Analysis" && (
-                  <span className="text-purple-500 text-sm">✨</span>
-                )}
-                {tab}
+                {getTabIcon(tab)}
+                <span>{tab}</span>
                 {isActive && (
                   <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-full" />
                 )}

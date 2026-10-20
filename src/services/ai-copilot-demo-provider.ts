@@ -1013,3 +1013,796 @@ export const DETERMINISTIC_QUERY_RESPONSES: Record<string, string> = {
   "Which assets are most at risk right now?":
     "Highest risk assets right now: 1) DB-CLUSTER-PRIMARY (critical data tier with active egress alert), 2) BASTION-01 (perimeter host under brute force), and 3) FIN-WS-44 (endpoint with blocked executable).",
 };
+
+// =========================================================================
+// INVESTIGATION ASSISTANT DEMO DATA (Tab 4: Primary Specifications)
+// =========================================================================
+
+// 1. KPI ROW (5 Cards)
+export const INVESTIGATION_ASSISTANT_KPIS: AiKpiMetric[] = [
+  {
+    id: "inv-this-week",
+    label: "Investigations (This Week)",
+    value: "42",
+    trendText: "+12% vs last week",
+    isTrendUp: true,
+    trendPositive: true,
+    icon: "shield",
+    sparkline: [
+      { day: "Mon", value: 28 },
+      { day: "Tue", value: 32 },
+      { day: "Wed", value: 37 },
+      { day: "Thu", value: 35 },
+      { day: "Fri", value: 40 },
+      { day: "Sat", value: 38 },
+      { day: "Sun", value: 42 },
+    ],
+  },
+  {
+    id: "inv-open",
+    label: "Open Investigations",
+    value: "14",
+    trendText: "3 new today",
+    isTrendUp: true,
+    trendPositive: false,
+    icon: "zap",
+    sparkline: [
+      { day: "Mon", value: 18 },
+      { day: "Tue", value: 16 },
+      { day: "Wed", value: 19 },
+      { day: "Thu", value: 15 },
+      { day: "Fri", value: 17 },
+      { day: "Sat", value: 13 },
+      { day: "Sun", value: 14 },
+    ],
+  },
+  {
+    id: "inv-resolved",
+    label: "Investigations Resolved",
+    value: "28",
+    trendText: "+18% resolution pace",
+    isTrendUp: true,
+    trendPositive: true,
+    icon: "document",
+    sparkline: [
+      { day: "Mon", value: 10 },
+      { day: "Tue", value: 16 },
+      { day: "Wed", value: 18 },
+      { day: "Thu", value: 20 },
+      { day: "Fri", value: 23 },
+      { day: "Sat", value: 25 },
+      { day: "Sun", value: 28 },
+    ],
+  },
+  {
+    id: "inv-avg-time",
+    label: "Avg. Investigation Time",
+    value: "38m",
+    trendText: "-14m faster with AI",
+    isTrendUp: false,
+    trendPositive: true,
+    icon: "clock",
+    sparkline: [
+      { day: "Mon", value: 52 },
+      { day: "Tue", value: 48 },
+      { day: "Wed", value: 44 },
+      { day: "Thu", value: 41 },
+      { day: "Fri", value: 39 },
+      { day: "Sat", value: 38 },
+      { day: "Sun", value: 38 },
+    ],
+  },
+  {
+    id: "inv-escalated",
+    label: "Escalated to Analyst",
+    value: "6",
+    trendText: "14.2% of total",
+    isTrendUp: false,
+    trendPositive: true,
+    icon: "sparkles",
+    sparkline: [
+      { day: "Mon", value: 9 },
+      { day: "Tue", value: 8 },
+      { day: "Wed", value: 7 },
+      { day: "Thu", value: 8 },
+      { day: "Fri", value: 6 },
+      { day: "Sat", value: 6 },
+      { day: "Sun", value: 6 },
+    ],
+  },
+];
+
+// 2. ACTIVE INVESTIGATIONS LIST ITEM
+export interface ActiveInvestigationItem {
+  id: string;
+  incidentId: string;
+  title: string;
+  priority: "Critical" | "High" | "Medium" | "Low";
+  status: "In Progress" | "Open" | "Pending" | "Escalated" | "Resolved";
+  assignedTo: string;
+  age: string;
+  // Details for Investigation Assistant card binding
+  summary: string;
+  keyEntities: {
+    sourceIp: string;
+    targetAccount: string;
+    targetSystem: string;
+    firstSeen: string;
+    lastSeen: string;
+  };
+  suggestedNextSteps: string[];
+}
+
+export const ACTIVE_INVESTIGATIONS_LIST: ActiveInvestigationItem[] = [
+  {
+    id: "INV-2025-0101",
+    incidentId: "INC-9482",
+    title: "Brute Force Login Attempts",
+    priority: "Critical",
+    status: "In Progress",
+    assignedTo: "Sarah Jenkins (SOC L2)",
+    age: "18m ago",
+    summary:
+      "Multiple failed authentication attempts detected originating from a known bulletproof hosting ASN, targeting privileged administrative endpoints. Behavioral patterns indicate distributed dictionary spraying.",
+    keyEntities: {
+      sourceIp: "194.26.29.112",
+      targetAccount: "admin.svc@corp.internal",
+      targetSystem: "AUTH-GW-01.prod",
+      firstSeen: "May 19, 08:14 UTC",
+      lastSeen: "2 mins ago",
+    },
+    suggestedNextSteps: [
+      "Review edge firewall ACL to verify ingress drop from 194.26.29.112",
+      "Review VPN access logs for suspicious concurrent sessions",
+      "Recommend immediate password reset & session revocation for target account",
+      "Monitor repeated authentication attempts from related AS200017 subnet",
+    ],
+  },
+  {
+    id: "INV-2025-0102",
+    incidentId: "INC-9480",
+    title: "Malware Execution Detected",
+    priority: "Critical",
+    status: "Escalated",
+    assignedTo: "David Kim (Lead Analyst)",
+    age: "45m ago",
+    summary:
+      "Suspicious PowerShell child process spawned by winword.exe with obfuscated base64 payload. Attempted persistence via Scheduled Task creation before EDR isolation hook engaged.",
+    keyEntities: {
+      sourceIp: "10.14.32.88",
+      targetAccount: "j.doe@finance.corp",
+      targetSystem: "FIN-WS-082.corp",
+      firstSeen: "May 19, 07:42 UTC",
+      lastSeen: "12 mins ago",
+    },
+    suggestedNextSteps: [
+      "Investigate process memory tree on isolated endpoint FIN-WS-082",
+      "Review email gateway logs for inbound phishing payload source",
+      "Recommend hash block for 7a8b9c0d1e2f3a4b across endpoint fleet",
+      "Monitor Active Directory replication logs for privileged service ticket requests",
+    ],
+  },
+  {
+    id: "INV-2025-0103",
+    incidentId: "INC-9477",
+    title: "Phishing Email Reported",
+    priority: "High",
+    status: "In Progress",
+    assignedTo: "Elena Rostova (SOC L1)",
+    age: "1h 10m ago",
+    summary:
+      "Multiple users reported an urgent invoice notification linking to a typo-squatted credential capture page. Email passed SPF/DKIM due to compromised third-party vendor relay.",
+    keyEntities: {
+      sourceIp: "185.220.101.5",
+      targetAccount: "procurement@corp.internal",
+      targetSystem: "M365 Mail Gateway",
+      firstSeen: "May 19, 07:15 UTC",
+      lastSeen: "35 mins ago",
+    },
+    suggestedNextSteps: [
+      "Purge matching phishing message ID across all tenant mailboxes",
+      "Add malicious domain invoice-portal-update[.]com to DNS sinkhole",
+      "Investigate 3 recipients who clicked the embedded hyperlink",
+      "Recommend triggering security awareness refresher for affected department",
+    ],
+  },
+  {
+    id: "INV-2025-0104",
+    incidentId: "INC-9471",
+    title: "Web Application Attack",
+    priority: "High",
+    status: "Pending",
+    assignedTo: "Automated AI Agent",
+    age: "2h 05m ago",
+    summary:
+      "Repetitive SQL injection and path traversal payloads detected by WAF against public API gateway endpoint. Payload signatures match known CVE-2023-38606 automated scanners.",
+    keyEntities: {
+      sourceIp: "45.142.214.8",
+      targetAccount: "api-public-anon",
+      targetSystem: "API-EDGE-CLUSTER",
+      firstSeen: "May 19, 06:18 UTC",
+      lastSeen: "42 mins ago",
+    },
+    suggestedNextSteps: [
+      "Review WAF custom rule triggers for bypass telemetry",
+      "Investigate backend API database query latency metrics during spike",
+      "Recommend temporary rate-limiting on /v2/auth endpoints for /24 CIDR",
+      "Monitor application logs for 500 error code responses",
+    ],
+  },
+  {
+    id: "INV-2025-0105",
+    incidentId: "INC-9466",
+    title: "Data Exfiltration Attempt",
+    priority: "Medium",
+    status: "Open",
+    assignedTo: "Marcus Chen (Threat Hunter)",
+    age: "3h 20m ago",
+    summary:
+      "Unusual volume of compressed archive files staged in temporary user profile directory, followed by elevated encrypted outbound traffic to external cloud storage provider.",
+    keyEntities: {
+      sourceIp: "10.8.12.44",
+      targetAccount: "b.miller@rnd.corp",
+      targetSystem: "ENG-STATION-19",
+      firstSeen: "May 19, 05:02 UTC",
+      lastSeen: "1h 15m ago",
+    },
+    suggestedNextSteps: [
+      "Review DLP gateway outbound byte volume matched against user baseline",
+      "Inspect file hashes in user Temp/Staging directory on host",
+      "Recommend temporarily restricting external storage upload access",
+      "Investigate user's active file access log history across code repositories",
+    ],
+  },
+];
+
+// 3. INVESTIGATION PROGRESS OVERVIEW (Donut Breakdown)
+export interface InvestigationStatusBreakdown {
+  name: "Not Started" | "In Progress" | "Pending" | "Escalated" | "Resolved";
+  count: number;
+  percentage: number;
+  color: string;
+}
+
+export const INVESTIGATION_STATUS_OVERVIEW: InvestigationStatusBreakdown[] = [
+  { name: "In Progress", count: 18, percentage: 43, color: "#3b82f6" }, // blue
+  { name: "Resolved", count: 14, percentage: 33, color: "#10b981" }, // emerald
+  { name: "Escalated", count: 4, percentage: 10, color: "#ef4444" }, // red
+  { name: "Pending", count: 3, percentage: 7, color: "#f59e0b" }, // amber
+  { name: "Not Started", count: 3, percentage: 7, color: "#94a3b8" }, // slate
+];
+
+export const TOTAL_INVESTIGATIONS_COUNT = 42;
+
+// 4. INVESTIGATION TIMELINE (Vertical timeline)
+export interface InvestigationTimelineEvent {
+  id: string;
+  timestamp: string;
+  date: string;
+  incidentId: string;
+  description: string;
+  severity: "Critical" | "High" | "Medium" | "Low";
+}
+
+export const INVESTIGATION_TIMELINE_EVENTS: InvestigationTimelineEvent[] = [
+  {
+    id: "EVT-801",
+    timestamp: "09:12:44",
+    date: "Today, May 19",
+    incidentId: "INC-9482",
+    description: "Account locked automatically following policy violation",
+    severity: "Critical",
+  },
+  {
+    id: "EVT-802",
+    timestamp: "09:08:15",
+    date: "Today, May 19",
+    incidentId: "INC-9482",
+    description: "Multiple failed attempts threshold exceeded (>50 attempts/min)",
+    severity: "Critical",
+  },
+  {
+    id: "EVT-803",
+    timestamp: "08:52:10",
+    date: "Today, May 19",
+    incidentId: "INC-9480",
+    description: "EDR telemetry correlated malicious script block on FIN-WS-082",
+    severity: "High",
+  },
+  {
+    id: "EVT-804",
+    timestamp: "08:34:02",
+    date: "Today, May 19",
+    incidentId: "INC-9477",
+    description: "Phishing alert generated via user submission plugin",
+    severity: "Medium",
+  },
+  {
+    id: "EVT-805",
+    timestamp: "08:15:30",
+    date: "Today, May 19",
+    incidentId: "INC-9482",
+    description: "Initial brute force login attempt detected on perimeter gateway",
+    severity: "High",
+  },
+];
+
+// 5. MITRE ATT&CK TACTICS (Active Investigations)
+export interface MitreTacticItem {
+  tactic: string;
+  count: number;
+  percentage: number;
+}
+
+export const MITRE_ATTACK_TACTICS_ACTIVE: MitreTacticItem[] = [
+  { tactic: "Initial Access", count: 18, percentage: 28 },
+  { tactic: "Execution", count: 14, percentage: 22 },
+  { tactic: "Credential Access", count: 12, percentage: 19 },
+  { tactic: "Defense Evasion", count: 8, percentage: 12 },
+  { tactic: "Persistence", count: 5, percentage: 8 },
+  { tactic: "Exfiltration", count: 4, percentage: 6 },
+  { tactic: "Discovery", count: 3, percentage: 5 },
+];
+
+// 6. TOP INVESTIGATION TAGS (Tag / Word cloud visualization)
+export interface InvestigationTagItem {
+  tag: string;
+  count: number;
+  weight: "xl" | "lg" | "md" | "sm";
+  colorClass: string;
+}
+
+export const TOP_INVESTIGATION_TAGS: InvestigationTagItem[] = [
+  { tag: "Brute Force", count: 28, weight: "xl", colorClass: "text-red-600 dark:text-red-400 font-extrabold" },
+  { tag: "Malware", count: 22, weight: "xl", colorClass: "text-orange-600 dark:text-orange-400 font-bold" },
+  { tag: "Initial Access", count: 18, weight: "lg", colorClass: "text-blue-600 dark:text-blue-400 font-bold" },
+  { tag: "Credential Abuse", count: 16, weight: "lg", colorClass: "text-purple-600 dark:text-purple-400 font-semibold" },
+  { tag: "Phishing", count: 15, weight: "lg", colorClass: "text-indigo-600 dark:text-indigo-400 font-semibold" },
+  { tag: "Defense Evasion", count: 12, weight: "md", colorClass: "text-amber-600 dark:text-amber-400 font-medium" },
+  { tag: "Data Exfiltration", count: 9, weight: "md", colorClass: "text-rose-600 dark:text-rose-400 font-medium" },
+  { tag: "Lateral Movement", count: 7, weight: "sm", colorClass: "text-slate-600 dark:text-slate-300 font-normal" },
+  { tag: "Lateral Escalation", count: 5, weight: "sm", colorClass: "text-slate-500 dark:text-slate-400 font-normal" },
+  { tag: "Password Spray", count: 8, weight: "md", colorClass: "text-cyan-600 dark:text-cyan-400 font-medium" },
+  { tag: "Command & Control", count: 6, weight: "sm", colorClass: "text-emerald-600 dark:text-emerald-400 font-normal" },
+];
+
+// 7. RECENTLY RESOLVED INVESTIGATIONS (Full width bottom table)
+export interface ResolvedInvestigationRecord {
+  id: string;
+  incidentId: string;
+  title: string;
+  priority: "Critical" | "High" | "Medium" | "Low";
+  status: "Resolved";
+  resolvedBy: string;
+  resolvedAt: string;
+  resolutionTime: string;
+  summary: string;
+}
+
+export const RECENTLY_RESOLVED_INVESTIGATIONS: ResolvedInvestigationRecord[] = [
+  {
+    id: "INV-2025-0098",
+    incidentId: "INC-9452",
+    title: "Suspicious Kerberoasting Activity",
+    priority: "High",
+    status: "Resolved",
+    resolvedBy: "Sarah Jenkins (SOC L2)",
+    resolvedAt: "May 18, 17:45",
+    resolutionTime: "24m",
+    summary: "SPN query spikes contained via automated domain controller group isolation.",
+  },
+  {
+    id: "INV-2025-0095",
+    incidentId: "INC-9448",
+    title: "Cobalt Strike Beacon Simulation",
+    priority: "Critical",
+    status: "Resolved",
+    resolvedBy: "David Kim (Lead Analyst)",
+    resolvedAt: "May 18, 14:20",
+    resolutionTime: "18m",
+    summary: "Authorized Red Team simulation validated and confirmed against drill schedule.",
+  },
+  {
+    id: "INV-2025-0091",
+    incidentId: "INC-9439",
+    title: "Ransomware Canary File Modification",
+    priority: "Critical",
+    status: "Resolved",
+    resolvedBy: "Automated EDR Playbook",
+    resolvedAt: "May 18, 11:05",
+    resolutionTime: "12m",
+    summary: "Canary trap triggered, rogue encryption utility immediately terminated and host quarantined.",
+  },
+  {
+    id: "INV-2025-0089",
+    incidentId: "INC-9431",
+    title: "Privilege Escalation via CVE-2024-21413",
+    priority: "High",
+    status: "Resolved",
+    resolvedBy: "Marcus Chen (Threat Hunter)",
+    resolvedAt: "May 17, 19:30",
+    resolutionTime: "42m",
+    summary: "Outlook preview bypass payload patched and verified on all client workstations.",
+  },
+  {
+    id: "INV-2025-0084",
+    incidentId: "INC-9420",
+    title: "Suspicious Outbound DNS Tunneling",
+    priority: "Medium",
+    status: "Resolved",
+    resolvedBy: "Elena Rostova (SOC L1)",
+    resolvedAt: "May 17, 15:10",
+    resolutionTime: "31m",
+    summary: "Misconfigured telemetry service on DEV-SRV-04 corrected to legitimate internal DNS server.",
+  },
+];
+
+// =========================================================================
+// RECOMMENDATION WORKSPACE DATA (Tab 5: Primary Specifications)
+// =========================================================================
+
+// 1. TOP KPI CARDS (6 Cards in 1 Row)
+export const RECOMMENDATION_TAB_KPIS: AiKpiMetric[] = [
+  {
+    id: "rec-total-156",
+    label: "Total Recommendations",
+    value: "156",
+    trendText: "+8% vs last 7 days",
+    isTrendUp: true,
+    trendPositive: true,
+    icon: "sparkles",
+    sparkline: [
+      { day: "Mon", value: 140 },
+      { day: "Tue", value: 144 },
+      { day: "Wed", value: 148 },
+      { day: "Thu", value: 150 },
+      { day: "Fri", value: 152 },
+      { day: "Sat", value: 154 },
+      { day: "Sun", value: 156 },
+    ],
+  },
+  {
+    id: "rec-high-priority-48",
+    label: "High Priority",
+    value: "48 (31%)",
+    trendText: "+3 vs last 7 days",
+    isTrendUp: true,
+    trendPositive: false,
+    icon: "shield",
+    sparkline: [
+      { day: "Mon", value: 42 },
+      { day: "Tue", value: 45 },
+      { day: "Wed", value: 44 },
+      { day: "Thu", value: 46 },
+      { day: "Fri", value: 49 },
+      { day: "Sat", value: 47 },
+      { day: "Sun", value: 48 },
+    ],
+  },
+  {
+    id: "rec-implemented-62",
+    label: "Implemented",
+    value: "62 (40%)",
+    trendText: "+14% vs last 7 days",
+    isTrendUp: true,
+    trendPositive: true,
+    icon: "document",
+    sparkline: [
+      { day: "Mon", value: 48 },
+      { day: "Tue", value: 50 },
+      { day: "Wed", value: 53 },
+      { day: "Thu", value: 56 },
+      { day: "Fri", value: 59 },
+      { day: "Sat", value: 60 },
+      { day: "Sun", value: 62 },
+    ],
+  },
+  {
+    id: "rec-in-progress-54",
+    label: "In Progress",
+    value: "54 (35%)",
+    trendText: "-2 vs last 7 days",
+    isTrendUp: false,
+    trendPositive: true,
+    icon: "clock",
+    sparkline: [
+      { day: "Mon", value: 58 },
+      { day: "Tue", value: 57 },
+      { day: "Wed", value: 56 },
+      { day: "Thu", value: 55 },
+      { day: "Fri", value: 53 },
+      { day: "Sat", value: 55 },
+      { day: "Sun", value: 54 },
+    ],
+  },
+  {
+    id: "rec-overdue-12",
+    label: "Overdue",
+    value: "12 (8%)",
+    trendText: "-4 vs last 7 days",
+    isTrendUp: false,
+    trendPositive: true,
+    icon: "zap",
+    sparkline: [
+      { day: "Mon", value: 18 },
+      { day: "Tue", value: 16 },
+      { day: "Wed", value: 15 },
+      { day: "Thu", value: 14 },
+      { day: "Fri", value: 13 },
+      { day: "Sat", value: 12 },
+      { day: "Sun", value: 12 },
+    ],
+  },
+  {
+    id: "rec-effectiveness-87",
+    label: "Effectiveness Score",
+    value: "87%",
+    trendText: "+5% vs last 7 days",
+    isTrendUp: true,
+    trendPositive: true,
+    icon: "sparkles",
+    sparkline: [
+      { day: "Mon", value: 81 },
+      { day: "Tue", value: 82 },
+      { day: "Wed", value: 84 },
+      { day: "Thu", value: 85 },
+      { day: "Fri", value: 86 },
+      { day: "Sat", value: 86 },
+      { day: "Sun", value: 87 },
+    ],
+  },
+];
+
+// 2. ROW 1: CARD 1 - TOP RECOMMENDED ACTIONS TABLE
+export interface TopRecommendedActionItem {
+  id: string;
+  recommendation: string;
+  category: "Threat Prevention" | "Identity Security" | "Access Control" | "Vulnerability Mgmt" | "Account Security";
+  priority: "Critical" | "High" | "Medium";
+  impact: "High" | "Medium";
+  status: "In Progress" | "Implemented";
+}
+
+export const TOP_RECOMMENDED_ACTIONS: TopRecommendedActionItem[] = [
+  {
+    id: "ACT-01",
+    recommendation: "Block IP 185.220.101.2 at firewall and WAF",
+    category: "Threat Prevention",
+    priority: "Critical",
+    impact: "High",
+    status: "In Progress",
+  },
+  {
+    id: "ACT-02",
+    recommendation: "Enforce MFA for VPN and privileged accounts",
+    category: "Identity Security",
+    priority: "Critical",
+    impact: "High",
+    status: "Implemented",
+  },
+  {
+    id: "ACT-03",
+    recommendation: "Review and restrict excessive VPN access",
+    category: "Access Control",
+    priority: "High",
+    impact: "Medium",
+    status: "In Progress",
+  },
+  {
+    id: "ACT-04",
+    recommendation: "Patch security vulnerabilities in public-facing apps",
+    category: "Vulnerability Mgmt",
+    priority: "High",
+    impact: "High",
+    status: "In Progress",
+  },
+  {
+    id: "ACT-05",
+    recommendation: "Enable account lockout policy for failed logins",
+    category: "Account Security",
+    priority: "Medium",
+    impact: "Medium",
+    status: "Implemented",
+  },
+];
+
+// 3. ROW 1: CARD 2 - RECOMMENDATION BY CATEGORY (DONUT CHART)
+// Sum: 42 + 36 + 28 + 24 + 16 + 10 = 156
+export interface RecommendationCategoryItem {
+  name: string;
+  count: number;
+  percentage: number;
+  color: string;
+}
+
+export const RECOMMENDATIONS_BY_CATEGORY: RecommendationCategoryItem[] = [
+  { name: "Threat Prevention", count: 42, percentage: 27, color: "#ef4444" }, // red
+  { name: "Identity Security", count: 36, percentage: 23, color: "#3b82f6" }, // blue
+  { name: "Access Control", count: 28, percentage: 18, color: "#8b5cf6" }, // purple
+  { name: "Vulnerability Mgmt", count: 24, percentage: 15, color: "#f59e0b" }, // amber
+  { name: "Account Security", count: 16, percentage: 10, color: "#10b981" }, // emerald
+  { name: "Others", count: 10, percentage: 7, color: "#94a3b8" }, // slate
+];
+
+export const TOTAL_RECOMMENDATIONS_COUNT = 156;
+
+// 4. ROW 1: CARD 3 - PRIORITIZATION MATRIX (3x3)
+// Y-axis: Impact (High, Medium, Low)
+// X-axis: Effort (Low, Medium, High)
+// Legend tags: Do First (High Impact, Low Effort), Schedule (High/Med Impact, Med Effort), Consider, Monitor
+export interface MatrixCellData {
+  count: number;
+  actionType: "Do First" | "Schedule" | "Consider" | "Monitor";
+  badgeBg: string;
+}
+
+export const PRIORITIZATION_MATRIX_CELLS: Record<"High" | "Medium" | "Low", Record<"Low" | "Medium" | "High", MatrixCellData>> = {
+  High: {
+    Low: { count: 34, actionType: "Do First", badgeBg: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800" },
+    Medium: { count: 28, actionType: "Schedule", badgeBg: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800" },
+    High: { count: 16, actionType: "Schedule", badgeBg: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800" },
+  },
+  Medium: {
+    Low: { count: 24, actionType: "Consider", badgeBg: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800" },
+    Medium: { count: 22, actionType: "Consider", badgeBg: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800" },
+    High: { count: 12, actionType: "Monitor", badgeBg: "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700" },
+  },
+  Low: {
+    Low: { count: 10, actionType: "Consider", badgeBg: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800" },
+    Medium: { count: 6, actionType: "Monitor", badgeBg: "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700" },
+    High: { count: 4, actionType: "Monitor", badgeBg: "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700" },
+  },
+};
+
+// 5. ROW 2: CARD 4 - IMPLEMENTATION STATUS (DONUT CHART)
+// Implemented = 62 (40%)
+// In Progress = 54 (35%)
+// Pending = 28 (18%)
+// Overdue = 12 (7%)
+// Total = 156
+export interface ImplementationStatusItem {
+  name: "Implemented" | "In Progress" | "Pending" | "Overdue";
+  count: number;
+  percentage: number;
+  color: string;
+}
+
+export const IMPLEMENTATION_STATUS_DATA: ImplementationStatusItem[] = [
+  { name: "Implemented", count: 62, percentage: 40, color: "#10b981" }, // emerald
+  { name: "In Progress", count: 54, percentage: 35, color: "#3b82f6" }, // blue
+  { name: "Pending", count: 28, percentage: 18, color: "#f59e0b" }, // amber
+  { name: "Overdue", count: 12, percentage: 7, color: "#ef4444" }, // red
+];
+
+// 6. ROW 2: CARD 5 - RECOMMENDATIONS OVER TIME (LINE CHART)
+// Time: May 13, May 14, May 15, May 16, May 18, May 19
+export interface RecommendationTrendPoint {
+  date: string;
+  Total: number;
+  Implemented: number;
+  InProgress: number;
+  Overdue: number;
+}
+
+export const RECOMMENDATIONS_OVER_TIME_SERIES: RecommendationTrendPoint[] = [
+  { date: "May 13", Total: 140, Implemented: 48, InProgress: 58, Overdue: 18 },
+  { date: "May 14", Total: 144, Implemented: 50, InProgress: 57, Overdue: 16 },
+  { date: "May 15", Total: 148, Implemented: 53, InProgress: 56, Overdue: 15 },
+  { date: "May 16", Total: 150, Implemented: 56, InProgress: 55, Overdue: 14 },
+  { date: "May 18", Total: 154, Implemented: 60, InProgress: 55, Overdue: 12 },
+  { date: "May 19", Total: 156, Implemented: 62, InProgress: 54, Overdue: 12 },
+];
+
+// 7. ROW 2: CARD 6 - TOP ASSETS TO IMPROVE (TABLE)
+export interface TopAssetToImproveItem {
+  asset: string;
+  riskLevel: "Critical" | "High" | "Medium" | "Low";
+  openRec: number;
+  topRecommendation: string;
+}
+
+export const TOP_ASSETS_TO_IMPROVE: TopAssetToImproveItem[] = [
+  {
+    asset: "185.220.101.2",
+    riskLevel: "Critical",
+    openRec: 8,
+    topRecommendation: "Block IP at perimeter edge and sinkhole related DNS beacons",
+  },
+  {
+    asset: "VPN-GW-01",
+    riskLevel: "Critical",
+    openRec: 6,
+    topRecommendation: "Enforce hardware token MFA & terminate idle privileged sessions",
+  },
+  {
+    asset: "Web Application",
+    riskLevel: "High",
+    openRec: 5,
+    topRecommendation: "Patch public CVE-2023-38606 & review rate limiting thresholds",
+  },
+  {
+    asset: "Domain Controllers",
+    riskLevel: "High",
+    openRec: 4,
+    topRecommendation: "Enforce AES Kerberos encryption & audit delegated service accounts",
+  },
+  {
+    asset: "Email Gateway",
+    riskLevel: "Medium",
+    openRec: 3,
+    topRecommendation: "Tighten DMARC policy from quarantine to reject on external relays",
+  },
+];
+
+// 8. BOTTOM SECTION: RECENT RECOMMENDATIONS (FULL-WIDTH TABLE)
+export interface RecentRecommendationRecord {
+  id: string; // e.g. REC-2025-0519-0001
+  recommendation: string;
+  category: "Threat Prevention" | "Identity Security" | "Access Control" | "Vulnerability Mgmt" | "Account Security";
+  priority: "Critical" | "High" | "Medium" | "Low";
+  impact: "High" | "Medium" | "Low";
+  status: "In Progress" | "Implemented" | "Pending" | "Overdue";
+  assignedTo: string;
+  createdAt: string;
+  dueDate: string;
+}
+
+export const RECENT_RECOMMENDATIONS_LIST: RecentRecommendationRecord[] = [
+  {
+    id: "REC-2025-0519-0001",
+    recommendation: "Block IP 185.220.101.2 at firewall and WAF perimeter",
+    category: "Threat Prevention",
+    priority: "Critical",
+    impact: "High",
+    status: "In Progress",
+    assignedTo: "Network Sec Team",
+    createdAt: "May 19, 08:30",
+    dueDate: "May 20, 12:00",
+  },
+  {
+    id: "REC-2025-0519-0002",
+    recommendation: "Enforce MFA for VPN and privileged accounts fleet-wide",
+    category: "Identity Security",
+    priority: "Critical",
+    impact: "High",
+    status: "Implemented",
+    assignedTo: "IAM Administrator",
+    createdAt: "May 18, 14:15",
+    dueDate: "May 19, 18:00",
+  },
+  {
+    id: "REC-2025-0519-0003",
+    recommendation: "Review and restrict excessive VPN access permissions for contractors",
+    category: "Access Control",
+    priority: "High",
+    impact: "Medium",
+    status: "In Progress",
+    assignedTo: "Security Operations",
+    createdAt: "May 18, 10:45",
+    dueDate: "May 22, 17:00",
+  },
+  {
+    id: "REC-2025-0519-0004",
+    recommendation: "Patch security vulnerabilities in public-facing API gateways",
+    category: "Vulnerability Mgmt",
+    priority: "High",
+    impact: "High",
+    status: "Pending",
+    assignedTo: "DevOps & SecOps",
+    createdAt: "May 17, 16:20",
+    dueDate: "May 24, 18:00",
+  },
+  {
+    id: "REC-2025-0519-0005",
+    recommendation: "Enable account lockout policy for consecutive failed logins",
+    category: "Account Security",
+    priority: "Medium",
+    impact: "Medium",
+    status: "Implemented",
+    assignedTo: "Active Directory Team",
+    createdAt: "May 17, 09:10",
+    dueDate: "May 18, 17:00",
+  },
+];
+
+
